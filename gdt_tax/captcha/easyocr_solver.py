@@ -1,10 +1,12 @@
-"""Solver CAPTCHA mặc định: tiền xử lý ảnh bằng OpenCV rồi đọc bằng EasyOCR.
+"""Solver CAPTCHA bằng EasyOCR (không còn là mặc định — mặc định là ``ddddocr``).
 
 Ảnh CAPTCHA của cổng thuế có 5 ký tự, nền lốm đốm và đường kẻ gây nhiễu. Cách
 làm: phóng to ảnh, thử vài ngưỡng nhị phân, đọc tất cả biến thể rồi chọn theo
 số phiếu bầu và độ tin cậy — cách này ổn định hơn đọc một biến thể duy nhất.
 
-``easyocr``/``torch`` chỉ được import khi solver này thực sự được dùng.
+``easyocr``/``torch`` chỉ được import khi solver này thực sự được dùng. Đo trên
+CAPTCHA thật của cổng: 2/6 lần đúng, ~3,14s/ảnh, cài ~555MB — chỉ nên dùng khi
+``ddddocr`` không hợp với ảnh hiện tại.
 """
 
 from __future__ import annotations

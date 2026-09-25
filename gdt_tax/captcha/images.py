@@ -9,13 +9,8 @@ from __future__ import annotations
 import logging
 import time
 
-from ..constants import (
-    DEFAULT_HEADERS,
-    LANDING,
-    LOGIN_CAPTCHA,
-    LOGIN_PAGE,
-    SEARCH_CAPTCHA,
-)
+from ..constants import LANDING, LOGIN_CAPTCHA, LOGIN_PAGE, SEARCH_CAPTCHA
+from ..headers import DEFAULT_PROFILE, build_image_headers
 from ..http import HttpClient
 
 LOGGER_NAME = "gdt_tax.captcha"
@@ -30,6 +25,7 @@ def fetch_captcha(
     kind: str = KIND_SEARCH,
     *,
     logger: logging.Logger | None = None,
+    profile: str = DEFAULT_PROFILE,
 ) -> bytes | None:
     """Trả về bytes ảnh CAPTCHA, hoặc ``None`` nếu cổng không trả ảnh hợp lệ."""
     logger = logger or logging.getLogger(LOGGER_NAME)
@@ -40,7 +36,7 @@ def fetch_captcha(
     response = http.get(
         path,
         params={"_": int(time.time() * 1000)},
-        headers={**DEFAULT_HEADERS, "Accept": "image/*", "Referer": referer},
+        headers=build_image_headers(profile=profile, headers={"Referer": referer}),
     )
     content_type = response.headers.get("content-type", "").lower()
     if (

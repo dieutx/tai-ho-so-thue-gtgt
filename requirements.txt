@@ -8,6 +8,10 @@ requests>=2.32,<3
 ddddocr>=1.5
 onnxruntime>=1.17
 
+# Tùy chọn — cài thêm để Accept-Encoding khớp Chrome hơn (`gzip, deflate, br` thay
+# vì chỉ `gzip, deflate`). Không cài cũng chạy bình thường.
+#   brotli    : pip install brotli
+
 # Tùy chọn — chỉ cài nếu chọn solver khác:
 #   easyocr   : pip install "easyocr>=1.7,<2" "opencv-python-headless>=4.10,<6" "numpy>=1.24,<3"
 #   paddleocr : pip install "paddleocr>=2.7,<3" "paddlepaddle>=2.6" "opencv-python-headless>=4.10,<6" "numpy>=1.24,<3"

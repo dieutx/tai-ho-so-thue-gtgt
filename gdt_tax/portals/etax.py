@@ -46,18 +46,19 @@ class EtaxPortal(Portal):
                 "captcha": self.captcha_text(),
                 "btnSearch_tdt": "",
             },
-            headers={
-                **self.base_headers(),
-                "Accept": "text/html-partial",
-                "Content-Type": "application/x-www-form-urlencoded",
-                "HX-Current-URL": self.landing_url,
-                "HX-Request": "true",
-                "HX-Target": "bangKetQuaTraCuu_tdt",
-                "HX-Trigger": "form_search_tdt",
-                "Origin": ORIGIN,
-                "Referer": self.landing_url,
-                "X-XSRF-TOKEN": self.csrf,
-            },
+            headers=self.xhr_headers(
+                accept="text/html-partial",
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "HX-Current-URL": self.landing_url,
+                    "HX-Request": "true",
+                    "HX-Target": "bangKetQuaTraCuu_tdt",
+                    "HX-Trigger": "form_search_tdt",
+                    "Origin": ORIGIN,
+                    "Referer": self.landing_url,
+                    "X-XSRF-TOKEN": self.csrf,
+                },
+            ),
         )
         return self._page_result(response)
 
@@ -66,15 +67,15 @@ class EtaxPortal(Portal):
             ETAX_DOWNLOAD,
             params={"loaiTraCuu": SOURCE_ETAX},
             json={"maHoSo": record.ma_ho_so},
-            headers={
-                **self.base_headers(),
-                "Accept": "*/*",
-                "Content-Type": "application/json",
-                "Origin": ORIGIN,
-                "Referer": detail_url,
-                "X-Requested-With": "XMLHttpRequest",
-                "X-XSRF-TOKEN": csrf,
-            },
+            headers=self.xhr_headers(
+                headers={
+                    "Content-Type": "application/json",
+                    "Origin": ORIGIN,
+                    "Referer": detail_url,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-XSRF-TOKEN": csrf,
+                }
+            ),
         )
 
 

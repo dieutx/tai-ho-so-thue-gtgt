@@ -26,6 +26,7 @@ from gdt_tax.constants import (
     SEARCH_CAPTCHA,
 )
 from gdt_tax.errors import LoginError, SearchError
+from gdt_tax.headers import PROFILE_BROWSER, PROFILE_MINIMAL
 from gdt_tax.naming import zip_filename
 from gdt_tax.parsing import parse_records
 from gdt_tax.pipeline import Pipeline
@@ -249,6 +250,113 @@ class DvcFlowTests(PipelineTestCase):
             call for call in http.calls if route_of(call.path).startswith("/tchs/files/detail/")
         ]
         self.assertTrue(all(call.path.endswith("?loai=") for call in details))
+
+
+class PauseJitterTests(PipelineTestCase):
+    """Jitter chỉ cộng thêm thời gian nghỉ, không bao giờ rút ngắn."""
+
+    def run_with_delays(self, **settings_overrides) -> list[float]:
+        delays: list[float] = []
+        settings = self.settings_for(
+            from_date=date(2026, 1, 1),
+            to_date=date(2026, 1, 31),
+            pause_between_records=1.0,
+            pause_between_pages=0.0,
+            **settings_overrides,
+        )
+        handler = make_handler(search=lambda _kwargs: fixture("dvc_results_page1.html"))
+        pipeline = Pipeline(
+            settings,
+            FakeHttp(handler),
+            StubCaptcha(),
+            store=ZipStore(settings.download_dir),
+            sleep=delays.append,
+        )
+        pipeline.run()
+        return delays
+
+    def test_jitter_bang_khong_thi_nghi_dung_bang_cau_hinh(self):
+        delays = self.run_with_delays(pause_jitter=0.0)
+        self.assertIn(1.0, delays)
+        self.assertTrue(all(delay == 1.0 for delay in delays if delay))
+
+    def test_jitter_chi_cong_them_toi_da_theo_ti_le(self):
+        # uniform trả về đúng mức trần → delay = 1s * (1 + 0.3).
+        with mock.patch("gdt_tax.pipeline.random.uniform", return_value=0.3):
+            delays = self.run_with_delays(pause_jitter=0.3)
+        self.assertIn(1.3, delays)
+        self.assertTrue(all(delay <= 1.3 for delay in delays))
+
+    def test_jitter_khong_bao_gio_lam_ngan_lai(self):
+        delays = self.run_with_delays(pause_jitter=0.5)
+        self.assertTrue(delays)
+        self.assertTrue(all(delay >= 1.0 or delay == 0.0 for delay in delays))
+
+
+class HeaderProfileTests(PipelineTestCase):
+    """Bộ header gửi đi: ``minimal`` giữ nguyên, ``browser`` thêm dấu hiệu Chrome."""
+
+    def dvc_settings(self, **overrides) -> Settings:
+        return self.settings_for(
+            from_date=date(2026, 1, 1), to_date=date(2026, 1, 31), **overrides
+        )
+
+    def browse(self, **settings_overrides):
+        def search(_kwargs) -> str:
+            return fixture("dvc_results_page1.html")
+
+        return self.run_pipeline(
+            make_handler(search=search), self.dvc_settings(**settings_overrides)
+        )
+
+    def headers_by_route(self, http) -> dict[str, dict]:
+        found: dict[str, dict] = {}
+        for call in http.calls:
+            found.setdefault(route_of(call.path), call.kwargs.get("headers", {}))
+        return found
+
+    def test_mac_dinh_da_la_browser(self):
+        _, http = self.browse()
+        headers = self.headers_by_route(http)
+        self.assertEqual(headers[LOGIN_PAGE]["Sec-Fetch-Dest"], "document")
+        self.assertIn("sec-ch-ua", headers[DVC_SEARCH])
+
+    def test_minimal_khong_gui_dau_hieu_browser(self):
+        _, http = self.browse(header_profile=PROFILE_MINIMAL)
+        for call in http.calls:
+            headers = call.kwargs.get("headers", {})
+            self.assertNotIn("Sec-Fetch-Dest", headers)
+            self.assertNotIn("sec-ch-ua", headers)
+
+    def test_browser_gui_sec_fetch_dung_theo_tung_loai_request(self):
+        _, http = self.browse(header_profile=PROFILE_BROWSER)
+        headers = self.headers_by_route(http)
+
+        # Mở trang: điều hướng tài liệu, lần đầu vào cổng là Sec-Fetch-Site: none.
+        self.assertEqual(headers[LOGIN_PAGE]["Sec-Fetch-Dest"], "document")
+        self.assertEqual(headers[LOGIN_PAGE]["Sec-Fetch-Mode"], "navigate")
+        self.assertEqual(headers[LOGIN_PAGE]["Sec-Fetch-Site"], "none")
+        self.assertEqual(headers[LANDING]["Sec-Fetch-Site"], "same-origin")
+
+        # AJAX/HTMX: fetch cùng nguồn, không có Sec-Fetch-User.
+        self.assertEqual(headers[DVC_SEARCH]["Sec-Fetch-Dest"], "empty")
+        self.assertEqual(headers[DVC_SEARCH]["Sec-Fetch-Mode"], "cors")
+        self.assertNotIn("Sec-Fetch-User", headers[DVC_SEARCH])
+        self.assertEqual(headers[DVC_VALIDATE]["Sec-Fetch-Dest"], "empty")
+
+        # Ảnh CAPTCHA và client hint khớp User-Agent.
+        self.assertEqual(headers[LOGIN_CAPTCHA]["Sec-Fetch-Dest"], "image")
+        self.assertEqual(headers[LOGIN_CAPTCHA]["Sec-Fetch-Mode"], "no-cors")
+        self.assertEqual(headers[DVC_SEARCH]["sec-ch-ua-platform"], '"Windows"')
+
+    def test_browser_de_trang_chi_tiet_la_dieu_huong(self):
+        _, http = self.browse(header_profile=PROFILE_BROWSER)
+        detail = next(
+            headers
+            for route, headers in self.headers_by_route(http).items()
+            if route.startswith("/tchs/files/detail/")
+        )
+        self.assertEqual(detail["Sec-Fetch-Dest"], "document")
 
 
 class FailureTests(PipelineTestCase):

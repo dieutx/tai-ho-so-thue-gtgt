@@ -24,6 +24,8 @@ Chạy trên **Windows, Linux và macOS**, Python **3.10+**.
 - [Chọn bộ nhận dạng CAPTCHA](#chọn-bộ-nhận-dạng-captcha)
 - [Benchmark](#benchmark)
 - [Hiểu biết về cổng Dịch vụ công](#hiểu-biết-về-cổng-dịch-vụ-công)
+- [Ghi log và lưu lại traffic](#ghi-log-và-lưu-lại-traffic)
+- [Không bị nhận diện là Python](#không-bị-nhận-diện-là-python)
 - [Kiểm thử](#kiểm-thử)
 - [Khắc phục sự cố](#khắc-phục-sự-cố)
 - [Bảo trì khi cổng thay đổi](#bảo-trì-khi-cổng-thay-đổi)
@@ -58,6 +60,16 @@ Khoảng ngày bất kỳ ──► tự cắt thành các đoạn ≤ 31 ngày
 - Bỏ qua ZIP đã tải hợp lệ nên chạy tiếp được khi bị gián đoạn.
 - Tự thử lại khi cổng trả `429 Too Many Requests` (đọc header `Retry-After`).
 - `--dry-run` chỉ tra cứu, không tải file — dùng để kiểm tra khoảng ngày trước.
+- **Gửi request như trình duyệt** (mặc định `--header-profile browser`): đủ
+  `sec-ch-ua*`, `Sec-Fetch-*`, `Upgrade-Insecure-Requests`, `Accept` và thứ tự
+  header như Chrome, khớp theo từng loại request — xem
+  [Không bị nhận diện là Python](#không-bị-nhận-diện-là-python).
+- **Log từng request**: một dòng cho mỗi request (phương thức, đường dẫn, tham số,
+  mã trạng thái, thời gian, dung lượng) và chi tiết header/body ở mức `-v` hoặc
+  trong file `--log-file`. Header/trường nhạy cảm được che bằng `***`.
+- **`--dump-http`** lưu nguyên request/response ra file để dựng fixture khi cổng đổi.
+- **`--header`** thêm hoặc ghi đè header cho mọi request ngay lúc chạy, không cần
+  sửa mã nguồn.
 
 ## Cài đặt
 
@@ -143,7 +155,12 @@ Bảng biến đầy đủ:
 | `GDT_HTTP_RETRIES` | Không | `3` | Số lần thử lại khi gặp HTTP 429 |
 | `GDT_PAUSE_BETWEEN_RECORDS` | Không | `1` | Nghỉ giữa 2 hồ sơ (giây) |
 | `GDT_PAUSE_BETWEEN_PAGES` | Không | `3` | Nghỉ giữa 2 trang (giây) |
+| `GDT_PAUSE_JITTER` | Không | `0.3` | Tỉ lệ ngẫu nhiên cộng thêm vào mỗi lần nghỉ (chỉ cộng, không rút ngắn) |
 | `GDT_DRY_RUN` | Không | `false` | Chỉ tra cứu, không tải |
+| `GDT_EXTRA_HEADERS` | Không | `{}` | Header thêm/ghi đè cho mọi request, dạng JSON |
+| `GDT_HEADER_PROFILE` | Không | `browser` | `browser` (mặc định, gửi như Chrome) hoặc `minimal` (để loại trừ lỗi do header) |
+| `GDT_LOG_FILE` | Không | trống | Ghi thêm toàn bộ log (mức DEBUG) ra file |
+| `GDT_HTTP_DUMP_DIR` | Không | trống | Lưu nguyên request/response để dựng fixture |
 
 ## Sử dụng
 
@@ -170,6 +187,15 @@ python -m gdt_tax --solver manual
 
 # Xem các bộ nhận dạng CAPTCHA có sẵn
 python -m gdt_tax --list-solvers
+
+# Ghi log chi tiết ra file và lưu lại traffic để chẩn đoán khi cổng đổi
+python -m gdt_tax -v --log-file logs/run.log --dump-http http-dump
+
+# Cổng yêu cầu thêm header mới: thêm ngay, không cần sửa mã nguồn
+python -m gdt_tax --header "Referer=https://dichvucong.gdt.gov.vn/tthc/tchs"
+
+# Loại trừ khả năng header gây lỗi (mặc định đã gửi y như Chrome)
+python -m gdt_tax --header-profile minimal --dry-run
 ```
 
 Mã thoát: `0` thành công, `1` chạy xong nhưng thiếu hồ sơ, `2` lỗi cấu hình.
@@ -213,6 +239,8 @@ cli ─► config ─► captcha (plugin)
 | Nền tảng | `constants.py`, `models.py`, `errors.py` |
 | Cấu hình & quy tắc ngày | `config.py`, `dates.py` |
 | Hạ tầng | `http.py`, `csrf.py`, `parsing.py`, `naming.py`, `storage.py` |
+| Header | `headers.py` — bộ header theo từng loại request, profile `browser` (mặc định) / `minimal` |
+| Quan sát & gỡ lỗi | `traffic.py`, `logging_setup.py` |
 | CAPTCHA (plugin) | `captcha/base.py`, `captcha/registry.py`, `captcha/*_solver.py` |
 | Nguồn dữ liệu | `portals/base.py`, `portals/dvc.py`, `portals/etax.py` |
 | Luồng & CLI | `auth.py`, `pipeline.py`, `cli.py`, `__main__.py` |
@@ -395,11 +423,141 @@ sau không phải dò lại. Đây cũng là lý do các quyết định thiết
     để lọc kết quả OCR là sai; phải dùng regex ASCII `[A-Za-z0-9]`.
 16. **Tên file ZIP nên bất biến theo nội dung**: đặt tên theo mã hồ sơ, kỳ tính
     thuế và loại tờ khai giúp lần chạy sau nhận ra file đã tải và bỏ qua.
+17. **Gửi header giống Chrome thì phải đúng cả bộ, đúng thứ tự, và đừng khai
+    `zstd`.** Cổng không kiểm dấu vân tay trình duyệt (nó chỉ giới hạn ở tầng ứng
+    dụng bằng 429 và kiểm CAPTCHA ở bước đăng nhập), nhưng mục tiêu của công cụ là
+    không để lộ ra là Python. Vài điều đã do và kiểm chứng:
+    - **`Accept-Encoding`**: Chrome gửi `gzip, deflate, br, zstd`, nhưng `zstd`
+      **dùng không được**: urllib3 (tới 2.8) chỉ giải mã `gzip`, `deflate`, `br`,
+      `x-gzip`. Đo thật: cài `zstandard` rồi gửi `Accept-Encoding: zstd` thì
+      `response.content` vẫn là byte nén ⇒ ZIP tải về sẽ hỏng. Vì vậy công cụ chỉ
+      khai `br` khi có `brotli`, và **không bao giờ** khai `zstd` — xem
+      `accept_encoding()` trong `gdt_tax/headers.py`.
+    - **Thứ tự header cũng là một dấu hiệu.** `requests` gộp header của `Session`
+      lên trước và giữ nguyên vị trí của khoá đã có, nên chỉ sắp xếp trong từng
+      builder là chưa đủ; `HttpClient` phải xoá header mặc định của session rồi sắp
+      lại bộ cuối cùng. `Host` và `Content-Length` do urllib3 đặt nên vẫn lệch.
+    - **Đừng thêm `Sec-Fetch-*` hay `sec-ch-ua*` bằng tay**: giá trị phụ thuộc loại
+      request, và `sec-ch-ua` phải khớp `Chrome/<số>` với `User-Agent` — sai một
+      trường là dấu hiệu lạ còn rõ hơn là không có. Header nào cần thêm thì sửa
+      `gdt_tax/headers.py` rồi chạy `tests/test_headers.py`.
+    - Muốn thử một header mới mà chưa sửa code: `--header`/`GDT_EXTRA_HEADERS`.
+    - Muốn thấy đúng những gì đã gửi: `--dump-http` (xem mục
+      [Ghi log và lưu lại traffic](#ghi-log-và-lưu-lại-traffic)).
+
+## Ghi log và lưu lại traffic
+
+Cổng Dịch vụ công có thể đổi giao diện bất cứ lúc nào, và khi đó người sửa cần
+đúng dữ liệu thật của cổng. Chương trình có sẵn ba mức quan sát, dùng tăng dần:
+
+**1. Mặc định — một dòng cho mỗi request.**
+
+```text
+10:35:28 [INFO] gdt_tax.http: HTTP GET https://dichvucong.gdt.gov.vn/tthc/ho-so/search?tuNgay=01/01/2026&denNgay=31/01/2026&page=1 → 200 (1.02s, 12.4 kB)
+```
+
+**2. `-v` — thêm header, tham số và body đã cắt bớt.**
+
+```text
+10:35:28 [DEBUG] gdt_tax.http: GỬI POST https://dichvucong.gdt.gov.vn/tthc/loginLDAP (lần 1/10)
+10:35:28 [DEBUG] gdt_tax.http:   header: {'User-Agent': 'Mozilla/5.0 ...', 'Cookie': '***', 'X-XSRF-TOKEN': '***'}
+10:35:28 [DEBUG] gdt_tax.http:   body: {"tenDN": "0101234567-QL", "matKhau": "***", "captcha": "abcde"}
+10:35:28 [DEBUG] gdt_tax.http:   ← header: {'Content-Type': 'application/json', 'Set-Cookie': '***'}
+10:35:28 [DEBUG] gdt_tax.http:   ← body: {"status": "200"}
+```
+
+**3. `--log-file` — lưu toàn bộ log ở mức `DEBUG` vào file**, kể cả khi màn hình
+chỉ hiện `INFO`. File này đủ để gửi kèm khi báo lỗi:
+
+```bash
+python -m gdt_tax --log-file logs/run.log        # màn hình gọn, file đầy đủ
+python -m gdt_tax -v --log-file logs/run.log     # cả hai đều chi tiết
+```
+
+**4. `--dump-http` — lưu nguyên request/response ra file**, để dựng lại fixture
+khi cổng đổi giao diện:
+
+```bash
+python -m gdt_tax --dry-run --dump-http http-dump
+```
+
+```text
+http-dump/20260925-103528/
+├── 0001-GET-login.request.txt          phương thức, URL, tham số, header, body
+├── 0001-GET-login.response.txt         mã trạng thái, thời gian, header, body
+├── 0001-GET-login.response.body        body nguyên bản (nhị phân)
+├── 0002-GET-ho-so-search.request.txt
+└── ...
+```
+
+Mỗi lần chạy tạo một thư mục con theo thời điểm bắt đầu nên không ghi đè kết quả
+cũ. File `.response.body` giữ nguyên byte gốc; file `.response.txt` để đọc bằng
+mắt. Mỗi file bị giới hạn **2 MB** để một trang lớn không làm đầy đĩa.
+
+Báo lỗi khi cổng đổi giao diện nhanh nhất là: cắt phần response tương ứng thành
+fixture (nhớ che mã số thuế, mã hồ sơ), thêm vào `tests/fixtures/`, chạy test để
+thấy chỗ vỡ.
+
+**Thêm hoặc ghi đè header lúc chạy.** Khi cổng yêu cầu một header mới, thử ngay
+không cần sửa mã:
+
+```bash
+python -m gdt_tax --header "X-Requested-With=XMLHttpRequest" --header "Referer: https://dichvucong.gdt.gov.vn/tthc/tchs"
+GDT_EXTRA_HEADERS='{"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"}' python -m gdt_tax
+```
+
+Header cấu hình **thắng** header mà portal tự đặt, nên ghi đè được `User-Agent`,
+`Referer`... Nếu cách này chạy tốt lâu dài thì chuyển giá trị đó vào
+`DEFAULT_HEADERS` trong `gdt_tax/constants.py`.
+
+> **Dữ liệu nhạy cảm luôn được che.** `Cookie`, `Set-Cookie`, `Authorization`,
+> `X-XSRF-TOKEN` trong header và `matKhau`, `_csrf`, `password`, `token` trong body
+> đều thành `***` trước khi ghi ra log hay file dump. Cảnh giác vẫn nên có: nội
+> dung HTML của cổng có thể chứa mã số thuế và mã hồ sơ của bạn.
+
+## Không bị nhận diện là Python
+
+Mục tiêu: request gửi lên cổng không bị phân biệt được với request của người dùng
+đang đăng nhập bằng trình duyệt. Công cụ làm được điều đó ở tầng HTTP, và nói thẳng
+chỗ không làm được ở tầng vận chuyển.
+
+**Đang mô phỏng đúng** — mặc định `GDT_HEADER_PROFILE=browser`:
+
+| Dấu hiệu | Gửi đi | Ghi chú |
+|---|---|---|
+| `User-Agent` | Chrome/153 trên Windows | khai trong `constants.py`, nên đổi theo Chrome bạn đang dùng |
+| `sec-ch-ua*` | khớp `User-Agent` | tự tính; ghi đè `User-Agent` thì hint tính lại, không phải Chrome thì bỏ hẳn |
+| `Sec-Fetch-Site/Mode/User/Dest` | đúng theo loại request | mở trang `document`/`navigate`, AJAX `empty`/`cors`, ảnh CAPTCHA `image`/`no-cors` |
+| `Upgrade-Insecure-Requests` | `1` | chỉ ở request mở trang |
+| `Accept` | chuỗi dài như Chrome | HTML khi mở trang, danh sách `image/...` cho CAPTCHA, `*/*` cho AJAX |
+| `Accept-Encoding` | `gzip, deflate, br` | `zstd` không dùng được (mục 17 ở trên); `pip install brotli` thì khớp Chrome hơn hẳn |
+| `Referer` | bỏ ở điều hướng đầu tiên | giữ nhất quán với `Sec-Fetch-Site: none` |
+| Thứ tự header | theo Chrome | trừ `Host`, `Content-Length` do urllib3 đặt |
+| Nhịp thời gian | nghỉ ngẫu nhiên, **chỉ cộng thêm** | `GDT_PAUSE_JITTER`, mặc định `0.3` (0–30%) |
+| `Cookie`, `Origin`, `X-Requested-With`, `HX-*` | như browser/HTMX thật | bám theo luồng quan sát được trên cổng |
+
+**Không sửa được bằng header** — biết trước để không kỳ vọng sai:
+
+- **HTTP/2**: browser thật thương lượng HTTP/2 qua ALPN trong TLS; `requests`/
+  `urllib3` chỉ nói HTTP/1.1. WAF nào đọc ALPN sẽ thấy khác.
+- **Dấu vân tay TLS (JA3/JA4)**: ClientHello của urllib3 khác Chrome.
+
+Hai điểm này chỉ giải quyết được bằng cách đổi lớp vận chuyển (`curl_cffi` với
+`impersonate="chrome"`, hoặc `httpx[http2]`). `HttpClient` là **nơi duy nhất** gọi
+mạng, nên khi cần chỉ phải thay lớp đó — portal, parsing, storage không đổi.
+Cổng thuế hiện chỉ giới hạn ở tầng ứng dụng nên hai điểm trên chưa thành vấn đề.
+
+Nghi ngờ chính header gây lỗi thì chạy lại với profile tối thiểu; đây cũng là cách
+loại trừ nhanh khi có sự cố:
+
+```bash
+GDT_HEADER_PROFILE=minimal python -m gdt_tax --dry-run
+```
 
 ## Kiểm thử
 
 ```bash
-python -m unittest discover -s tests -t . -v   # 114 test, chạy offline
+python -m unittest discover -s tests -t . -v   # 220 test, chạy offline
 ruff check .                                   # lint
 mypy gdt_tax                                   # kiểm tra kiểu (29 file)
 ```
@@ -414,7 +572,10 @@ nguyên 5 giai đoạn với phản hồi dựng sẵn.
 | `test_parsing.py` | Đọc bảng ETAX/DVC từ fixture HTML thật, bỏ trùng, hàng thiếu cột |
 | `test_naming.py` | Tên file ZIP, có test riêng cho chữ `đ` |
 | `test_config.py` | Ưu tiên cấu hình, kiểm tra kiểu, lỗi thiếu tài khoản |
-| `test_http.py` | Ghép URL, thử lại khi 429, `Retry-After` sai định dạng |
+| `test_http.py` | Ghép URL, thử lại khi 429, `Retry-After` sai định dạng, log request, header ghi đè, dump |
+| `test_headers.py` | Bộ header theo profile và theo loại request, client hint khớp `User-Agent`, `Accept-Encoding` không khai `zstd` |
+| `test_traffic.py` | Che header/body nhạy cảm, định dạng log, ghi file dump và giới hạn dung lượng |
+| `test_logging_setup.py` | Mức log ra màn hình so với file log |
 | `test_storage.py` | ZIP hợp lệ/hỏng, giải mã Base64, bỏ qua file đã có, CSV/JSON |
 | `test_captcha.py` | Sổ đăng ký solver, nạp muộn, `normalize_text` |
 | `test_captcha_backends.py` | Smoke test từng backend OCR, tự bỏ qua nếu chưa cài thư viện |
@@ -422,7 +583,8 @@ nguyên 5 giai đoạn với phản hồi dựng sẵn.
 | `test_cli.py` | Tham số dòng lệnh, mã thoát, danh sách solver |
 
 Fixture HTML được rút gọn từ trang thật và đã bỏ mã số thuế, mã hồ sơ. Khi cổng
-đổi giao diện, cách sửa nhanh nhất là thay fixture rồi chạy test để thấy chỗ vỡ.
+đổi giao diện, cách sửa nhanh nhất là thay fixture rồi chạy test để thấy chỗ vỡ;
+dùng `--dump-http` để lấy lại HTML thật cần thiết.
 
 ## Khắc phục sự cố
 
@@ -436,6 +598,10 @@ Fixture HTML được rút gọn từ trang thật và đã bỏ mã số thuế
 | Không tải lại file đã xoá nội dung | File ZIP cũ vẫn hợp lệ nên bị bỏ qua | Xoá file cũ hoặc dùng thư mục `--output-dir` khác |
 | `ModuleNotFoundError: ddddocr` | Chưa cài bộ nhận dạng | `pip install ddddocr onnxruntime`, hoặc `--solver manual` |
 | `paddle` lỗi `protobuf` | Cài chồng `ddddocr` và `paddlepaddle` | `pip install "protobuf==3.20.3"` |
+| Cổng trả lỗi lạ, cần xem request thật | Cổng đổi tham số/header | `-v`, hoặc `--log-file logs/run.log --dump-http http-dump` |
+| Cổng đòi header mới | Cổng nâng cấp giao diện | `--header "Tên=Giá trị"` để thử ngay |
+| Nghi header gây lỗi | Một header mới không hợp với cổng | `GDT_HEADER_PROFILE=minimal` để loại trừ, rồi báo lại để sửa `headers.py` |
+| Muốn xem log của lần chạy trước | Log chỉ in ra màn hình | Chạy lại với `--log-file`; file log được ghi thêm, không xoá lần trước |
 
 ## Bảo trì khi cổng thay đổi
 
@@ -443,6 +609,9 @@ Cổng có thể đổi bất cứ lúc nào. Bản đồ sửa nhanh:
 
 | Cổng thay đổi gì | Sửa ở đâu |
 |---|---|
+| Khoảng ngày trả về rỗng, cần xem request thật | `--log-file logs/run.log --dump-http http-dump` rồi đối chiếu |
+| Cổng yêu cầu thêm header | Thử `--header "Tên=Giá trị"`, chạy ổn định rồi mới thêm vào `gdt_tax/headers.py` |
+| Cổng chặn theo dấu hiệu trình duyệt (403, trang chặn) | Gửi như browser là mặc định rồi; nếu vẫn bị chặn thì thường là do TLS/HTTP2 — phải đổi lớp vận chuyển, xem mục [Không bị nhận diện là Python](#không-bị-nhận-diện-là-python) |
 | HTML bảng kết quả | Cập nhật `tests/fixtures/*.html` rồi `gdt_tax/parsing.py` |
 | Địa chỉ hoặc tên tham số endpoint | `gdt_tax/constants.py` |
 | Cách gọi endpoint tải ZIP | Portal tương ứng trong `gdt_tax/portals/` |

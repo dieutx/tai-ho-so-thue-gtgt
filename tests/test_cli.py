@@ -1,11 +1,14 @@
 import io
 import os
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest import mock
 
 from gdt_tax.captcha import available_solvers
-from gdt_tax.cli import build_parser, main, parse_solver_options
+from gdt_tax.cli import build_parser, main, parse_headers, parse_solver_options
+from gdt_tax.headers import PROFILES
 
 
 class ParseSolverOptionsTests(unittest.TestCase):
@@ -27,6 +30,28 @@ class ParseSolverOptionsTests(unittest.TestCase):
         self.assertEqual(parse_solver_options(None), {})
 
 
+class ParseHeadersTests(unittest.TestCase):
+    def test_doc_header_kieu_dau_bang(self):
+        self.assertEqual(parse_headers(["X-Token=abc"]), {"X-Token": "abc"})
+
+    def test_doc_header_kieu_hai_cham(self):
+        self.assertEqual(parse_headers(["User-Agent: Mozilla/5.0"]), {"User-Agent": "Mozilla/5.0"})
+
+    def test_giu_nguyen_gia_tri_co_dau_hai_cham(self):
+        headers = parse_headers(["Referer: https://dichvucong.gdt.gov.vn/tthc/tchs"])
+        self.assertEqual(headers["Referer"], "https://dichvucong.gdt.gov.vn/tthc/tchs")
+
+    def test_bo_qua_muc_khong_co_ten(self):
+        self.assertEqual(parse_headers(["", "  ", "=abc", ":abc", "khong-co-dau"]), {})
+
+    def test_nhieu_header_va_lan_sau_thang(self):
+        headers = parse_headers(["X-A=1", "X-B=2", "X-A=3"])
+        self.assertEqual(headers, {"X-A": "3", "X-B": "2"})
+
+    def test_danh_sach_rong(self):
+        self.assertEqual(parse_headers(None), {})
+
+
 class ParserTests(unittest.TestCase):
     def test_gia_tri_mac_dinh(self):
         args = build_parser().parse_args([])
@@ -36,6 +61,10 @@ class ParserTests(unittest.TestCase):
         self.assertFalse(args.dry_run)
         self.assertEqual(args.env_file, ".env")
         self.assertEqual(args.solver_option, [])
+        self.assertEqual(args.header, [])
+        self.assertIsNone(args.log_file)
+        self.assertIsNone(args.dump_http)
+        self.assertIsNone(args.header_profile)
 
     def test_doc_tham_so_day_du(self):
         args = build_parser().parse_args(
@@ -60,6 +89,39 @@ class ParserTests(unittest.TestCase):
         self.assertTrue(args.dry_run)
         self.assertTrue(args.verbose)
 
+    def test_doc_tham_so_chan_doan(self):
+        args = build_parser().parse_args(
+            [
+                "--header",
+                "Referer=https://dichvucong.gdt.gov.vn/tthc/tchs",
+                "--header",
+                "X-Token: abc",
+                "--log-file",
+                "logs/run.log",
+                "--dump-http",
+                "http-dump",
+            ]
+        )
+        self.assertEqual(len(args.header), 2)
+        self.assertEqual(args.log_file, "logs/run.log")
+        self.assertEqual(args.dump_http, "http-dump")
+
+    def test_doc_header_profile(self):
+        args = build_parser().parse_args(["--header-profile", "browser"])
+        self.assertEqual(args.header_profile, "browser")
+
+    def test_header_profile_la_khong_hop_le_thi_bao_loi(self):
+        with self.assertRaises(SystemExit), redirect_stderr(io.StringIO()):
+            build_parser().parse_args(["--header-profile", "chrome"])
+
+    def test_danh_sach_chon_header_profile_lay_tu_headers(self):
+        action = next(
+            action
+            for action in build_parser()._actions
+            if action.dest == "header_profile"
+        )
+        self.assertEqual(list(action.choices), list(PROFILES))
+
     def test_co_tham_so_phien_ban(self):
         with self.assertRaises(SystemExit):
             build_parser().parse_args(["--version"])
@@ -72,6 +134,23 @@ class MainTests(unittest.TestCase):
             code = main(["--list-solvers"])
         self.assertEqual(code, 0)
         self.assertEqual(buffer.getvalue().split(), list(available_solvers()))
+
+    def test_liet_ke_solver_tao_duoc_file_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "logs" / "run.log"
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                code = main(["--list-solvers", "--log-file", str(path)])
+            self.assertEqual(code, 0)
+            self.assertTrue(path.is_file())
+
+    def test_file_log_khong_mo_duoc_tra_ve_ma_loi_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = main(["--list-solvers", "--log-file", tmp])
+        self.assertEqual(code, 2)
+        self.assertIn("LỖI CẤU HÌNH", stderr.getvalue())
 
     def test_thieu_cau_hinh_tra_ve_ma_loi_2(self):
         stdout, stderr = io.StringIO(), io.StringIO()

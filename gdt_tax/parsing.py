@@ -22,12 +22,23 @@ from __future__ import annotations
 
 from bs4 import BeautifulSoup, Tag
 
-from .constants import SOURCE_ETAX
+from .constants import SOURCE_DVC, SOURCE_ETAX
 from .csrf import attribute
 from .models import CaseRecord
 
 ETAX_MIN_CELLS = 10
 DVC_MIN_CELLS = 12
+SOURCES = (SOURCE_ETAX, SOURCE_DVC)
+
+
+def _check_source(source: str) -> None:
+    """Chặn nguồn lạ.
+
+    Không có bước này thì một nguồn mới (hoặc tên sai chính tả) sẽ lặng lẽ được
+    đọc như DVC và cho ra hồ sơ sai cột thay vì báo lỗi ngay.
+    """
+    if source not in SOURCES:
+        raise ValueError(f"Nguồn dữ liệu không hợp lệ: {source!r}. Chỉ có {', '.join(SOURCES)}")
 
 
 def direct_cells(row: Tag) -> list[str]:
@@ -47,6 +58,7 @@ def case_id_from_row(row: Tag, cells: list[str], fallback_index: int) -> str:
 
 
 def etax_record(cells: list[str], case_id: str) -> CaseRecord | None:
+    """Đọc một hàng bảng ETAX (11 cột) thành hồ sơ."""
     if not case_id or len(cells) < ETAX_MIN_CELLS:
         return None
     return CaseRecord(
@@ -64,11 +76,12 @@ def etax_record(cells: list[str], case_id: str) -> CaseRecord | None:
 
 
 def dvc_record(cells: list[str], case_id: str) -> CaseRecord | None:
+    """Đọc một hàng bảng DVC (13 cột) thành hồ sơ."""
     if not case_id or len(cells) < DVC_MIN_CELLS:
         return None
     return CaseRecord(
         ma_ho_so=case_id,
-        nguon="DVC",
+        nguon=SOURCE_DVC,
         ten_tthc=cells[3],
         to_khai=cells[4],
         ky_tinh_thue=cells[5],
@@ -83,6 +96,7 @@ def dvc_record(cells: list[str], case_id: str) -> CaseRecord | None:
 
 def parse_records(html: str, source: str) -> list[CaseRecord]:
     """Đọc mọi hồ sơ trong bảng kết quả, bỏ trùng theo mã hồ sơ."""
+    _check_source(source)
     soup = BeautifulSoup(html, "lxml")
     records: list[CaseRecord] = []
     seen: set[str] = set()
@@ -112,6 +126,7 @@ def _int_attribute(soup: BeautifulSoup, element_id: str, attribute_name: str) ->
 
 def page_count(html: str, source: str) -> int | None:
     """Tổng số trang của kết quả tra cứu, ``None`` nếu cổng không cho biết."""
+    _check_source(source)
     soup = BeautifulSoup(html, "lxml")
     if source == SOURCE_ETAX:
         return _int_attribute(soup, "goToPage_tdt", "max")
@@ -123,6 +138,9 @@ def page_count(html: str, source: str) -> int | None:
 
 
 __all__ = [
+    "DVC_MIN_CELLS",
+    "ETAX_MIN_CELLS",
+    "SOURCES",
     "case_id_from_row",
     "direct_cells",
     "dvc_record",

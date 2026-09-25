@@ -27,6 +27,7 @@ from .dates import (
     split_periods,
 )
 from .errors import ConfigError
+from .headers import DEFAULT_PROFILE, PROFILES
 from .models import SearchPeriod
 
 ENV_PREFIX = "GDT_"
@@ -88,6 +89,10 @@ class _Env:
             return False
         raise ConfigError(f"{ENV_PREFIX}{name} phải là true/false, nhận được {raw!r}")
 
+    def text_map(self, name: str) -> dict[str, str]:
+        """Đọc một đối tượng JSON phẳng và đổi mọi giá trị thành chuỗi."""
+        return {str(key): str(value) for key, value in self.json(name).items()}
+
     def json(self, name: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
         raw = self._raw(name, "").strip()
         if not raw:
@@ -123,7 +128,18 @@ class Settings:
     http_retries: int = 3
     pause_between_records: float = 1.0
     pause_between_pages: float = 3.0
+    #: Tỉ lệ ngẫu nhiên (0–1) cộng thêm vào mỗi lần nghỉ để nhịp không đều như máy.
+    pause_jitter: float = 0.3
     dry_run: bool = False
+    #: Header thêm hoặc ghi đè cho mọi request, để xử lý nhanh khi cổng đổi yêu cầu
+    #: mà chưa cần sửa mã nguồn (``--header``/``GDT_EXTRA_HEADERS``).
+    extra_headers: Mapping[str, str] = field(default_factory=dict)
+    #: File ghi thêm toàn bộ log ở mức DEBUG (``--log-file``/``GDT_LOG_FILE``).
+    log_file: str = ""
+    #: Thư mục lưu nguyên request/response để dựng fixture (``--dump-http``).
+    http_dump_dir: str = ""
+    #: Bộ header gửi đi: ``minimal`` (mặc định) hoặc ``browser``. Xem gdt_tax.headers.
+    header_profile: str = DEFAULT_PROFILE
 
     # --- Dẫn xuất ---
     def periods(self) -> list[SearchPeriod]:
@@ -152,6 +168,15 @@ class Settings:
             raise ConfigError("GDT_MAX_DAYS_PER_SEARCH phải lớn hơn 0")
         if self.page_size < 1:
             raise ConfigError("GDT_PAGE_SIZE phải lớn hơn 0")
+        if self.pause_jitter < 0:
+            raise ConfigError("GDT_PAUSE_JITTER không được là số âm")
+        if not all(isinstance(name, str) and name for name in self.extra_headers):
+            raise ConfigError("GDT_EXTRA_HEADERS phải là đối tượng JSON với khoá là tên header")
+        if self.header_profile not in PROFILES:
+            raise ConfigError(
+                f"GDT_HEADER_PROFILE phải là {' hoặc '.join(PROFILES)}, nhận được "
+                f"{self.header_profile!r}"
+            )
 
     @classmethod
     def from_env(
@@ -195,7 +220,12 @@ class Settings:
                 http_retries=env.integer("HTTP_RETRIES", 3),
                 pause_between_records=env.number("PAUSE_BETWEEN_RECORDS", 1.0),
                 pause_between_pages=env.number("PAUSE_BETWEEN_PAGES", 3.0),
+                pause_jitter=env.number("PAUSE_JITTER", 0.3),
                 dry_run=bool(pick("dry_run", env.boolean("DRY_RUN", False))),
+                extra_headers=pick("extra_headers", env.text_map("EXTRA_HEADERS")) or {},
+                log_file=pick("log_file", env.text("LOG_FILE")),
+                http_dump_dir=pick("http_dump_dir", env.text("HTTP_DUMP_DIR")),
+                header_profile=pick("header_profile", env.text("HEADER_PROFILE", DEFAULT_PROFILE)),
             )
         except ValueError as error:  # parse_date
             raise ConfigError(str(error)) from error

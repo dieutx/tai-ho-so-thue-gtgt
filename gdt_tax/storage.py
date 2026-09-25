@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import csv
+import glob
 import json
 import logging
 import zipfile
@@ -71,7 +72,9 @@ class ZipStore:
         """Trả về file ZIP đã có nếu hợp lệ; đổi tên về đúng quy ước khi cần."""
         self.directory.mkdir(parents=True, exist_ok=True)
         preferred = self.path_for(record)
-        candidates = [preferred, *self.directory.glob(f"*{record.ma_ho_so}*.zip")]
+        # glob.escape: mã hồ sơ có thể chứa ký tự đặc biệt (``[``, ``?``, ``*``).
+        pattern = f"*{glob.escape(record.ma_ho_so)}*.zip"
+        candidates = [preferred, *self.directory.glob(pattern)]
         checked: set[Path] = set()
         for candidate in candidates:
             if candidate in checked or not candidate.is_file():

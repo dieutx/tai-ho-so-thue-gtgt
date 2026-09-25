@@ -89,5 +89,14 @@ class RobustnessTests(unittest.TestCase):
         self.assertIsNone(page_count("<div></div>", SOURCE_ETAX))
 
 
+class UnknownSourceTests(unittest.TestCase):
+    def test_nguon_la_thi_bao_loi_ngay(self):
+        # Trước đây nguồn lạ bị đọc như DVC và cho ra hồ sơ sai cột.
+        with self.assertRaises(ValueError):
+            parse_records("<table><tbody></tbody></table>", "KHONG-CO")
+        with self.assertRaises(ValueError):
+            page_count("<html></html>", "KHONG-CO")
+
+
 if __name__ == "__main__":
     unittest.main()

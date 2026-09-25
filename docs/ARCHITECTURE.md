@@ -13,7 +13,9 @@ quy tắc ngày tháng) đều tách riêng để thay mà không ảnh hưởng
 | `errors.py` | Cây ngoại lệ | — |
 | `dates.py` | Đọc/ghi ngày, chia đoạn tra cứu, mốc ETAX | Gọi mạng |
 | `config.py` | `Settings` từ `.env` + biến môi trường | Gọi mạng |
-| `http.py` | `HttpClient`: nối URL, timeout, thử lại khi 429 | Hiểu nghiệp vụ |
+| `http.py` | `HttpClient`: nối URL, timeout, thử lại khi 429, log và dump từng request | Hiểu nghiệp vụ |
+| `traffic.py` | Che dữ liệu nhạy cảm, định dạng log, ghi file dump request/response | Gọi mạng, hiểu nghiệp vụ |
+| `logging_setup.py` | Cấu hình log ra màn hình và ra file | Ghi log nghiệp vụ |
 | `csrf.py` | Đọc CSRF token từ HTML | Gọi mạng |
 | `parsing.py` | Đọc bảng kết quả thành `CaseRecord` | Gọi mạng |
 | `naming.py` | Tạo tên file ZIP | Đọc/ghi file |
@@ -29,8 +31,9 @@ Quan hệ phụ thuộc chỉ đi một chiều:
 ```text
 cli ─► pipeline ─► auth, portals, storage, config
                        │           │
-                       │           └─► parsing, http, csrf, constants
-                       └─► captcha ─► http, constants
+                       │           ├─► parsing, csrf, constants
+                       │           └─► http ─► headers, traffic, constants
+                       └─► captcha ─► http, headers, constants
 ```
 
 `config`, `dates`, `models`, `naming` là lá: chỉ dùng thư viện chuẩn và không
@@ -89,7 +92,65 @@ Thứ tự cột của bảng kết quả nằm ở đầu `gdt_tax/parsing.py`.
   cần gửi đúng tham số `captcha` là đủ.
 - **Phải tải ngay trong lúc phân trang**, nếu gom hết mã hồ sơ rồi mới tải sẽ
   gặp lỗi `validateIdTkhai` (xem phần Năm giai đoạn).
-- **Cổng có lúc trả `429`** khi tra cứu nhanh; `HttpClient` tự đọc `Retry-After`.
+- **Cổng có lúc trả `429`** khi tra cứu nhanh; `HttpClient` tự đọc `Retry-After`,
+  còn `Pipeline._pause()` thêm jitter (chỉ cộng thêm) để nhịp không đều như máy.
+- **Cổng không kiểm dấu vân tay trình duyệt** (chỉ 429 ở tầng ứng dụng + CAPTCHA ở
+  bước đăng nhập), nhưng công cụ vẫn mặc định gửi header như Chrome. Phần không sửa
+  được bằng header là HTTP/1.1 (không ALPN/HTTP2) và dấu vân tay TLS — xem mục
+  *Không bị nhận diện là Python* trong README.
+
+## Ghi log và lưu traffic
+
+`http.py` là điểm duy nhất gọi mạng, nên mọi thứ cần quan sát đều nằm ở đó:
+
+* mỗi request được log một dòng `INFO` (phương thức, URL, tham số, mã trạng thái,
+  thời gian, dung lượng) — đây là thứ giúp đọc hiểu luồng khi cổng đổi;
+* header, tham số và body được log ở mức `DEBUG` (``-v``, hoặc luôn có trong file
+  khi dùng ``--log-file``);
+* `--dump-http` gọi :class:`gdt_tax.traffic.TrafficDumper` để ghi nguyên
+  request/response ra file, phục vụ dựng lại fixture.
+
+`extra_headers` của `HttpClient` được gộp **sau** header mà portal đặt, nên
+`--header`/`GDT_EXTRA_HEADERS` ghi đè được. Nhờ vậy khi cổng yêu cầu thêm một
+header, có thể xử lý ngay lúc chạy; nếu thành yêu cầu lâu dài thì sửa
+`gdt_tax/headers.py` cho đúng chỗ.
+
+`traffic.py` cũng giữ quy tắc che dữ liệu nhạy cảm (`mask_headers`, `mask_data`)
+— thêm tên header hay trường mới cần che thì sửa hai hằng số ở đầu module.
+Không module nào khác được tự ghi ra file log hay file dump.
+
+## Header gửi đi (không bị nhận diện là Python)
+
+`headers.py` là nơi duy nhất quyết định một request gửi header gì, theo hai profile
+(`GDT_HEADER_PROFILE`): ``browser`` (mặc định) và ``minimal``.
+
+Quan hệ giữa ba module, cần nhớ khi sửa:
+
+```text
+portals/* , auth.py , captcha/images.py
+        │  chọn builder theo loại request (page / xhr / image)
+        ▼
+   headers.py       bộ header + client hint + thứ tự Chrome
+        │
+        ▼
+   http.py          xoá header mặc định của Session, gộp header lúc chạy,
+                    tính lại sec-ch-ua* theo User-Agent cuối cùng, sắp lại thứ tự
+```
+
+Hai cạm bẫy đã kiểm chứng và được ghi bằng test:
+
+1. **Thứ tự phải sắp ở bộ cuối cùng**, trong `http.py`: `requests` gộp header của
+   `Session` lên trước rồi mới tới header của request, nên sắp xếp trong builder là
+   chưa đủ. Profile ``browser`` cũng xoá luôn header mặc định của `requests`
+   (``python-requests/…``) — vừa là dấu hiệu lộ công cụ, vừa chèn lên trước.
+2. **`Accept-Encoding` không được khai `zstd`**: urllib3 (tới 2.8) chỉ giải mã
+   ``gzip``/``deflate``/``br``/``x-gzip``. `accept_encoding()` chỉ thêm ``br`` khi
+   có ``brotli``, còn ``zstd`` thì không bao giờ thêm.
+
+`sec-ch-ua*` luôn được tính từ ``User-Agent`` thực sự gửi đi
+(`reconcile_client_hints`), nên ``--header "User-Agent=..."`` không tạo ra cặp giá
+trị mâu thuẫn: hint được tính lại, hoặc bị bỏ hẳn nếu ``User-Agent`` không phải
+Chrome.
 
 ## Mở rộng
 

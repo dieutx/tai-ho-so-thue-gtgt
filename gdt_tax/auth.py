@@ -12,15 +12,10 @@ import logging
 import time
 
 from .captcha import KIND_LOGIN, CaptchaSolver, fetch_captcha
-from .constants import (
-    DEFAULT_HEADERS,
-    LANDING,
-    LOGIN_ENDPOINT,
-    LOGIN_PAGE,
-    ORIGIN,
-)
+from .constants import LANDING, LOGIN_ENDPOINT, LOGIN_PAGE, ORIGIN
 from .csrf import token_from_meta
 from .errors import LoginError
+from .headers import DEFAULT_PROFILE, build_page_headers, build_xhr_headers
 from .http import HttpClient
 
 LOGGER_NAME = "gdt_tax.auth"
@@ -40,16 +35,31 @@ def login(
 
     for attempt in range(1, settings.login_attempts + 1):
         logger.info("ĐĂNG NHẬP %s/%s", attempt, settings.login_attempts)
-        page = http.get(LOGIN_PAGE, headers={**DEFAULT_HEADERS, "Referer": f"{ORIGIN}/"})
+        page = http.get(
+            LOGIN_PAGE,
+            headers=build_page_headers(
+                profile=settings.header_profile,
+                site="none",
+                headers={"Referer": f"{ORIGIN}/"},
+            ),
+        )
         if page.status_code != 200:
             logger.warning("Không mở được trang đăng nhập: HTTP %s", page.status_code)
             time.sleep(PAUSE_BEFORE_RETRY)
             continue
 
         csrf = token_from_meta(page.text)
-        image = fetch_captcha(http, KIND_LOGIN, logger=logger)
+        image = fetch_captcha(
+            http, KIND_LOGIN, logger=logger, profile=settings.header_profile
+        )
         captcha_text = captcha.solve(image) if image else ""
         if not csrf or not captcha_text:
+            logger.warning(
+                "Bỏ lần thử này: %s",
+                "không lấy được CSRF token từ trang đăng nhập"
+                if not csrf
+                else "bộ nhận dạng CAPTCHA không đọc được mã",
+            )
             time.sleep(PAUSE_BEFORE_RETRY)
             continue
 
@@ -61,15 +71,16 @@ def login(
                 "doiTuong": "DN",
                 "captcha": captcha_text,
             },
-            headers={
-                **DEFAULT_HEADERS,
-                "Accept": "*/*",
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": ORIGIN,
-                "Referer": http.url(LOGIN_PAGE),
-                "X-Requested-With": "XMLHttpRequest",
-                "X-XSRF-TOKEN": csrf,
-            },
+            headers=build_xhr_headers(
+                profile=settings.header_profile,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Origin": ORIGIN,
+                    "Referer": http.url(LOGIN_PAGE),
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-XSRF-TOKEN": csrf,
+                },
+            ),
         )
         logger.info("LOGIN: HTTP=%s %s", response.status_code, response.text[:200])
 
@@ -84,10 +95,15 @@ def login(
     return False
 
 
-def open_landing(http: HttpClient, logger: logging.Logger | None = None) -> str:
+def open_landing(
+    http: HttpClient,
+    logger: logging.Logger | None = None,
+    *,
+    profile: str = DEFAULT_PROFILE,
+) -> str:
     """Mở trang hồ sơ và trả về HTML (nguồn của CSRF token cho luồng ETAX)."""
     logger = logger or logging.getLogger(LOGGER_NAME)
-    response = http.get(LANDING, headers=DEFAULT_HEADERS)
+    response = http.get(LANDING, headers=build_page_headers(profile=profile))
     if response.status_code != 200:
         raise LoginError(f"Không mở được trang hồ sơ: HTTP {response.status_code}")
     logger.debug("Đã mở trang hồ sơ (%s bytes)", len(response.content))

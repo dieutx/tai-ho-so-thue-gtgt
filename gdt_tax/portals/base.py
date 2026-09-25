@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 
 from ..captcha import fetch_captcha
-from ..constants import CASE_DETAIL, DEFAULT_HEADERS, LANDING
+from ..constants import CASE_DETAIL, LANDING
 from ..csrf import csrf_token
+from ..headers import build_page_headers, build_xhr_headers
 from ..http import HttpClient
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..parsing import page_count, parse_records
@@ -35,6 +37,11 @@ class Portal(ABC):
         self.settings = settings
         self.logger = logger or logging.getLogger(f"gdt_tax.portal.{self.source.lower()}")
 
+    @property
+    def profile(self) -> str:
+        """Bộ header đang dùng: ``minimal`` (mặc định) hoặc ``browser``."""
+        return self.settings.header_profile
+
     # --- Phần từng nguồn phải tự cài ---
     @abstractmethod
     def search(self, period: SearchPeriod, page: int) -> PageResult:
@@ -49,12 +56,21 @@ class Portal(ABC):
     def landing_url(self) -> str:
         return self.http.url(LANDING)
 
-    def base_headers(self) -> dict[str, str]:
-        return dict(DEFAULT_HEADERS)
+    def page_headers(
+        self, *, site: str = "same-origin", headers: Mapping[str, str] | None = None
+    ) -> dict[str, str]:
+        """Header cho một lần mở trang HTML; xem :func:`gdt_tax.headers.build_page_headers`."""
+        return build_page_headers(profile=self.profile, site=site, headers=headers)
+
+    def xhr_headers(
+        self, *, accept: str = "*/*", headers: Mapping[str, str] | None = None
+    ) -> dict[str, str]:
+        """Header cho request AJAX/HTMX; xem :func:`gdt_tax.headers.build_xhr_headers`."""
+        return build_xhr_headers(profile=self.profile, accept=accept, headers=headers)
 
     def captcha_text(self) -> str:
         """Lấy ảnh CAPTCHA tra cứu và nhờ solver hiện hành đọc mã."""
-        image = fetch_captcha(self.http, "search", logger=self.logger)
+        image = fetch_captcha(self.http, "search", logger=self.logger, profile=self.profile)
         return self.captcha.solve(image) if image else ""
 
     def detail_url(self, record: CaseRecord) -> str:
@@ -65,7 +81,7 @@ class Portal(ABC):
     def fetch_detail_csrf(self, record: CaseRecord) -> tuple[str, str]:
         """Mở trang chi tiết và lấy token CSRF của form tải xuống."""
         url = self.detail_url(record)
-        response = self.http.get(url, headers={**self.base_headers(), "Referer": self.landing_url})
+        response = self.http.get(url, headers=self.page_headers(headers={"Referer": self.landing_url}))
         csrf = csrf_token(response.text) if response.status_code == 200 else ""
         return url, csrf
 

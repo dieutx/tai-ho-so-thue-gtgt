@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 from ..constants import (
-    DEFAULT_HEADERS,
     DVC_DOWNLOAD,
     DVC_DOWNLOAD_FORM,
     DVC_SEARCH,
@@ -43,14 +42,15 @@ class DvcPortal(Portal):
                 "page": page,
                 "size": self.settings.page_size,
             },
-            headers={
-                **self.base_headers(),
-                "HX-Request": "true",
-                "HX-Target": "table-container",
-                "HX-Current-URL": self.landing_url,
-                "Accept": "text/html-partial",
-                "Referer": self.landing_url,
-            },
+            headers=self.xhr_headers(
+                accept="text/html-partial",
+                headers={
+                    "HX-Request": "true",
+                    "HX-Target": "table-container",
+                    "HX-Current-URL": self.landing_url,
+                    "Referer": self.landing_url,
+                },
+            ),
         )
         return self._page_result(response)
 
@@ -58,28 +58,28 @@ class DvcPortal(Portal):
         validation = self.http.get(
             DVC_VALIDATE,
             params={"idTKhai": record.ma_ho_so},
-            headers={
-                **DEFAULT_HEADERS,
-                "Accept": "*/*",
-                "Origin": ORIGIN,
-                "X-Requested-With": "XMLHttpRequest",
-                "X-XSRF-TOKEN": csrf,
-                "Referer": detail_url,
-            },
+            headers=self.xhr_headers(
+                headers={
+                    "Origin": ORIGIN,
+                    "Referer": detail_url,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-XSRF-TOKEN": csrf,
+                }
+            ),
         )
         if validation.status_code == 200 and validation.text.strip() == "200":
             return self.http.post(
                 DVC_DOWNLOAD,
                 json={"maHoSo": record.ma_ho_so},
-                headers={
-                    **DEFAULT_HEADERS,
-                    "Accept": "*/*",
-                    "Content-Type": "application/json",
-                    "Origin": ORIGIN,
-                    "X-Requested-With": "XMLHttpRequest",
-                    "X-XSRF-TOKEN": csrf,
-                    "Referer": detail_url,
-                },
+                headers=self.xhr_headers(
+                    headers={
+                        "Content-Type": "application/json",
+                        "Origin": ORIGIN,
+                        "Referer": detail_url,
+                        "X-Requested-With": "XMLHttpRequest",
+                        "X-XSRF-TOKEN": csrf,
+                    }
+                ),
             )
 
         self.logger.warning(
@@ -87,16 +87,17 @@ class DvcPortal(Portal):
             validation.status_code,
             validation.text[:100],
         )
+        # Đây là form submit thật (không phải AJAX), nên dùng bộ header điều hướng.
         return self.http.post(
             DVC_DOWNLOAD_FORM,
             data={"_csrf": csrf, "mahoso": record.ma_ho_so},
-            headers={
-                **DEFAULT_HEADERS,
-                "Accept": "*/*",
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Origin": ORIGIN,
-                "Referer": detail_url,
-            },
+            headers=self.page_headers(
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Origin": ORIGIN,
+                    "Referer": detail_url,
+                }
+            ),
         )
 
 

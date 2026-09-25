@@ -79,6 +79,21 @@ class ZipStoreTests(unittest.TestCase):
     def test_chua_co_file_thi_tra_none(self):
         self.assertIsNone(self.store.find_existing(make_record()))
 
+    def test_khong_nham_file_cua_ho_so_khac_khi_ma_co_ky_tu_glob(self):
+        # "[" và "]" là ký tự đặc biệt của glob: không escape thì
+        # "*G[12]*.zip" khớp cả file "G1-khac.zip" của hồ sơ khác và bị đổi tên
+        # thành của hồ sơ này — hồ sơ sẽ mang dữ liệu sai.
+        (self.directory / "G1-khac.zip").write_bytes(sample_zip())
+        self.assertIsNone(self.store.find_existing(make_record("G[12]")))
+        self.assertTrue((self.directory / "G1-khac.zip").is_file())
+
+    def test_van_tim_thay_file_cu_cua_dung_ho_so_co_ky_tu_glob(self):
+        record = make_record("G[12]")
+        (self.directory / "G[12]-ten-cu.zip").write_bytes(sample_zip())
+        found = self.store.find_existing(record)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.name, zip_filename(record))
+
     def test_save_from_response_giai_ma_base64(self):
         record = make_record()
         response = FakeResponse(json_payload={"content": zip_payload()})

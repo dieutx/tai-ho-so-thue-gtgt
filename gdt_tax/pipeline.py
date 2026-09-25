@@ -16,6 +16,7 @@ nếu không sẽ gặp lỗi ``validateIdTkhai``.
 from __future__ import annotations
 
 import logging
+import random
 import time
 from collections.abc import Callable
 
@@ -68,7 +69,7 @@ class Pipeline:
         if not login(self.http, self.captcha, self.settings, self.logger):
             raise LoginError("ĐĂNG NHẬP THẤT BẠI")
 
-        landing = open_landing(self.http, self.logger)
+        landing = open_landing(self.http, self.logger, profile=self.settings.header_profile)
         portals = self.portal_factory(
             self.http, self.captcha, self.settings, csrf_token(landing), self.logger
         )
@@ -124,14 +125,27 @@ class Pipeline:
 
                 if self.settings.case_id and record.ma_ho_so == self.settings.case_id:
                     return True
-                self.sleep(self.settings.pause_between_records)
+                self._pause(self.settings.pause_between_records)
 
             if total_pages is None and not result.records:
                 break
             page += 1
             if total_pages is None or page <= total_pages:
-                self.sleep(self.settings.pause_between_pages)
+                self._pause(self.settings.pause_between_pages)
         return False
+
+    def _pause(self, seconds: float) -> None:
+        """Nghỉ giữa hai request, thêm chút ngẫu nhiên cho nhịp tự nhiên hơn.
+
+        Jitter **chỉ cộng thêm** thời gian, không bao giờ rút ngắn, nên không làm
+        tăng tần suất request — vẫn giữ đúng phép lịch sự với cổng (ngoài ra
+        ``HttpClient`` còn tôn trọng ``Retry-After``).
+        """
+        jitter = self.settings.pause_jitter
+        delay = seconds * (1 + random.uniform(0, jitter)) if jitter > 0 and seconds > 0 else seconds
+        if delay != seconds:
+            self.logger.debug("Nghỉ %.1fs (đã cộng jitter)", delay)
+        self.sleep(delay)
 
     def _search_page(self, portal, period, page: int) -> PageResult:
         """Tra cứu một trang, tự thử lại khi cổng trả về rỗng (thường do CAPTCHA sai)."""
@@ -149,7 +163,7 @@ class Pipeline:
             )
             if result.records or result.total_pages is not None:
                 return result
-            self.sleep(SEARCH_RETRY_PAUSE)
+            self._pause(SEARCH_RETRY_PAUSE)
         raise SearchError(
             f"Không tìm được trang {page} sau {self.settings.search_attempts} lần thử"
         )

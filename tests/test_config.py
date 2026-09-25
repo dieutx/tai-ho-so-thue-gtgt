@@ -6,6 +6,7 @@ from pathlib import Path
 from gdt_tax.config import Settings, load_env_file
 from gdt_tax.constants import SOURCE_ETAX
 from gdt_tax.errors import ConfigError
+from gdt_tax.headers import PROFILE_BROWSER, PROFILE_MINIMAL
 
 BASE_ENV = {
     "GDT_USERNAME": "0101234567-QL",
@@ -91,6 +92,61 @@ class SettingsFromEnvTests(unittest.TestCase):
         env = {**BASE_ENV, "GDT_CAPTCHA_OPTIONS": "{khong-phai-json}"}
         with self.assertRaises(ConfigError):
             Settings.from_env(env, env_file=None)
+
+    def test_mac_dinh_khong_co_header_log_hay_dump(self):
+        settings = Settings.from_env(BASE_ENV, env_file=None)
+        self.assertEqual(settings.extra_headers, {})
+        self.assertEqual(settings.log_file, "")
+        self.assertEqual(settings.http_dump_dir, "")
+
+    def test_doc_header_ghi_de_tu_json(self):
+        env = {
+            **BASE_ENV,
+            "GDT_EXTRA_HEADERS": '{"User-Agent": "Mozilla/5.0", "X-Token": "abc"}',
+        }
+        settings = Settings.from_env(env, env_file=None)
+        self.assertEqual(settings.extra_headers["X-Token"], "abc")
+
+    def test_header_sai_dinh_dang_thi_bao_loi(self):
+        with self.assertRaises(ConfigError):
+            Settings.from_env({**BASE_ENV, "GDT_EXTRA_HEADERS": "khong-phai-json"}, env_file=None)
+
+    def test_header_rong_thi_bao_loi(self):
+        with self.assertRaises(ConfigError):
+            Settings.from_env({**BASE_ENV, "GDT_EXTRA_HEADERS": '{"": "x"}'}, env_file=None)
+
+    def test_mac_dinh_header_profile_la_browser(self):
+        settings = Settings.from_env(BASE_ENV, env_file=None)
+        self.assertEqual(settings.header_profile, PROFILE_BROWSER)
+
+    def test_tat_header_profile_bang_minimal(self):
+        settings = Settings.from_env({**BASE_ENV, "GDT_HEADER_PROFILE": "minimal"}, env_file=None)
+        self.assertEqual(settings.header_profile, PROFILE_MINIMAL)
+
+    def test_mac_dinh_pause_jitter(self):
+        self.assertEqual(Settings.from_env(BASE_ENV, env_file=None).pause_jitter, 0.3)
+
+    def test_doc_pause_jitter(self):
+        settings = Settings.from_env({**BASE_ENV, "GDT_PAUSE_JITTER": "0"}, env_file=None)
+        self.assertEqual(settings.pause_jitter, 0.0)
+
+    def test_pause_jitter_am_thi_bao_loi(self):
+        with self.assertRaises(ConfigError):
+            Settings.from_env({**BASE_ENV, "GDT_PAUSE_JITTER": "-1"}, env_file=None)
+
+    def test_doc_header_profile_browser(self):
+        settings = Settings.from_env({**BASE_ENV, "GDT_HEADER_PROFILE": "browser"}, env_file=None)
+        self.assertEqual(settings.header_profile, PROFILE_BROWSER)
+
+    def test_header_profile_sai_thi_bao_loi(self):
+        with self.assertRaises(ConfigError):
+            Settings.from_env({**BASE_ENV, "GDT_HEADER_PROFILE": "chrome"}, env_file=None)
+
+    def test_doc_file_log_va_thu_muc_dump(self):
+        env = {**BASE_ENV, "GDT_LOG_FILE": "logs/run.log", "GDT_HTTP_DUMP_DIR": "http-dump"}
+        settings = Settings.from_env(env, env_file=None)
+        self.assertEqual(settings.log_file, "logs/run.log")
+        self.assertEqual(settings.http_dump_dir, "http-dump")
 
     def test_so_nguyen_sai_thi_bao_loi(self):
         with self.assertRaises(ConfigError):

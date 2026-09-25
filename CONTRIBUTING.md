@@ -15,7 +15,7 @@ Kích hoạt môi trường (Windows: `.\.venv\Scripts\Activate.ps1`, Linux:
 `source .venv/bin/activate`) rồi cài:
 
 ```bash
-pip install -r requirements-dev.txt   # gồm cả easyocr để chạy thử thật
+pip install -r requirements-dev.txt   # requirements.txt (gồm ddddocr) + ruff + mypy
 ```
 
 Nếu chỉ muốn sửa logic và chạy test, cài tối thiểu là đủ vì test **không** cần `easyocr`:
@@ -54,9 +54,16 @@ cài (xem `tests/test_captcha_backends.py`).
   cho `import gdt_tax` nhẹ và test chạy không cần OCR.
 - Thay đổi giao diện cổng thì sửa `constants.py`, `parsing.py` hoặc portal — không
   rải điều kiện rẽ nhánh khắp nơi.
+- Không tự ghép dict header trong portal/auth: mọi header đi qua
+  `gdt_tax/headers.py` (một builder cho mỗi loại request). Sửa header là sửa ở đó
+  rồi chạy `tests/test_headers.py`; đừng khai `Accept-Encoding` bằng tay, xem
+  `accept_encoding()` để biết vì sao `zstd` bị loại.
 - Thông báo log và ngoại lệ viết bằng tiếng Việt, không dấu ở tên biến/hàm.
 - Thêm hàm phức tạp thì thêm test; ưu tiên fixture HTML thật trong `tests/fixtures/`.
 - Không hard-code tài khoản, mật khẩu, cookie hay CSRF token.
+- Chỉ ghi log ra màn hình; mọi thứ ghi ra file hoặc in ra ở mức `DEBUG` đi qua
+  `traffic.py`. Thêm header/trường nhạy cảm mới vào `SENSITIVE_HEADERS` hoặc
+  `SENSITIVE_FIELDS` ở đầu module đó.
 
 ## Thêm bộ nhận dạng CAPTCHA hoặc nguồn dữ liệu
 
@@ -90,8 +97,15 @@ nhỏ và tự chuyển nguồn tại mốc đó.
 
 Đính kèm giúp chúng tôi rất nhiều:
 
-- Lệnh đã chạy và log chạy với `-v`.
-- HTML thật của trang kết quả **đã che** mã số thuế và mã hồ sơ của bạn.
+- Lệnh đã chạy và file log đầy đủ:
+  ```bash
+  python -m gdt_tax --from-date ... --to-date ... --log-file logs/run.log --dump-http http-dump
+  ```
+  File log luôn ở mức `DEBUG` (kèm header/body của từng request); `Cookie`,
+  `Set-Cookie`, `Authorization`, `matKhau`, `_csrf` đã bị che thành `***` trước khi
+  ghi, nên gửi kèm được. Xem mục **Ghi log và lưu lại traffic** trong README.
+- File `*.response.txt` liên quan trong `http-dump/` — HTML thật của cổng. Nhớ
+  **che mã số thuế và mã hồ sơ** của bạn (log không tự che phần này).
 - Tên solver CAPTCHA đang dùng (`GDT_CAPTCHA_SOLVER`).
 
 Dán HTML vào `tests/fixtures/` là cách nhanh nhất để người khác tái hiện lỗi.

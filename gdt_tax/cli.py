@@ -12,12 +12,14 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import platform
 import sys
 
 from . import __version__
 from .captcha import available_solvers, create_solver, register_plugins
 from .config import DEFAULT_ENV_FILE, Settings
 from .errors import CaptchaError, ConfigError, GdtError
+from .headers import PROFILE_BROWSER, PROFILE_MINIMAL, PROFILES, header_names
 from .http import HttpClient
 from .logging_setup import configure_logging
 from .pipeline import Pipeline
@@ -35,6 +37,11 @@ Ví dụ:
   python -m gdt_tax --case-id 11320250292469209
   python -m gdt_tax --solver manual            # tự nhập CAPTCHA từng lần
   python -m gdt_tax --dry-run                  # chỉ tra cứu, không tải
+
+Khi cổng đổi giao diện, chạy kèm các tham số chẩn đoán:
+  python -m gdt_tax -v --log-file logs/run.log --dump-http http-dump
+  python -m gdt_tax --header "Referer=https://dichvucong.gdt.gov.vn/tthc/tchs"
+  python -m gdt_tax --header-profile minimal   # loại trừ lỗi do header (mặc định: browser)
 """
 
 
@@ -52,6 +59,24 @@ def parse_solver_options(items: list[str] | None) -> dict:
         except json.JSONDecodeError:
             options[key] = raw
     return options
+
+
+def parse_headers(items: list[str] | None) -> dict[str, str]:
+    """Đổi ``--header Ten=Gia tri`` hoặc ``--header Ten: Gia tri`` thành dict.
+
+    Nhận cả ``=`` và ``:`` vì đọc header kiểu HTTP quen tay hơn, còn ``=`` thì
+    giống ``--solver-option``. Giá trị được giữ nguyên, kể cả khi có dấu ``:``.
+    """
+    headers: dict[str, str] = {}
+    for item in items or []:
+        positions = [index for index in (item.find("="), item.find(":")) if index > 0]
+        if not positions:
+            continue
+        cut = min(positions)
+        name, value = item[:cut].strip(), item[cut + 1 :].strip()
+        if name:
+            headers[name] = value
+    return headers
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -81,6 +106,34 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--list-solvers", action="store_true", help="Liệt kê solver CAPTCHA rồi thoát"
     )
+    parser.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        metavar="TÊN=GIÁ_TRỊ",
+        help=(
+            "Thêm hoặc ghi đè header cho mọi request, lặp lại được "
+            "(dùng khi cổng yêu cầu header mới)"
+        ),
+    )
+    parser.add_argument(
+        "--log-file",
+        metavar="FILE",
+        help="Ghi thêm toàn bộ log ở mức chi tiết ra file (kèm header/body của request)",
+    )
+    parser.add_argument(
+        "--dump-http",
+        metavar="THƯ_MỤC",
+        help="Lưu nguyên request/response ra thư mục để dựng fixture khi cổng đổi",
+    )
+    parser.add_argument(
+        "--header-profile",
+        choices=list(PROFILES),
+        help=(
+            f"Bộ header gửi đi: {PROFILE_MINIMAL} (mặc định) hoặc {PROFILE_BROWSER} "
+            "(thêm Sec-Fetch-*, sec-ch-ua* như Chrome thật)"
+        ),
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Log chi tiết")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
@@ -89,9 +142,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    configure_logging(args.verbose)
 
     if args.list_solvers:
+        try:
+            configure_logging(args.verbose, log_file=args.log_file)
+        except OSError as error:
+            print(f"LỖI CẤU HÌNH: không mở được file log: {error}", file=sys.stderr)
+            return EXIT_CONFIG_ERROR
         print("\n".join(available_solvers()))
         return EXIT_OK
 
@@ -105,12 +162,31 @@ def main(argv: list[str] | None = None) -> int:
             captcha_solver=args.solver,
             captcha_options=parse_solver_options(args.solver_option) or None,
             dry_run=True if args.dry_run else None,
+            extra_headers=parse_headers(args.header) or None,
+            log_file=args.log_file,
+            http_dump_dir=args.dump_http,
+            header_profile=args.header_profile,
         )
     except (ConfigError, ValueError) as error:
         print(f"LỖI CẤU HÌNH: {error}", file=sys.stderr)
         return EXIT_CONFIG_ERROR
 
+    try:
+        configure_logging(args.verbose, log_file=settings.log_file or None)
+    except OSError as error:
+        print(f"LỖI CẤU HÌNH: không mở được file log: {error}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+
     logger = logging.getLogger(LOGGER_NAME)
+    logger.debug(
+        "gdt-tax %s | Python %s | %s | header profile=%s",
+        __version__,
+        platform.python_version(),
+        platform.platform(),
+        settings.header_profile,
+    )
+    if settings.extra_headers:
+        logger.debug("Header ghi đè: %s", header_names(settings.extra_headers))
     try:
         register_plugins(settings.captcha_plugins)
         captcha = create_solver(settings.captcha_solver, **settings.captcha_options)
@@ -122,6 +198,9 @@ def main(argv: list[str] | None = None) -> int:
         timeout=settings.request_timeout,
         retries=settings.http_retries,
         logger=logger,
+        extra_headers=settings.extra_headers,
+        dump_dir=settings.http_dump_dir or None,
+        header_profile=settings.header_profile,
     )
     try:
         summary = Pipeline(settings, http, captcha, logger=logger).run()
@@ -144,4 +223,4 @@ def main(argv: list[str] | None = None) -> int:
     return EXIT_OK if summary.complete else EXIT_INCOMPLETE
 
 
-__all__ = ["build_parser", "main", "parse_solver_options"]
+__all__ = ["build_parser", "main", "parse_headers", "parse_solver_options"]

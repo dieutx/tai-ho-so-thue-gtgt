@@ -19,6 +19,9 @@ hoso_zip/
 logs/
 share/
 *.zip
+*.log
+http-dump/
+*-dump/
 captcha*.png
 clean_captcha*.png
 

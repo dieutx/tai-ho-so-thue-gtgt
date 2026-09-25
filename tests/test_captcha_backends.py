@@ -38,9 +38,9 @@ class SolverSmokeTestCase(unittest.TestCase):
         self.solver = create_solver(self.solver_name)
 
     def tearDown(self):
-        close = getattr(self, "solver", None)
-        if close is not None:
-            close.close()
+        solver = getattr(self, "solver", None)
+        if solver is not None:
+            solver.close()
 
     def test_doc_anh_captcha_that(self):
         text = self.solver.solve(sample_image())
