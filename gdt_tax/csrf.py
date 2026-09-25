@@ -11,21 +11,31 @@ thao tác thật trên trình duyệt.
 
 from __future__ import annotations
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
+
+
+def attribute(tag: Tag, name: str) -> str:
+    """Đọc một thuộc tính HTML; trả chuỗi rỗng nếu thiếu hoặc không phải chuỗi.
+
+    ``Tag.get`` của bs4 có thể trả về ``str``, danh sách giá trị hoặc ``None``,
+    nên cần chuẩn hoá trước khi dùng làm token.
+    """
+    value = tag.get(name, "")
+    return value if isinstance(value, str) else ""
 
 
 def token_from_meta(html: str) -> str:
     """Lấy token từ thẻ ``<meta name="csrf-token">``."""
     soup = BeautifulSoup(html, "lxml")
     tag = soup.find("meta", attrs={"name": "csrf-token"})
-    return tag.get("content", "") if tag else ""
+    return attribute(tag, "content") if tag else ""
 
 
 def token_from_form(html: str) -> str:
     """Lấy token từ ô ẩn ``<input name="_csrf">``."""
     soup = BeautifulSoup(html, "lxml")
     field = soup.find("input", attrs={"name": "_csrf"})
-    return field.get("value", "") if field else ""
+    return attribute(field, "value") if field else ""
 
 
 def csrf_token(html: str, *, prefer_form: bool = True) -> str:
@@ -38,4 +48,4 @@ def csrf_token(html: str, *, prefer_form: bool = True) -> str:
     return first(html) or second(html)
 
 
-__all__ = ["csrf_token", "token_from_form", "token_from_meta"]
+__all__ = ["attribute", "csrf_token", "token_from_form", "token_from_meta"]

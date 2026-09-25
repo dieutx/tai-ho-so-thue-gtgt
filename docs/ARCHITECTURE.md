@@ -97,9 +97,9 @@ Thứ tự cột của bảng kết quả nằm ở đầu `gdt_tax/parsing.py`.
 
 | Tên | Lớp | Ghi chú |
 |---|---|---|
-| `ddddocr` | `DdddOcrSolver` | **Mặc định.** ONNX, ~10MB, huấn luyện riêng cho CAPTCHA chữ-số. Đo trên CAPTCHA đăng nhập thật: 6/6 đúng, 0,06s/ảnh |
-| `easyocr` | `EasyOcrSolver` | 2/6 đúng, 3,14s/ảnh, cần torch (~1GB) |
-| `paddleocr` | `PaddleOcrSolver` | 3/6 đúng, 0,60s/ảnh; tự nhận biết API 2.x (`.ocr()`) và 3.x (`.predict()`) |
+| `ddddocr` | `DdddOcrSolver` | **Mặc định.** ONNX, huấn luyện riêng cho CAPTCHA chữ-số, cài ~131MB. Đo trên CAPTCHA đăng nhập thật: 6/6 đúng, 0,06s/ảnh |
+| `easyocr` | `EasyOcrSolver` | 2/6 đúng, 3,14s/ảnh, cài ~555MB (chủ yếu là torch) |
+| `paddleocr` | `PaddleOcrSolver` | 3/6 đúng, 0,60s/ảnh, cài ~304MB; tự nhận biết API 2.x (`.ocr()`) và 3.x (`.predict()`) |
 | `manual` | `ManualSolver` | Lưu ảnh và hỏi người vận hành; dùng khi cổng đổi kiểu CAPTCHA |
 | `remote` | `RemoteHttpSolver` | Gọi một endpoint HTTP bên ngoài, không gắn cứng nhà cung cấp |
 

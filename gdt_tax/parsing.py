@@ -23,6 +23,7 @@ from __future__ import annotations
 from bs4 import BeautifulSoup, Tag
 
 from .constants import SOURCE_ETAX
+from .csrf import attribute
 from .models import CaseRecord
 
 ETAX_MIN_CELLS = 10
@@ -35,10 +36,10 @@ def direct_cells(row: Tag) -> list[str]:
 
 
 def case_id_from_row(row: Tag, cells: list[str], fallback_index: int) -> str:
-    marker = row.find(attrs={"data-ma-ho-so": True})
+    marker = row.find(lambda tag: tag.has_attr("data-ma-ho-so"))
     if marker:
-        value = marker.get("data-ma-ho-so", "")
-        if value and value.strip():
+        value = attribute(marker, "data-ma-ho-so")
+        if value.strip():
             return value.strip()
     if len(cells) > fallback_index:
         return cells[fallback_index].strip()
@@ -101,10 +102,12 @@ def parse_records(html: str, source: str) -> list[CaseRecord]:
     return records
 
 
-def _int_attribute(soup: BeautifulSoup, element_id: str, attribute: str) -> int | None:
+def _int_attribute(soup: BeautifulSoup, element_id: str, attribute_name: str) -> int | None:
     element = soup.find(id=element_id)
-    value = element.get(attribute, "") if element else ""
-    return int(value) if str(value).isdigit() else None
+    if element is None:
+        return None
+    value = attribute(element, attribute_name).strip()
+    return int(value) if value.isdigit() else None
 
 
 def page_count(html: str, source: str) -> int | None:

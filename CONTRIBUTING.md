@@ -29,10 +29,23 @@ pip install beautifulsoup4 lxml requests
 ```bash
 python -m unittest discover -s tests -t . -v
 ruff check .
+mypy gdt_tax
 ```
 
 Test phải xanh trên cả Windows và Linux trước khi mở pull request — CI cũng chạy
 đúng hai hệ điều hành này.
+
+## Chuẩn cho một bộ nhận dạng CAPTCHA mới
+
+Trước khi đề xuất đổi mặc định, hãy đo và ghi lại số liệu theo đúng quy trình ở
+mục **Benchmark** trong README (đăng nhập một lần, sau đó N lần "lấy CAPTCHA mới
+→ đọc → gửi lên cổng", đếm số lần cổng trả `status = 200`). Cỡ mẫu nên từ 20 lần
+trở lên nếu muốn kết luận chắc chắn; mọi kết quả đều phải kèm ngày đo, hệ điều
+hành, phiên bản Python và phiên bản thư viện.
+
+Solver mới cần: kế thừa `CaptchaSolver`, trả về `""` khi không đọc chắc chắn,
+không import thư viện nặng ở cấp module, và có test bỏ qua được khi thư viện chưa
+cài (xem `tests/test_captcha_backends.py`).
 
 ## Nguyên tắc viết mã
 

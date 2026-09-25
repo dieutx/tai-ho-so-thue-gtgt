@@ -23,8 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Nhận dạng CAPTCHA mặc định (ddddocr): nhẹ, không cần torch/paddle.
-ocr = ["ddddocr>=1.5", "onnxruntime>=1.17"]
+# Mỗi bộ nhận dạng CAPTCHA một extra, tên trùng với GDT_CAPTCHA_SOLVER.
 ocr-ddddocr = ["ddddocr>=1.5", "onnxruntime>=1.17"]
 ocr-easyocr = [
     "easyocr>=1.7,<2",
