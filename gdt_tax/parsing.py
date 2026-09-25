@@ -1,6 +1,6 @@
 """Đọc bảng kết quả trả về từ cổng Dịch vụ công.
 
-Hai nguồn dữ liệu trả về bảng khác nhau. Thứ tự cột thật trên cổng:
+Ba nguồn dữ liệu trả về bảng khác nhau. Thứ tự cột thật trên cổng:
 
 ETAX — ``/tchs/thuedientu`` (11 cột)::
 
@@ -14,21 +14,37 @@ DVC — ``/ho-so/search`` (13 cột)::
     6 Loại tờ khai | 7 Lần nộp bổ sung | 8 Lần nộp | 9 Cơ quan thuế tiếp nhận
     10 Ngày nộp | 11 Trạng thái | 12 Hồ sơ đính kèm
 
+ETAX_LEGACY — trang Thuế điện tử cũ ``thuedientu.gdt.gov.vn`` (12 cột)::
+
+    0 STT | 1 Mã giao dịch | 2 Tờ khai/Phụ lục | 3 Kỳ tính thuế | 4 Loại tờ khai
+    5 Lần nộp | 6 Lần bổ sung | 7 Ngày nộp | 8 (trống)
+    9 Nơi nộp | 10 Trạng thái | 11 Thao tác (link downloadTkhai)
+
 Mã hồ sơ ưu tiên lấy từ thuộc tính ``data-ma-ho-so`` của nút "Thao tác" vì đó
 là dữ liệu cổng dùng cho các lệnh AJAX.
 """
 
 from __future__ import annotations
 
+import re
+
 from bs4 import BeautifulSoup, Tag
 
-from .constants import SOURCE_DVC, SOURCE_ETAX
+from .constants import ALL_SOURCES, SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
 from .csrf import attribute
 from .models import CaseRecord
 
 ETAX_MIN_CELLS = 10
 DVC_MIN_CELLS = 12
+ETAX_LEGACY_MIN_CELLS = 11
 SOURCES = (SOURCE_ETAX, SOURCE_DVC)
+LEGACY_RESULT_TABLE_ID = "data_content_onday"
+
+
+def legacy_message_id(row_html: str, event: str = "downloadTkhai") -> str:
+    """Lấy mã hồ sơ từ lệnh ``downloadTkhai('...')`` trong một hàng bảng legacy."""
+    match = re.search(rf"{event}\(\s*['\"]([^'\"]+)['\"]", row_html)
+    return match.group(1) if match else ""
 
 
 def _check_source(source: str) -> None:
@@ -37,8 +53,10 @@ def _check_source(source: str) -> None:
     Không có bước này thì một nguồn mới (hoặc tên sai chính tả) sẽ lặng lẽ được
     đọc như DVC và cho ra hồ sơ sai cột thay vì báo lỗi ngay.
     """
-    if source not in SOURCES:
-        raise ValueError(f"Nguồn dữ liệu không hợp lệ: {source!r}. Chỉ có {', '.join(SOURCES)}")
+    if source not in ALL_SOURCES:
+        raise ValueError(
+            f"Nguồn dữ liệu không hợp lệ: {source!r}. Chỉ có {', '.join(ALL_SOURCES)}"
+        )
 
 
 def direct_cells(row: Tag) -> list[str]:
@@ -94,12 +112,51 @@ def dvc_record(cells: list[str], case_id: str) -> CaseRecord | None:
     )
 
 
+def etax_legacy_record(cells: list[str], row: Tag) -> CaseRecord | None:
+    """Đọc một hàng bảng legacy (12 cột) thành hồ sơ.
+
+    Mã hồ sơ nằm trong lệnh ``downloadTkhai('...')`` của cột Thao tác; hàng
+    không có lệnh này (thông báo, tờ khai bị huỷ) được bỏ qua.
+    """
+    if len(cells) < ETAX_LEGACY_MIN_CELLS:
+        return None
+    row_html = str(row)
+    case_id = legacy_message_id(row_html)
+    if not case_id:
+        return None
+    return CaseRecord(
+        ma_ho_so=case_id,
+        nguon=SOURCE_ETAX_LEGACY,
+        to_khai=cells[2],
+        ky_tinh_thue=cells[3],
+        loai_to_khai=cells[4],
+        lan_nop=cells[5],
+        lan_bo_sung=cells[6],
+        ngay_nop=cells[7],
+        noi_nop=cells[9],
+        trang_thai=cells[10],
+    )
+
+
 def parse_records(html: str, source: str) -> list[CaseRecord]:
     """Đọc mọi hồ sơ trong bảng kết quả, bỏ trùng theo mã hồ sơ."""
     _check_source(source)
     soup = BeautifulSoup(html, "lxml")
     records: list[CaseRecord] = []
     seen: set[str] = set()
+
+    if source == SOURCE_ETAX_LEGACY:
+        table = soup.find("table", id=LEGACY_RESULT_TABLE_ID)
+        if table is None:
+            return records
+        for row in table.find_all("tr"):
+            cells = direct_cells(row)
+            record = etax_legacy_record(cells, row)
+            if record is None or record.ma_ho_so in seen:
+                continue
+            seen.add(record.ma_ho_so)
+            records.append(record)
+        return records
 
     for row in soup.select("tbody tr"):
         cells = direct_cells(row)
@@ -139,12 +196,16 @@ def page_count(html: str, source: str) -> int | None:
 
 __all__ = [
     "DVC_MIN_CELLS",
+    "ETAX_LEGACY_MIN_CELLS",
     "ETAX_MIN_CELLS",
+    "LEGACY_RESULT_TABLE_ID",
     "SOURCES",
     "case_id_from_row",
     "direct_cells",
     "dvc_record",
+    "etax_legacy_record",
     "etax_record",
+    "legacy_message_id",
     "page_count",
     "parse_records",
 ]

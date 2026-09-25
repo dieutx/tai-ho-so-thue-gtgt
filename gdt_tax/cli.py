@@ -140,6 +140,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--legacy-etax",
+        action="store_true",
+        help=(
+            "Bật nguồn dự phòng trang Thuế điện tử cũ: đoạn ngày trước mốc "
+            "mà cổng không trả hồ sơ nào sẽ được tra cứu thêm trên "
+            "thuedientu.gdt.gov.vn (dùng chung tài khoản)"
+        ),
+    )
+    parser.add_argument(
         "--header-profile",
         choices=list(PROFILES),
         help=(
@@ -194,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
             http_dump_dir=args.dump_http,
             header_profile=args.header_profile,
             proxy_url=args.proxy,
+            legacy_etax=True if args.legacy_etax else None,
         )
     except (ConfigError, ValueError) as error:
         print(f"LỖI CẤU HÌNH: {error}", file=sys.stderr)

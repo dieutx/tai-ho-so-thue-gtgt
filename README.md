@@ -53,6 +53,10 @@ Khoảng ngày bất kỳ ──► tự cắt thành các đoạn ≤ 31 ngày
 - Tự chia khoảng tra cứu dài thành các đoạn **tối đa 31 ngày** — giới hạn của cổng.
 - Tự chọn nguồn dữ liệu theo ngày nộp hồ sơ: **ETAX** trước `01/07/2025`,
   **DVC** từ `01/07/2025`. Cả hai đều bị chia nhỏ 31 ngày như nhau.
+- **Nguồn dự phòng trang Thuế điện tử cũ** (`--legacy-etax`): một số tờ khai cũ
+  chỉ còn hiển thị trên `thuedientu.gdt.gov.vn`, không tra cứu được qua cổng.
+  Khi bật, đoạn ngày trước mốc mà cổng không trả hồ sơ nào sẽ được đăng nhập
+  trang cũ (dùng chung tài khoản, tự đọc CAPTCHA) để tải bù dưới dạng XML.
 - Xử lý đầy đủ phân trang và **tải ngay trên từng trang** để giữ trạng thái phiên.
 - Nhận dạng CAPTCHA bằng **ddddocr** (mặc định); đổi được sang `easyocr`,
   `paddleocr`, `manual`, dịch vụ HTTP ngoài, hoặc solver tự viết.
@@ -185,6 +189,9 @@ python -m gdt_tax --case-id 11320250292469209
 
 # Chỉ tra cứu, không tải file
 python -m gdt_tax --dry-run
+
+# Bật nguồn dự phòng trang Thuế điện tử cũ (tờ khai cũ chỉ còn ở đó)
+python -m gdt_tax --from-date 01/01/2020 --to-date 29/02/2020 --legacy-etax
 
 # Tự nhập CAPTCHA (khi cổng đổi kiểu CAPTCHA)
 python -m gdt_tax --solver manual
