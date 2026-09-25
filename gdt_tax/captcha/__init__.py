@@ -6,7 +6,7 @@ Module này chỉ re-export giao diện và sổ đăng ký. Các backend nặng
 
 from __future__ import annotations
 
-from .base import CaptchaSolver
+from .base import CaptchaSolver, normalize_text
 from .images import KIND_LOGIN, KIND_SEARCH, fetch_captcha
 from .registry import (
     BUILTIN_SOLVERS,
@@ -24,6 +24,7 @@ __all__ = [
     "available_solvers",
     "create_solver",
     "fetch_captcha",
+    "normalize_text",
     "register_plugins",
     "register_solver",
 ]

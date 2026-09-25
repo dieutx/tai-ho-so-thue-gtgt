@@ -31,7 +31,9 @@ from .models import SearchPeriod
 
 ENV_PREFIX = "GDT_"
 DEFAULT_ENV_FILE = ".env"
-DEFAULT_CAPTCHA_SOLVER = "easyocr"
+#: ddddocr được chọn mặc định: đọc đúng 6/6 mẫu CAPTCHA thật của cổng, nhanh hơn
+#: easyocr khoảng 50 lần và không cần torch. Xem bảng so sánh trong README.
+DEFAULT_CAPTCHA_SOLVER = "ddddocr"
 
 
 def load_env_file(path: str | Path = DEFAULT_ENV_FILE) -> dict[str, str]:

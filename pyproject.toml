@@ -23,9 +23,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Nhận dạng CAPTCHA mặc định. Có thể bỏ nếu dùng solver "manual" hoặc "remote".
-ocr = [
+# Nhận dạng CAPTCHA mặc định (ddddocr): nhẹ, không cần torch/paddle.
+ocr = ["ddddocr>=1.5", "onnxruntime>=1.17"]
+ocr-ddddocr = ["ddddocr>=1.5", "onnxruntime>=1.17"]
+ocr-easyocr = [
     "easyocr>=1.7,<2",
+    "opencv-python-headless>=4.10,<6",
+    "numpy>=1.24,<3",
+]
+ocr-paddleocr = [
+    "paddleocr>=2.7,<3",
+    "paddlepaddle>=2.6",
     "opencv-python-headless>=4.10,<6",
     "numpy>=1.24,<3",
 ]

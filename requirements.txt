@@ -3,8 +3,15 @@ beautifulsoup4>=4.12,<5
 lxml>=5,<7
 requests>=2.32,<3
 
-# Nhận dạng CAPTCHA mặc định (solver "easyocr").
-# Có thể bỏ ba gói dưới nếu dùng GDT_CAPTCHA_SOLVER=manual hoặc remote.
-easyocr>=1.7,<2
-opencv-python-headless>=4.10,<6
-numpy>=1.24,<3
+# Nhận dạng CAPTCHA mặc định (solver "ddddocr"): ONNX, mô hình ~10MB, không cần
+# torch hay paddle, nhanh khoảng 50 lần so với easyocr trên CAPTCHA của cổng.
+ddddocr>=1.5
+onnxruntime>=1.17
+
+# Tùy chọn — chỉ cài nếu chọn solver khác:
+#   easyocr   : pip install "easyocr>=1.7,<2" "opencv-python-headless>=4.10,<6" "numpy>=1.24,<3"
+#   paddleocr : pip install "paddleocr>=2.7,<3" "paddlepaddle>=2.6" "opencv-python-headless>=4.10,<6" "numpy>=1.24,<3"
+#
+# Nếu cài cả ddddocr và paddlepaddle, ghim protobuf==3.20.3: onnxruntime cần
+# protobuf>=4.25 còn paddlepaddle 2.6 chỉ nhận <=3.20.2. Bản 3.20.3 đã kiểm chứng
+# chạy được cho cả hai.

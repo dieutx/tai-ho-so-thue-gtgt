@@ -21,7 +21,12 @@ from ..errors import CaptchaError
 from .base import CaptchaSolver
 
 BUILTIN_SOLVERS: dict[str, str] = {
+    # Nhận dạng tự động, xếp theo mức tài nguyên tăng dần:
+    # ddddocr (ONNX, vài MB) → easyocr (torch) → paddleocr (paddlepaddle).
+    "ddddocr": "gdt_tax.captcha.ddddocr_solver:DdddOcrSolver",
     "easyocr": "gdt_tax.captcha.easyocr_solver:EasyOcrSolver",
+    "paddleocr": "gdt_tax.captcha.paddleocr_solver:PaddleOcrSolver",
+    # Nhập tay và gọi dịch vụ ngoài.
     "manual": "gdt_tax.captcha.manual_solver:ManualSolver",
     "remote": "gdt_tax.captcha.remote_solver:RemoteHttpSolver",
 }

@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Sequence
 
-from .base import CaptchaSolver
+from .base import CaptchaSolver, normalize_text
 
 ALLOWLIST = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 DEFAULT_LENGTH = 5
@@ -79,7 +79,7 @@ class EasyOcrSolver(CaptchaSolver):
             for _, raw_text, confidence in reader.readtext(
                 variant, detail=1, paragraph=False, allowlist=self.allowlist
             ):
-                text = "".join(char for char in raw_text if char.isalnum())
+                text = normalize_text(raw_text)
                 if len(text) == self.length:
                     candidates.append((float(confidence), text))
 

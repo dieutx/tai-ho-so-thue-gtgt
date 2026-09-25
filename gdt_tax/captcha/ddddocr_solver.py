@@ -1,0 +1,77 @@
+"""Solver CAPTCHA bằng ddddocr — ONNX, không cần torch hay paddle.
+
+``ddddocr`` được huấn luyện riêng cho CAPTCHA một dòng chữ-số (đúng dạng ảnh
+150×38 của cổng thuế), mô hình chỉ vài MB và chạy trên CPU nên nhanh hơn hẳn
+EasyOCR. Đây là lựa chọn nên thử đầu tiên khi EasyOCR đọc sai nhiều.
+
+Cài::
+
+    pip install ddddocr onnxruntime
+
+Dùng::
+
+    GDT_CAPTCHA_SOLVER=ddddocr
+"""
+
+from __future__ import annotations
+
+from .base import CaptchaSolver, normalize_text
+
+
+class DdddOcrSolver(CaptchaSolver):
+    """Đọc CAPTCHA bằng mô hình ONNX của ddddocr."""
+
+    name = "ddddocr"
+
+    def __init__(
+        self,
+        *,
+        length: int = 5,
+        require_length: bool = True,
+        beta: bool = False,
+        show_ad: bool = False,
+        import_onnx_path: str = "",
+        charsets_path: str = "",
+        **options: object,
+    ) -> None:
+        """``beta=True`` dùng mô hình mới hơn của ddddocr.
+
+        Khi đó cần tải sẵn file mô hình và chỉ đường dẫn qua ``import_onnx_path``
+        (cùng ``charsets_path`` nếu mô hình có bảng ký tự riêng).
+        """
+        super().__init__(**options)
+        self.length = length
+        self.require_length = require_length
+        self.beta = beta
+        self.show_ad = show_ad
+        self.import_onnx_path = import_onnx_path
+        self.charsets_path = charsets_path
+        self._ocr = None
+
+    def _get_ocr(self):
+        if self._ocr is None:
+            import ddddocr  # ONNX + mô hình: chỉ nạp khi thực sự dùng
+
+            kwargs: dict[str, object] = {"show_ad": self.show_ad, "beta": self.beta}
+            if self.import_onnx_path:
+                kwargs["import_onnx_path"] = self.import_onnx_path
+            if self.charsets_path:
+                kwargs["charsets_path"] = self.charsets_path
+            self.logger.info("Đang nạp ddddocr...")
+            self._ocr = ddddocr.DdddOcr(**kwargs)
+        return self._ocr
+
+    def solve(self, image: bytes) -> str:
+        text = normalize_text(self._get_ocr().classification(image))
+        if self.require_length and len(text) != self.length:
+            self.logger.warning(
+                "ddddocr đọc ra %r (%s ký tự, cần %s)", text, len(text), self.length
+            )
+            return ""
+        return text
+
+    def close(self) -> None:
+        self._ocr = None
+
+
+__all__ = ["DdddOcrSolver"]

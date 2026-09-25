@@ -34,7 +34,7 @@ class SettingsFromEnvTests(unittest.TestCase):
         self.assertEqual(settings.from_date, date(2026, 9, 1))
         self.assertEqual(settings.to_date, date(2026, 9, 25))
         self.assertEqual(settings.download_dir, Path("download"))
-        self.assertEqual(settings.captcha_solver, "easyocr")
+        self.assertEqual(settings.captcha_solver, "ddddocr")
         self.assertEqual(settings.page_size, 10)
         self.assertEqual(settings.max_days_per_search, 31)
 

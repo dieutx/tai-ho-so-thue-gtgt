@@ -12,8 +12,9 @@ Chạy được trên **Windows và Linux**, Python **3.10+**.
   - trước `01/07/2025` → luồng **ETAX** (Thuế điện tử)
   - từ `01/07/2025` → luồng **DVC** (Dịch vụ công hiện hành)
 - Xử lý đầy đủ phân trang và tải ngay trên từng trang để giữ trạng thái phiên.
-- Nhận dạng CAPTCHA đăng nhập và tra cứu; **có thể thay bằng bộ nhận dạng khác**
-  khi cổng đổi kiểu CAPTCHA (xem [Cấu hình](#cấu-hình)).
+- Nhận dạng CAPTCHA đăng nhập bằng **ddddocr** (mặc định, ONNX nhẹ); có thể đổi
+  sang `easyocr`, `paddleocr`, `manual`, dịch vụ ngoài, hoặc solver tự viết
+  (xem [Chọn bộ nhận dạng CAPTCHA](#chọn-bộ-nhận-dạng-captcha)).
 - Đặt tên ZIP gợi nhớ: mã hồ sơ, kỳ tính thuế, **loại tờ khai**, tên tờ khai.
 - Xuất `danh_sach_ho_so.csv` và `danh_sach_ho_so.json` cho biết loại từng tờ khai.
 - Bỏ qua ZIP đã tải hợp lệ, nên chạy tiếp được khi bị gián đoạn.
@@ -42,7 +43,9 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Lần chạy đầu tiên `easyocr` sẽ tải mô hình nhận dạng (vài chục MB).
+`requirements.txt` cài sẵn `ddddocr` (khoảng 10MB, chạy trên CPU, không kéo theo
+`torch` hay `paddle`). Nếu chọn solver khác, xem
+[Chọn bộ nhận dạng CAPTCHA](#chọn-bộ-nhận-dạng-captcha).
 
 ## Cấu hình
 
@@ -72,7 +75,7 @@ Bảng biến đầy đủ ở [`.env.example`](.env.example). Các biến hay d
 | `GDT_FROM_DATE` / `GDT_TO_DATE` | `01/09/2026` / `25/09/2026` | Khoảng ngày `dd/mm/yyyy` |
 | `GDT_DOWNLOAD_DIR` | `download` | Thư mục lưu ZIP và metadata |
 | `GDT_CASE_ID` | trống | Chỉ tải một mã hồ sơ |
-| `GDT_CAPTCHA_SOLVER` | `easyocr` | `easyocr`, `manual`, `remote` hoặc solver riêng |
+| `GDT_CAPTCHA_SOLVER` | `ddddocr` | `ddddocr`, `easyocr`, `paddleocr`, `manual`, `remote` hoặc solver riêng |
 | `GDT_ETAX_CUTOFF` | `01/07/2025` | Mốc chuyển từ ETAX sang DVC |
 | `GDT_MAX_DAYS_PER_SEARCH` | `31` | Số ngày tối đa mỗi đoạn tra cứu |
 | `GDT_DRY_RUN` | `false` | Chỉ tra cứu, không tải |
@@ -114,6 +117,41 @@ download/2025-01/
 
 Mỗi dòng metadata có: mã hồ sơ, nguồn, tên TTHC, tờ khai, kỳ tính thuế,
 **loại tờ khai**, lần nộp, lần bổ sung, ngày nộp, nơi nộp, trạng thái, tên file ZIP.
+
+## Chọn bộ nhận dạng CAPTCHA
+
+CAPTCHA của cổng là ảnh **150×38 px, 5 ký tự chữ-số**. Kết quả đo trên CAPTCHA
+**đăng nhập** thật (6 mẫu mỗi bộ, ảnh mới cho từng lần thử):
+
+| Solver | Đọc đúng | Thời gian/ảnh | Cần cài |
+|---|---|---|---|
+| **`ddddocr`** (mặc định) | **6/6** | 0,06s | `ddddocr` + `onnxruntime` (~10MB) |
+| `paddleocr` | 3/6 | 0,60s | `paddleocr` + `paddlepaddle` (~500MB) |
+| `easyocr` | 2/6 | 3,14s | `easyocr` + `torch` (~1GB) |
+| `manual` | do người nhập | — | không |
+| `remote` | tùy dịch vụ | tùy mạng | không |
+
+Đổi bộ nhận dạng:
+
+```bash
+# Nhập tay (dùng khi cổng đổi kiểu CAPTCHA mà chưa kịp cập nhật OCR)
+python -m gdt_tax --solver manual
+
+# PaddleOCR
+pip install "paddleocr>=2.7,<3" paddlepaddle opencv-python-headless numpy
+export GDT_CAPTCHA_SOLVER=paddleocr
+
+# Dịch vụ HTTP bên ngoài (không gắn cứng nhà cung cấp nào)
+export GDT_CAPTCHA_SOLVER=remote
+export GDT_CAPTCHA_OPTIONS='{"url": "https://example.com/solve", "api_key": "...", "result_field": "data.text"}'
+```
+
+Tham số riêng của từng solver truyền qua `GDT_CAPTCHA_OPTIONS` (JSON), ví dụ
+`{"gpu": false, "scale": 5}` cho `easyocr`. Xem danh sách bằng
+`python -m gdt_tax --list-solvers`.
+
+> **Lưu ý khi cài chồng:** `ddddocr` cần `protobuf>=4.25` còn `paddlepaddle 2.6`
+> chỉ nhận `<=3.20.2`. Cài `protobuf==3.20.3` là cả hai chạy được (đã kiểm chứng).
 
 ## Kiểm thử
 

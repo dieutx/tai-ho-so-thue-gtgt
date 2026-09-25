@@ -8,7 +8,20 @@ thì tạo một lớp kế thừa :class:`CaptchaSolver` và đăng ký nó, xe
 from __future__ import annotations
 
 import logging
+import re
 from abc import ABC, abstractmethod
+
+#: Ký tự được phép trong mã CAPTCHA của cổng thuế.
+_TEXT_DISALLOWED = re.compile(r"[^A-Za-z0-9]+")
+
+
+def normalize_text(value: str) -> str:
+    """Bỏ mọi ký tự không phải chữ-số ASCII khỏi kết quả OCR.
+
+    Dùng regex ASCII thay vì ``str.isalnum()`` vì ``isalnum()`` coi cả chữ có
+    dấu tiếng Việt là hợp lệ, trong khi CAPTCHA chỉ có ``A-Z``, ``a-z`` và ``0-9``.
+    """
+    return _TEXT_DISALLOWED.sub("", value or "")
 
 
 class CaptchaSolver(ABC):
@@ -33,4 +46,4 @@ class CaptchaSolver(ABC):
         return f"{type(self).__name__}(name={self.name!r})"
 
 
-__all__ = ["CaptchaSolver"]
+__all__ = ["CaptchaSolver", "normalize_text"]

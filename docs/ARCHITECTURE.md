@@ -81,9 +81,34 @@ vào nhau thay vì chạy tuần tự.
 
 Thứ tự cột của bảng kết quả nằm ở đầu `gdt_tax/parsing.py`.
 
+## Một số điều đã kiểm chứng khi chạy thật
+
+- **CAPTCHA chỉ thực sự bị kiểm ở bước đăng nhập.** Gửi CAPTCHA sai, thậm chí
+  để rỗng, ở `GET /tthc/ho-so/search` vẫn nhận đủ kết quả của trang tra cứu.
+  Vì vậy độ chính xác CAPTCHA chỉ đáng tối ưu cho `login()`; phần tra cứu chỉ
+  cần gửi đúng tham số `captcha` là đủ.
+- **Phải tải ngay trong lúc phân trang**, nếu gom hết mã hồ sơ rồi mới tải sẽ
+  gặp lỗi `validateIdTkhai` (xem phần Năm giai đoạn).
+- **Cổng có lúc trả `429`** khi tra cứu nhanh; `HttpClient` tự đọc `Retry-After`.
+
 ## Mở rộng
 
-### Thêm bộ nhận dạng CAPTCHA
+### Bộ nhận dạng CAPTCHA có sẵn
+
+| Tên | Lớp | Ghi chú |
+|---|---|---|
+| `ddddocr` | `DdddOcrSolver` | **Mặc định.** ONNX, ~10MB, huấn luyện riêng cho CAPTCHA chữ-số. Đo trên CAPTCHA đăng nhập thật: 6/6 đúng, 0,06s/ảnh |
+| `easyocr` | `EasyOcrSolver` | 2/6 đúng, 3,14s/ảnh, cần torch (~1GB) |
+| `paddleocr` | `PaddleOcrSolver` | 3/6 đúng, 0,60s/ảnh; tự nhận biết API 2.x (`.ocr()`) và 3.x (`.predict()`) |
+| `manual` | `ManualSolver` | Lưu ảnh và hỏi người vận hành; dùng khi cổng đổi kiểu CAPTCHA |
+| `remote` | `RemoteHttpSolver` | Gọi một endpoint HTTP bên ngoài, không gắn cứng nhà cung cấp |
+
+Cách đo: đăng nhập một lần, sau đó với mỗi solver thực hiện 6 lần "lấy CAPTCHA
+mới → đọc → gửi lên cổng", đếm số lần cổng trả `status = 200`. Cỡ mẫu nhỏ nên
+coi là tín hiệu định hướng, không phải benchmark đầy đủ; muốn đánh giá lại thì
+giữ nguyên quy trình này.
+
+### Thêm bộ nhận dạng CAPTCHA mới
 
 Viết một lớp kế thừa `CaptchaSolver` rồi đăng ký. Không cần sửa pipeline.
 
