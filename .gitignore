@@ -5,3 +5,5 @@
 !requirements.txt
 !.env.example
 !taitokhaiGTGT_fix_v12_full.py
+!tests/
+!tests/*.py
