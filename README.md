@@ -610,7 +610,7 @@ GDT_HEADER_PROFILE=minimal python -m gdt_tax --dry-run
 ## Kiểm thử
 
 ```bash
-python -m unittest discover -s tests -t . -v   # 254 test, chạy offline
+python -m unittest discover -s tests -t . -v   # 257 test, chạy offline
 ruff check .                                   # lint
 mypy gdt_tax                                   # kiểm tra kiểu (32 file)
 ```

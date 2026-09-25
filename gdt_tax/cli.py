@@ -23,7 +23,7 @@ from .headers import PROFILE_BROWSER, PROFILE_MINIMAL, PROFILES, header_names
 from .http import HttpClient
 from .logging_setup import configure_logging
 from .pipeline import Pipeline
-from .proxy import parse_proxy
+from .proxy import Proxy, parse_proxy
 
 LOGGER_NAME = "gdt_tax"
 
@@ -153,6 +153,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def log_secrets(settings, proxy: Proxy | None) -> tuple[str, ...]:
+    """Chuỗi phải che khi ghi log: thông tin proxy **và** mật khẩu tài khoản.
+
+    Mật khẩu tài khoản vốn đã bị che theo tên trường ``matKhau`` khi ghi body,
+    nhưng vẫn đưa vào đây để không lọt ra ở bất kỳ thông báo nào khác (log của
+    thư viện ngoài, traceback, URL có tham số...).
+    """
+    values = list(proxy.secrets()) if proxy is not None else []
+    if settings.password:
+        values.append(settings.password)
+    return tuple(values)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -191,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
         configure_logging(
             args.verbose,
             log_file=settings.log_file or None,
-            secrets=proxy.secrets() if proxy else (),
+            secrets=log_secrets(settings, proxy),
         )
     except OSError as error:
         print(f"LỖI CẤU HÌNH: không mở được file log: {error}", file=sys.stderr)

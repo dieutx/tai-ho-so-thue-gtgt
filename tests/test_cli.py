@@ -7,8 +7,15 @@ from pathlib import Path
 from unittest import mock
 
 from gdt_tax.captcha import available_solvers
-from gdt_tax.cli import build_parser, main, parse_headers, parse_solver_options
+from gdt_tax.cli import (
+    build_parser,
+    log_secrets,
+    main,
+    parse_headers,
+    parse_solver_options,
+)
 from gdt_tax.headers import PROFILES
+from gdt_tax.proxy import parse_proxy
 
 
 class ParseSolverOptionsTests(unittest.TestCase):
@@ -132,6 +139,26 @@ class ParserTests(unittest.TestCase):
     def test_co_tham_so_phien_ban(self):
         with self.assertRaises(SystemExit):
             build_parser().parse_args(["--version"])
+
+
+class LogSecretsTests(unittest.TestCase):
+    def settings(self, password: str):
+        return mock.Mock(password=password)
+
+    def test_gom_ca_mat_khau_proxy_va_mat_khau_tai_khoan(self):
+        secrets = log_secrets(
+            self.settings("mat-khau-cong"), parse_proxy("1.2.3.4:8080:u:mat-khau-proxy")
+        )
+        self.assertIn("mat-khau-cong", secrets)
+        self.assertIn("mat-khau-proxy", secrets)
+
+    def test_khong_co_proxy_thi_chi_che_mat_khau_tai_khoan(self):
+        self.assertEqual(log_secrets(self.settings("mat-khau-cong"), None), ("mat-khau-cong",))
+
+    def test_khong_co_mat_khau_thi_chi_che_proxy(self):
+        secrets = log_secrets(self.settings(""), parse_proxy("1.2.3.4:8080:u:mat-khau-proxy"))
+        self.assertIn("mat-khau-proxy", secrets)
+        self.assertNotIn("", secrets)
 
 
 class MainTests(unittest.TestCase):
