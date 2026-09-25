@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Công cụ phát triển: lint và kiểm tra kiểu.
+ruff>=0.6
+mypy>=1.11

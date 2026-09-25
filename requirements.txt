@@ -1,6 +1,10 @@
+# Thư viện bắt buộc cho luồng chính.
 beautifulsoup4>=4.12,<5
-easyocr>=1.7,<2
 lxml>=5,<7
-numpy>=2,<3
-opencv-python-headless>=4.10,<6
 requests>=2.32,<3
+
+# Nhận dạng CAPTCHA mặc định (solver "easyocr").
+# Có thể bỏ ba gói dưới nếu dùng GDT_CAPTCHA_SOLVER=manual hoặc remote.
+easyocr>=1.7,<2
+opencv-python-headless>=4.10,<6
+numpy>=1.24,<3

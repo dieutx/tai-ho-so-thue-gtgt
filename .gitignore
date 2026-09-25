@@ -1,9 +1,30 @@
-# Chỉ đưa bộ mã nguồn sạch của v12 lên GitHub.
-*
-!.gitignore
-!README.md
-!requirements.txt
-!.env.example
-!taitokhaiGTGT_fix_v12_full.py
-!tests/
-!tests/*.py
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# --- Bí mật và dữ liệu chạy ---
+.env
+download/
+downloads/
+hoso_download/
+hoso_zip/
+logs/
+share/
+*.zip
+captcha*.png
+clean_captcha*.png
+
+# --- File thử nghiệm và ghi chú cá nhân ---
+legacy/
+.freebuff/
+search_page*.html
+prmpt*.txt
+a.txt

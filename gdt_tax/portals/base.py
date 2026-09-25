@@ -1,0 +1,82 @@
+"""Giao diện chung cho một nguồn dữ liệu trên cổng Dịch vụ công.
+
+Mỗi nguồn (DVC, ETAX) khác nhau ở ba điểm: endpoint tra cứu, cách gọi endpoint
+tải ZIP, và tham số ``loai`` của trang chi tiết. Mọi thứ còn lại — header, lấy
+CAPTCHA, đọc bảng kết quả, lấy CSRF của trang chi tiết — đều ở lớp này.
+
+Thêm nguồn mới: tạo lớp con của :class:`Portal`, cài ``source``, ``detail_loai``,
+``search`` và ``download``, rồi đăng ký trong :mod:`gdt_tax.portals`.
+"""
+
+from __future__ import annotations
+
+import logging
+from abc import ABC, abstractmethod
+
+from ..captcha import fetch_captcha
+from ..constants import CASE_DETAIL, DEFAULT_HEADERS, LANDING
+from ..csrf import csrf_token
+from ..http import HttpClient
+from ..models import CaseRecord, PageResult, SearchPeriod
+from ..parsing import page_count, parse_records
+
+
+class Portal(ABC):
+    """Cách tra cứu và tải hồ sơ của một nguồn dữ liệu."""
+
+    #: Giá trị nguồn dùng trong :class:`~gdt_tax.models.CaseRecord` (``DVC``/``ETAX``).
+    source: str = ""
+    #: Tham số ``loai`` của trang chi tiết hồ sơ.
+    detail_loai: str = ""
+
+    def __init__(self, http: HttpClient, captcha, settings, logger: logging.Logger | None = None) -> None:
+        self.http = http
+        self.captcha = captcha
+        self.settings = settings
+        self.logger = logger or logging.getLogger(f"gdt_tax.portal.{self.source.lower()}")
+
+    # --- Phần từng nguồn phải tự cài ---
+    @abstractmethod
+    def search(self, period: SearchPeriod, page: int) -> PageResult:
+        """Tra cứu một trang kết quả trong một đoạn ngày."""
+
+    @abstractmethod
+    def download(self, record: CaseRecord, detail_url: str, csrf: str):
+        """Gọi endpoint tải ZIP và trả về phản hồi HTTP."""
+
+    # --- Phần dùng chung ---
+    @property
+    def landing_url(self) -> str:
+        return self.http.url(LANDING)
+
+    def base_headers(self) -> dict[str, str]:
+        return dict(DEFAULT_HEADERS)
+
+    def captcha_text(self) -> str:
+        """Lấy ảnh CAPTCHA tra cứu và nhờ solver hiện hành đọc mã."""
+        image = fetch_captcha(self.http, "search", logger=self.logger)
+        return self.captcha.solve(image) if image else ""
+
+    def detail_url(self, record: CaseRecord) -> str:
+        """URL trang chi tiết hồ sơ (nơi lấy CSRF token để tải)."""
+        path = CASE_DETAIL.format(case_id=record.ma_ho_so)
+        return f"{self.http.url(path)}?loai={self.detail_loai}"
+
+    def fetch_detail_csrf(self, record: CaseRecord) -> tuple[str, str]:
+        """Mở trang chi tiết và lấy token CSRF của form tải xuống."""
+        url = self.detail_url(record)
+        response = self.http.get(url, headers={**self.base_headers(), "Referer": self.landing_url})
+        csrf = csrf_token(response.text) if response.status_code == 200 else ""
+        return url, csrf
+
+    def _page_result(self, response) -> PageResult:
+        if response.status_code != 200:
+            return PageResult(http_status=response.status_code)
+        return PageResult(
+            records=parse_records(response.text, self.source),
+            total_pages=page_count(response.text, self.source),
+            http_status=response.status_code,
+        )
+
+
+__all__ = ["Portal"]

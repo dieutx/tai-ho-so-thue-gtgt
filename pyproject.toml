@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tai-ho-so-thue-gtgt"
+version = "1.0.0"
+description = "Tải hồ sơ thuế GTGT từ Cổng Dịch vụ công của Cục Thuế (dichvucong.gdt.gov.vn)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "dieutx" }]
+keywords = ["gdt", "thue", "dichvucong", "tax", "vietnam"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "beautifulsoup4>=4.12,<5",
+    "lxml>=5,<7",
+    "requests>=2.32,<3",
+]
+
+[project.optional-dependencies]
+# Nhận dạng CAPTCHA mặc định. Có thể bỏ nếu dùng solver "manual" hoặc "remote".
+ocr = [
+    "easyocr>=1.7,<2",
+    "opencv-python-headless>=4.10,<6",
+    "numpy>=1.24,<3",
+]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[project.urls]
+Repository = "https://github.com/dieutx/tai-ho-so-thue-gtgt"
+
+[project.scripts]
+gdt-tax = "gdt_tax.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["gdt_tax*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true

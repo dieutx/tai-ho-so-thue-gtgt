@@ -1,0 +1,93 @@
+import unittest
+
+from gdt_tax.constants import SOURCE_DVC, SOURCE_ETAX
+from gdt_tax.parsing import page_count, parse_records
+from tests.support import fixture
+
+
+class EtaxParsingTests(unittest.TestCase):
+    def setUp(self):
+        self.html = fixture("etax_results.html")
+
+    def test_doc_dung_hai_ho_so(self):
+        records = parse_records(self.html, SOURCE_ETAX)
+        self.assertEqual(
+            [record.ma_ho_so for record in records],
+            ["11320250292469209", "11320250292528963"],
+        )
+
+    def test_lay_du_thong_tin_to_khai(self):
+        record = parse_records(self.html, SOURCE_ETAX)[0]
+        self.assertEqual(record.nguon, SOURCE_ETAX)
+        self.assertEqual(record.ky_tinh_thue, "12/2024")
+        self.assertEqual(record.loai_to_khai, "Chính thức")
+        self.assertEqual(record.lan_nop, "1")
+        self.assertEqual(record.lan_bo_sung, "0")
+        self.assertEqual(record.ngay_nop, "20/01/2025 17:11:35")
+        self.assertEqual(record.noi_nop, "Thuế cơ sở 1 tỉnh Hà Tĩnh")
+        self.assertTrue(record.trang_thai.startswith("Cơ quan thuế chấp nhận"))
+        self.assertTrue(record.to_khai.startswith("TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG"))
+
+    def test_etax_khong_co_ten_tthc(self):
+        record = parse_records(self.html, SOURCE_ETAX)[0]
+        self.assertEqual(record.ten_tthc, "")
+
+    def test_so_trang_etax(self):
+        self.assertEqual(page_count(self.html, SOURCE_ETAX), 1)
+
+
+class DvcParsingTests(unittest.TestCase):
+    def setUp(self):
+        self.html = fixture("dvc_results_page1.html")
+
+    def test_doc_dung_hai_ho_so(self):
+        records = parse_records(self.html, SOURCE_DVC)
+        self.assertEqual(
+            [record.ma_ho_so for record in records],
+            ["G12.18-260120-21010800254723", "G12.18-260120-21010800167745"],
+        )
+
+    def test_lay_du_thong_tin_dvc(self):
+        record = parse_records(self.html, SOURCE_DVC)[0]
+        self.assertEqual(record.nguon, SOURCE_DVC)
+        self.assertTrue(record.ten_tthc.startswith("1.007014"))
+        self.assertTrue(record.to_khai.startswith("01/GTGT"))
+        self.assertEqual(record.ky_tinh_thue, "12/2025")
+        self.assertEqual(record.loai_to_khai, "Chính thức")
+        self.assertEqual(record.lan_nop, "1")
+        self.assertEqual(record.lan_bo_sung, "0")
+        self.assertEqual(record.ngay_nop, "20/01/2026 13:51")
+        self.assertEqual(record.trang_thai, "Đã chấp nhận")
+
+    def test_ho_so_bo_sung_duoc_nhan_dien(self):
+        record = parse_records(self.html, SOURCE_DVC)[1]
+        self.assertEqual(record.loai_to_khai, "Bổ sung")
+
+    def test_so_trang_dvc(self):
+        self.assertEqual(page_count(self.html, SOURCE_DVC), 2)
+
+
+class RobustnessTests(unittest.TestCase):
+    def test_bo_qua_hang_thieu_cot(self):
+        html = "<table><tbody><tr><td>1</td><td>abc</td></tr></tbody></table>"
+        self.assertEqual(parse_records(html, SOURCE_ETAX), [])
+        self.assertEqual(parse_records(html, SOURCE_DVC), [])
+
+    def test_bo_trung_theo_ma_ho_so(self):
+        row = """
+        <tr>
+          <td>1</td><td>ABC-1</td><td>Tờ khai</td><td>12/2024</td><td>Chính thức</td>
+          <td>1</td><td>0</td><td>20/01/2025</td><td>Nơi nộp</td><td>Đã nhận</td>
+          <td><i data-ma-ho-so="ABC-1"></i></td>
+        </tr>
+        """
+        html = f"<table><tbody>{row}{row}</tbody></table>"
+        self.assertEqual(len(parse_records(html, SOURCE_ETAX)), 1)
+
+    def test_so_trang_khi_cong_khong_bao(self):
+        self.assertIsNone(page_count("<div></div>", SOURCE_DVC))
+        self.assertIsNone(page_count("<div></div>", SOURCE_ETAX))
+
+
+if __name__ == "__main__":
+    unittest.main()

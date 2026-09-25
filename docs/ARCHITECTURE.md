@@ -1,0 +1,146 @@
+# Kiến trúc
+
+Tài liệu này dành cho người đọc mã nguồn hoặc muốn mở rộng công cụ. Mục tiêu là
+mỗi module chỉ có một trách nhiệm, và mọi phần dễ đổi (CAPTCHA, nguồn dữ liệu,
+quy tắc ngày tháng) đều tách riêng để thay mà không ảnh hưởng phần còn lại.
+
+## Bản đồ module
+
+| Module | Trách nhiệm | Không được làm |
+|---|---|---|
+| `constants.py` | Địa chỉ cổng, endpoint, header, giá trị mặc định | Chứa logic |
+| `models.py` | `CaseRecord`, `SearchPeriod`, `PageResult`, `RunSummary` | Gọi mạng |
+| `errors.py` | Cây ngoại lệ | — |
+| `dates.py` | Đọc/ghi ngày, chia đoạn tra cứu, mốc ETAX | Gọi mạng |
+| `config.py` | `Settings` từ `.env` + biến môi trường | Gọi mạng |
+| `http.py` | `HttpClient`: nối URL, timeout, thử lại khi 429 | Hiểu nghiệp vụ |
+| `csrf.py` | Đọc CSRF token từ HTML | Gọi mạng |
+| `parsing.py` | Đọc bảng kết quả thành `CaseRecord` | Gọi mạng |
+| `naming.py` | Tạo tên file ZIP | Đọc/ghi file |
+| `storage.py` | Kiểm tra ZIP, chống tải trùng, ghi ZIP, CSV/JSON | Gọi mạng |
+| `captcha/` | Nhận dạng CAPTCHA (nhiều backend) | Gọi endpoint nghiệp vụ |
+| `portals/` | Tra cứu và tải theo từng nguồn | Đọc/ghi file |
+| `auth.py` | Đăng nhập, mở trang hồ sơ | Đọc/ghi file |
+| `pipeline.py` | Ghép các giai đoạn | Chi tiết giao thức |
+| `cli.py` | Tham số dòng lệnh, mã thoát, log | Nghiệp vụ |
+
+Quan hệ phụ thuộc chỉ đi một chiều:
+
+```text
+cli ─► pipeline ─► auth, portals, storage, config
+                       │           │
+                       │           └─► parsing, http, csrf, constants
+                       └─► captcha ─► http, constants
+```
+
+`config`, `dates`, `models`, `naming` là lá: chỉ dùng thư viện chuẩn và không
+import module nào ở trên chúng.
+
+## Năm giai đoạn của một lần chạy
+
+```text
+main()  (gdt_tax/cli.py)
+  │  Settings.from_env()      đọc .env rồi tới biến môi trường, tham số dòng lệnh thắng
+  │  create_solver()          nạp bộ nhận dạng CAPTCHA (nạp muộn, không kéo theo easyocr)
+  ▼
+Pipeline.run()  (gdt_tax/pipeline.py)
+  │
+  ├─ Giai đoạn 1  login() + open_landing()             → CSRF của trang hồ sơ
+  ├─ Giai đoạn 2  Settings.periods() → nhiều đoạn 31 ngày, mỗi đoạn một nguồn
+  │
+  ├─ Giai đoạn 3  với mỗi đoạn: portal.search(period, page) cho tới hết trang
+  │                  portal lấy CAPTCHA → gọi endpoint tra cứu → parsing đọc bảng
+  │
+  ├─ Giai đoạn 4  với mỗi hồ sơ: portal.fetch_detail_csrf() → portal.download()
+  │                  → storage.decode_zip_bytes() → ZipStore.save()
+  │
+  └─ Giai đoạn 5  write_metadata() → danh_sach_ho_so.csv + .json
+```
+
+**Vì sao tải ngay trong lúc phân trang?** Cổng chỉ giữ danh sách hồ sơ của trang
+tra cứu gần nhất trong phiên. Nếu gom hết mã hồ sơ rồi mới tải, các trang trước
+đó sẽ bị coi là không hợp lệ (`validateIdTkhai`). Vì vậy giai đoạn 3 và 4 lồng
+vào nhau thay vì chạy tuần tự.
+
+## Endpoint đang dùng
+
+| Nguồn | Việc | Gọi |
+|---|---|---|
+| chung | Mở trang đăng nhập | `GET /tthc/login` |
+| chung | CAPTCHA đăng nhập | `GET /tthc/login/getCaptcha` |
+| chung | Đăng nhập | `POST /tthc/loginLDAP` |
+| chung | CAPTCHA tra cứu | `GET /tthc/getCaptcha` |
+| chung | Trang hồ sơ | `GET /tthc/tchs` |
+| chung | Trang chi tiết (lấy CSRF) | `GET /tthc/tchs/files/detail/{id}?loai=` |
+| ETAX | Tra cứu | `POST /tthc/tchs/thuedientu` |
+| ETAX | Tải ZIP | `POST /tthc/tchs/downloadhoso-tdt?loaiTraCuu=ETAX` |
+| DVC | Tra cứu | `GET /tthc/ho-so/search` |
+| DVC | Kiểm tra trước khi tải | `GET /tthc/tchs/validateIdTkhai` |
+| DVC | Tải ZIP | `POST /tthc/tchs/downloadhoso` |
+| DVC | Dự phòng khi AJAX tắt | `POST /tthc/downloadhoso` |
+
+Thứ tự cột của bảng kết quả nằm ở đầu `gdt_tax/parsing.py`.
+
+## Mở rộng
+
+### Thêm bộ nhận dạng CAPTCHA
+
+Viết một lớp kế thừa `CaptchaSolver` rồi đăng ký. Không cần sửa pipeline.
+
+```python
+# goi_cua_toi/solver.py
+from gdt_tax.captcha import CaptchaSolver
+
+
+class MyOcrSolver(CaptchaSolver):
+    name = "myocr"
+
+    def solve(self, image: bytes) -> str:
+        return doc_ma_tu_anh(image)
+
+
+# goi_cua_toi/__init__.py
+from gdt_tax.captcha import register_solver
+
+register_solver("myocr", "goi_cua_toi.solver:MyOcrSolver")
+```
+
+Hoặc đăng ký qua cấu hình, không cần sửa mã nguồn:
+
+```dotenv
+GDT_CAPTCHA_PLUGINS=myocr=goi_cua_toi.solver:MyOcrSolver
+GDT_CAPTCHA_SOLVER=myocr
+```
+
+Bộ `remote` có sẵn để gọi một dịch vụ HTTP bên ngoài mà không gắn cứng nhà cung
+cấp nào:
+
+```dotenv
+GDT_CAPTCHA_SOLVER=remote
+GDT_CAPTCHA_OPTIONS={"url": "https://example.com/solve", "api_key": "...", "result_field": "data.text"}
+```
+
+`GDT_CAPTCHA_OPTIONS` được truyền thẳng thành tham số khởi tạo của lớp solver,
+nên mọi solver đều cấu hình được mà không phải thêm biến môi trường mới.
+
+### Thêm nguồn dữ liệu mới
+
+1. Thêm endpoint vào `constants.py`.
+2. Tạo lớp con của `Portal` trong `portals/`, cài `source`, `detail_loai`,
+   `search()` và `download()`.
+3. Đăng ký trong `PORTAL_CLASSES` ở `portals/__init__.py`.
+4. Nếu bảng kết quả khác cột, bổ sung nhánh trong `parsing.parse_records`.
+5. Thêm fixture HTML vào `tests/fixtures/` và test tương ứng.
+
+### Đổi quy tắc ngày tháng
+
+Mốc chuyển nguồn và số ngày tối đa là tham số của `dates.split_periods`, có thể
+ghi đè bằng `GDT_ETAX_CUTOFF` và `GDT_MAX_DAYS_PER_SEARCH` mà không cần sửa code.
+Nếu cổng thay đổi giới hạn, sửa `MAX_DAYS_PER_SEARCH_DEFAULT` trong `dates.py`.
+
+## Kiểm thử
+
+`tests/support.py` cung cấp `FakeHttp` định tuyến theo `(method, đường dẫn)`,
+nên `test_pipeline.py` chạy nguyên luồng 5 giai đoạn mà không ra Internet. Khi
+cổng đổi giao diện, cách nhanh nhất là cập nhật fixture trong `tests/fixtures/`
+rồi chạy lại test để thấy chỗ nào vỡ.
