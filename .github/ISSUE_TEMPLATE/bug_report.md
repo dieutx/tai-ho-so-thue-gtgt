@@ -34,3 +34,6 @@ mọi thông tin của bạn trước khi dán — log không tự che phần n�
 - Phiên bản Python:
 - Bộ nhận dạng CAPTCHA (`GDT_CAPTCHA_SOLVER`):
 - Profile header (`GDT_HEADER_PROFILE`, mặc định `browser`):
+- Có dùng proxy không (`GDT_PROXY_URL`), dạng `http` hay `socks`:
+  <!-- Chỉ cần nói có/không. ĐỪNG dán chuỗi proxy kèm tài khoản/mật khẩu. -->
+- Địa chỉ IP mà cổng nhìn thấy (`curl -x <proxy> https://ipinfo.io/json`):

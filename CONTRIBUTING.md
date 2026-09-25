@@ -60,7 +60,9 @@ cài (xem `tests/test_captcha_backends.py`).
   `accept_encoding()` để biết vì sao `zstd` bị loại.
 - Thông báo log và ngoại lệ viết bằng tiếng Việt, không dấu ở tên biến/hàm.
 - Thêm hàm phức tạp thì thêm test; ưu tiên fixture HTML thật trong `tests/fixtures/`.
-- Không hard-code tài khoản, mật khẩu, cookie hay CSRF token.
+- Không hard-code tài khoản, mật khẩu, cookie, CSRF token hay proxy (kể cả trong
+  test và tài liệu). Mọi chuỗi proxy đi qua `gdt_tax/proxy.py`; thêm dạng mới thì
+  bổ sung test vào `tests/test_proxy.py`.
 - Chỉ ghi log ra màn hình; mọi thứ ghi ra file hoặc in ra ở mức `DEBUG` đi qua
   `traffic.py`. Thêm header/trường nhạy cảm mới vào `SENSITIVE_HEADERS` hoặc
   `SENSITIVE_FIELDS` ở đầu module đó.
@@ -107,5 +109,8 @@ nhỏ và tự chuyển nguồn tại mốc đó.
 - File `*.response.txt` liên quan trong `http-dump/` — HTML thật của cổng. Nhớ
   **che mã số thuế và mã hồ sơ** của bạn (log không tự che phần này).
 - Tên solver CAPTCHA đang dùng (`GDT_CAPTCHA_SOLVER`).
+- Có dùng proxy không (`--proxy`/`GDT_PROXY_URL`) và nó có trả về IP Việt Nam
+  không (`curl -x … https://ipinfo.io/json`). **Không dán chuỗi proxy kèm tài khoản
+  của bạn vào issue.**
 
 Dán HTML vào `tests/fixtures/` là cách nhanh nhất để người khác tái hiện lỗi.

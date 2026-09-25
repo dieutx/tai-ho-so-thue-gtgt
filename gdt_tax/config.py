@@ -29,6 +29,7 @@ from .dates import (
 from .errors import ConfigError
 from .headers import DEFAULT_PROFILE, PROFILES
 from .models import SearchPeriod
+from .proxy import parse_proxy
 
 ENV_PREFIX = "GDT_"
 DEFAULT_ENV_FILE = ".env"
@@ -138,8 +139,11 @@ class Settings:
     log_file: str = ""
     #: Thư mục lưu nguyên request/response để dựng fixture (``--dump-http``).
     http_dump_dir: str = ""
-    #: Bộ header gửi đi: ``minimal`` (mặc định) hoặc ``browser``. Xem gdt_tax.headers.
+    #: Bộ header gửi đi: ``browser`` (mặc định) hoặc ``minimal``. Xem gdt_tax.headers.
     header_profile: str = DEFAULT_PROFILE
+    #: Proxy cho mọi request (``--proxy``/``GDT_PROXY_URL``); trống là đi trực tiếp.
+    #: Cần proxy Việt Nam khi chạy trên máy ở nước ngoài vì cổng chặn IP ngoài VN.
+    proxy_url: str = ""
 
     # --- Dẫn xuất ---
     def periods(self) -> list[SearchPeriod]:
@@ -168,6 +172,7 @@ class Settings:
             raise ConfigError("GDT_MAX_DAYS_PER_SEARCH phải lớn hơn 0")
         if self.page_size < 1:
             raise ConfigError("GDT_PAGE_SIZE phải lớn hơn 0")
+        parse_proxy(self.proxy_url)  # lỗi cấu hình phải hiện ra ngay lúc khởi động
         if self.pause_jitter < 0:
             raise ConfigError("GDT_PAUSE_JITTER không được là số âm")
         if not all(isinstance(name, str) and name for name in self.extra_headers):
@@ -226,6 +231,7 @@ class Settings:
                 log_file=pick("log_file", env.text("LOG_FILE")),
                 http_dump_dir=pick("http_dump_dir", env.text("HTTP_DUMP_DIR")),
                 header_profile=pick("header_profile", env.text("HEADER_PROFILE", DEFAULT_PROFILE)),
+                proxy_url=pick("proxy_url", env.text("PROXY_URL")),
             )
         except ValueError as error:  # parse_date
             raise ConfigError(str(error)) from error

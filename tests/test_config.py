@@ -142,6 +142,18 @@ class SettingsFromEnvTests(unittest.TestCase):
         with self.assertRaises(ConfigError):
             Settings.from_env({**BASE_ENV, "GDT_HEADER_PROFILE": "chrome"}, env_file=None)
 
+    def test_mac_dinh_khong_dung_proxy(self):
+        self.assertEqual(Settings.from_env(BASE_ENV, env_file=None).proxy_url, "")
+
+    def test_doc_proxy_tu_moi_truong(self):
+        env = {**BASE_ENV, "GDT_PROXY_URL": "1.2.3.4:8080:tai-khoan:mat-khau"}
+        settings = Settings.from_env(env, env_file=None)
+        self.assertEqual(settings.proxy_url, "1.2.3.4:8080:tai-khoan:mat-khau")
+
+    def test_proxy_sai_thi_bao_loi_ngay(self):
+        with self.assertRaises(ConfigError):
+            Settings.from_env({**BASE_ENV, "GDT_PROXY_URL": "1.2.3.4"}, env_file=None)
+
     def test_doc_file_log_va_thu_muc_dump(self):
         env = {**BASE_ENV, "GDT_LOG_FILE": "logs/run.log", "GDT_HTTP_DUMP_DIR": "http-dump"}
         settings = Settings.from_env(env, env_file=None)

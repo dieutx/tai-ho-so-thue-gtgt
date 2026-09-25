@@ -18,6 +18,7 @@ from typing import Any
 import requests
 
 from .constants import BASE
+from .errors import NetworkError
 from .headers import (
     DEFAULT_PROFILE,
     PROFILE_BROWSER,
@@ -25,6 +26,7 @@ from .headers import (
     chrome_order,
     reconcile_client_hints,
 )
+from .proxy import Proxy
 from .traffic import (
     BODY_LOG_LIMIT,
     TrafficDumper,
@@ -32,6 +34,7 @@ from .traffic import (
     describe_params,
     format_size,
     mask_headers,
+    mask_secrets,
 )
 
 LOGGER_NAME = "gdt_tax.http"
@@ -51,7 +54,8 @@ class HttpClient:
     ``extra_headers`` cho phép thêm hoặc ghi đè header cho **mọi** request ngay
     lúc chạy (``--header``/``GDT_EXTRA_HEADERS``), nên khi cổng yêu cầu thêm một
     header mới thì không phải chờ sửa mã nguồn. ``dump_dir`` bật ghi lại traffic
-    thật để dựng fixture (``--dump-http``).
+    thật để dựng fixture (``--dump-http``). ``proxy`` đẩy toàn bộ request qua proxy
+    Việt Nam khi chạy trên máy ở nước ngoài (``--proxy``/``GDT_PROXY_URL``).
     """
 
     def __init__(
@@ -67,6 +71,7 @@ class HttpClient:
         extra_headers: Mapping[str, str] | None = None,
         dump_dir: str | Path | None = None,
         header_profile: str = DEFAULT_PROFILE,
+        proxy: Proxy | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -77,6 +82,8 @@ class HttpClient:
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.extra_headers = dict(extra_headers or {})
         self.header_profile = header_profile
+        self.proxy = proxy
+        self.secrets = proxy.secrets() if proxy else ()
         #: Ghi lại request/response khi ``--dump-http`` được bật, ngược lại là ``None``.
         self.dumper = TrafficDumper(dump_dir, logger=self.logger) if dump_dir else None
         self._prepare_session()
@@ -112,12 +119,17 @@ class HttpClient:
         params = kwargs.get("params")
         payload = kwargs.get("data") if kwargs.get("data") is not None else kwargs.get("json")
         sent_headers = self._effective_headers(headers)
+        if self.proxy is not None:
+            kwargs.setdefault("proxies", self.proxy.proxies())
 
         response: requests.Response | None = None
         for attempt in range(1, self.retries + 1):
             self._log_request(method, url, sent_headers, params, payload, attempt)
             started = time.monotonic()
-            response = self.session.request(method, url, **kwargs)
+            try:
+                response = self.session.request(method, url, **kwargs)
+            except requests.exceptions.RequestException as error:
+                raise self._network_error(method, url, error) from error
             elapsed = time.monotonic() - started
             body = getattr(response, "content", b"") or b""
             self.logger.info(
@@ -212,6 +224,23 @@ class HttpClient:
         body = describe_body(payload, limit=BODY_LOG_LIMIT)
         if body:
             self.logger.debug("  body: %s", body)
+
+    def _network_error(
+        self, method: str, url: str, error: requests.exceptions.RequestException
+    ) -> NetworkError:
+        """Đổi lỗi của ``requests`` thành lỗi gọn, đã che mật khẩu proxy.
+
+        Thông báo của ``requests`` thường chứa cả URL proxy kèm tài khoản, nên phải
+        che trước khi đưa vào log.
+        """
+        detail = mask_secrets(str(error), self.secrets)
+        message = f"Không gửi được {method} {url}: {detail}"
+        if self.proxy is not None:
+            message += (
+                f" (qua proxy {self.proxy.label} — kiểm tra proxy còn sống và "
+                "tài khoản còn hạn, hoặc bỏ GDT_PROXY_URL để đi trực tiếp)"
+            )
+        return NetworkError(message)
 
     def _log_response(self, response: requests.Response) -> None:
         """Ghi lại phản hồi vừa nhận, kèm body đã che và cắt bớt."""

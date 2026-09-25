@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -41,6 +41,19 @@ BODY_LOG_LIMIT = 500
 #: Giới hạn mặc định cho mỗi file dump (2 MB).
 DEFAULT_MAX_BODY_BYTES = 2_000_000
 _SLUG_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def mask_secrets(text: str, secrets: Iterable[str] = ()) -> str:
+    """Thay mọi chuỗi bí mật (mật khẩu proxy...) trong ``text`` bằng ``***``.
+
+    Dùng cho thông báo lỗi và cho :class:`gdt_tax.logging_setup.SecretsFilter`, vì
+    lỗi mạng của ``requests`` thường in cả URL proxy kèm tài khoản.
+    """
+    masked = text
+    for secret in secrets:
+        if secret:
+            masked = masked.replace(secret, MASK)
+    return masked
 
 
 def mask_headers(headers: Mapping[str, Any] | None) -> dict[str, str]:
@@ -246,5 +259,6 @@ __all__ = [
     "format_size",
     "mask_data",
     "mask_headers",
+    "mask_secrets",
     "slug",
 ]

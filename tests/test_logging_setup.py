@@ -6,7 +6,49 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from gdt_tax.logging_setup import configure_logging
+from gdt_tax.logging_setup import SecretsFilter, configure_logging
+
+
+class SecretsFilterTests(unittest.TestCase):
+    def record(self, message: str, args=(), exc_text: str | None = None) -> logging.LogRecord:
+        record = logging.LogRecord("urllib3.connectionpool", logging.DEBUG, "f", 1, message, args, None)
+        record.exc_text = exc_text
+        return record
+
+    def test_che_mat_khau_trong_message(self):
+        secrets_filter = SecretsFilter(["bi-mat", "u:bi-mat"])
+        record = self.record("Bắt đầu kết nối http://u:bi-mat@1.2.3.4:8080")
+        self.assertTrue(secrets_filter.filter(record))
+        self.assertNotIn("bi-mat", record.getMessage())
+        self.assertIn("***", record.getMessage())
+
+    def test_che_ca_tham_so_noi_suy(self):
+        record = self.record("proxy=%s", ("bi-mat",))
+        SecretsFilter(["bi-mat"]).filter(record)
+        self.assertEqual(record.getMessage(), "proxy=***")
+
+    def test_che_ca_traceback_text(self):
+        record = self.record("loi", exc_text="ProxyError: u:bi-mat@1.2.3.4")
+        SecretsFilter(["u:bi-mat"]).filter(record)
+        self.assertNotIn("bi-mat", record.exc_text)
+
+    def test_khong_co_bi_mat_thi_khong_doi_gi(self):
+        record = self.record("giu nguyen")
+        SecretsFilter([]).filter(record)
+        self.assertEqual(record.getMessage(), "giu nguyen")
+
+    def test_duoc_gan_cho_moi_handler(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run.log"
+            console = io.StringIO()
+            with mock.patch.object(sys, "stdout", console):
+                configure_logging(log_file=path, secrets=["bi-mat"])
+                logging.getLogger("urllib3.connectionpool").debug("qua http://u:bi-mat@1.2.3.4:8080")
+                for handler in logging.getLogger().handlers:
+                    handler.flush()
+            text = path.read_text(encoding="utf-8")
+        self.assertNotIn("bi-mat", text)
+        self.assertIn("***", text)
 
 
 class ConfigureLoggingTests(unittest.TestCase):

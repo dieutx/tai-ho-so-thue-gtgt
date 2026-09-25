@@ -26,6 +26,7 @@ Chạy trên **Windows, Linux và macOS**, Python **3.10+**.
 - [Hiểu biết về cổng Dịch vụ công](#hiểu-biết-về-cổng-dịch-vụ-công)
 - [Ghi log và lưu lại traffic](#ghi-log-và-lưu-lại-traffic)
 - [Không bị nhận diện là Python](#không-bị-nhận-diện-là-python)
+- [Dùng proxy (khi chạy ở nước ngoài)](#dùng-proxy-khi-chạy-ở-nước-ngoài)
 - [Kiểm thử](#kiểm-thử)
 - [Khắc phục sự cố](#khắc-phục-sự-cố)
 - [Bảo trì khi cổng thay đổi](#bảo-trì-khi-cổng-thay-đổi)
@@ -70,6 +71,8 @@ Khoảng ngày bất kỳ ──► tự cắt thành các đoạn ≤ 31 ngày
 - **`--dump-http`** lưu nguyên request/response ra file để dựng fixture khi cổng đổi.
 - **`--header`** thêm hoặc ghi đè header cho mọi request ngay lúc chạy, không cần
   sửa mã nguồn.
+- **`--proxy`** đẩy mọi request qua proxy Việt Nam — bắt buộc khi chạy trên VPS
+  nước ngoài vì cổng chỉ phục vụ IP Việt Nam. Mật khẩu proxy luôn bị che trong log.
 
 ## Cài đặt
 
@@ -159,6 +162,7 @@ Bảng biến đầy đủ:
 | `GDT_DRY_RUN` | Không | `false` | Chỉ tra cứu, không tải |
 | `GDT_EXTRA_HEADERS` | Không | `{}` | Header thêm/ghi đè cho mọi request, dạng JSON |
 | `GDT_HEADER_PROFILE` | Không | `browser` | `browser` (mặc định, gửi như Chrome) hoặc `minimal` (để loại trừ lỗi do header) |
+| `GDT_PROXY_URL` | Không | trống | Proxy cho mọi request ra cổng, vd `1.2.3.4:8080:tai-khoan:mat-khau` |
 | `GDT_LOG_FILE` | Không | trống | Ghi thêm toàn bộ log (mức DEBUG) ra file |
 | `GDT_HTTP_DUMP_DIR` | Không | trống | Lưu nguyên request/response để dựng fixture |
 
@@ -196,6 +200,9 @@ python -m gdt_tax --header "Referer=https://dichvucong.gdt.gov.vn/tthc/tchs"
 
 # Loại trừ khả năng header gây lỗi (mặc định đã gửi y như Chrome)
 python -m gdt_tax --header-profile minimal --dry-run
+
+# Chạy trên máy chủ ngoài Việt Nam: đi qua proxy Việt Nam
+python -m gdt_tax --proxy 1.2.3.4:8080:tai-khoan:mat-khau --dry-run
 ```
 
 Mã thoát: `0` thành công, `1` chạy xong nhưng thiếu hồ sơ, `2` lỗi cấu hình.
@@ -238,7 +245,7 @@ cli ─► config ─► captcha (plugin)
 |---|---|
 | Nền tảng | `constants.py`, `models.py`, `errors.py` |
 | Cấu hình & quy tắc ngày | `config.py`, `dates.py` |
-| Hạ tầng | `http.py`, `csrf.py`, `parsing.py`, `naming.py`, `storage.py` |
+| Hạ tầng | `http.py`, `proxy.py`, `csrf.py`, `parsing.py`, `naming.py`, `storage.py` |
 | Header | `headers.py` — bộ header theo từng loại request, profile `browser` (mặc định) / `minimal` |
 | Quan sát & gỡ lỗi | `traffic.py`, `logging_setup.py` |
 | CAPTCHA (plugin) | `captcha/base.py`, `captcha/registry.py`, `captcha/*_solver.py` |
@@ -515,6 +522,52 @@ Header cấu hình **thắng** header mà portal tự đặt, nên ghi đè đư
 > đều thành `***` trước khi ghi ra log hay file dump. Cảnh giác vẫn nên có: nội
 > dung HTML của cổng có thể chứa mã số thuế và mã hồ sơ của bạn.
 
+## Dùng proxy (khi chạy ở nước ngoài)
+
+Cổng Dịch vụ công chỉ phục vụ IP Việt Nam. Đo thật từ máy ở Đức: `GET
+https://dichvucong.gdt.gov.vn/tthc/login` bị chặn ngay ở tầng kết nối (`Max retries
+exceeded`); cùng request đó qua một proxy Hà Nội trả `HTTP 200`, 66,9 KB kèm thẻ
+CSRF — tức là toàn bộ luồng chạy được. Nếu bạn chạy trên VPS/máy chủ ngoài Việt
+Nam thì **phải dùng proxy Việt Nam**.
+
+```bash
+# Dạng nhiều nhà cung cấp VN hay đưa: host:port:tài-khoản:mật-khẩu
+python -m gdt_tax --proxy 1.2.3.4:8080:tai-khoan:mat-khau
+
+# URL đầy đủ, hoặc SOCKS (cần pip install "requests[socks]")
+python -m gdt_tax --proxy "http://tai-khoan:mat-khau@1.2.3.4:8080"
+python -m gdt_tax --proxy "socks5://tai-khoan:mat-khau@1.2.3.4:1080"
+
+# Hoặc ghi một lần vào .env (đã nằm trong .gitignore) cho khỏi gõ lại
+GDT_PROXY_URL=1.2.3.4:8080:tai-khoan:mat-khau
+```
+
+Các dạng chuỗi được nhận:
+
+| Dạng | Ví dụ |
+|---|---|
+| `host:port` (không cần tài khoản) | `1.2.3.4:8080` |
+| `host:port:tài-khoản:mật-khẩu` | `1.2.3.4:8080:muaproxy:matkhau` |
+| `tài-khoản:mật-khẩu@host:port` (mặc định `http`) | `muaproxy:matkhau@1.2.3.4:8080` |
+| URL đầy đủ `http`/`https`/`socks*` | `http://muaproxy:matkhau@1.2.3.4:8080` |
+
+Mật khẩu chứa `@`, `:` hay `/` vẫn dùng được: tài khoản được percent-encode khi
+dựng lại URL, và dạng `host:port:tài-khoản:mật-khẩu` được ưu tiên khi trường thứ
+hai là port hợp lệ.
+
+**An toàn khi dùng proxy:**
+
+- Proxy áp dụng cho **mọi** request ra cổng: mở trang đăng nhập, CAPTCHA, tra cứu,
+  trang chi tiết và tải ZIP đều đi chung một đường. Riêng solver CAPTCHA `remote`
+  gọi dịch vụ ngoài nên vẫn đi trực tiếp.
+- **Mật khẩu proxy không bao giờ vào log.** `SecretsFilter` che ở mọi handler — kể
+  cả log của `urllib3`, vốn in cả URL proxy kèm tài khoản — và `--dump-http` cũng
+  không ghi proxy. Bạn vẫn không nên dán `GDT_PROXY_URL` vào issue hay PR.
+- Lỗi proxy được đổi thành một dòng `NetworkError` (đã che mật khẩu) kèm gợi ý,
+  thay vì traceback dài.
+- Kiểm tra proxy bằng tay: `curl -x http://user:pass@1.2.3.4:8080 https://ipinfo.io/json`
+  phải trả `"country": "VN"`.
+
 ## Không bị nhận diện là Python
 
 Mục tiêu: request gửi lên cổng không bị phân biệt được với request của người dùng
@@ -557,9 +610,9 @@ GDT_HEADER_PROFILE=minimal python -m gdt_tax --dry-run
 ## Kiểm thử
 
 ```bash
-python -m unittest discover -s tests -t . -v   # 220 test, chạy offline
+python -m unittest discover -s tests -t . -v   # 254 test, chạy offline
 ruff check .                                   # lint
-mypy gdt_tax                                   # kiểm tra kiểu (29 file)
+mypy gdt_tax                                   # kiểm tra kiểu (32 file)
 ```
 
 Bộ test **không cần Internet và không cần tài khoản**: `tests/support.py` cung cấp
@@ -575,7 +628,8 @@ nguyên 5 giai đoạn với phản hồi dựng sẵn.
 | `test_http.py` | Ghép URL, thử lại khi 429, `Retry-After` sai định dạng, log request, header ghi đè, dump |
 | `test_headers.py` | Bộ header theo profile và theo loại request, client hint khớp `User-Agent`, `Accept-Encoding` không khai `zstd` |
 | `test_traffic.py` | Che header/body nhạy cảm, định dạng log, ghi file dump và giới hạn dung lượng |
-| `test_logging_setup.py` | Mức log ra màn hình so với file log |
+| `test_logging_setup.py` | Mức log ra màn hình so với file log, che bí mật trong log, `SecretsFilter` che mật khẩu proxy kể cả trong log của urllib3 |
+| `test_proxy.py` | Đọc các dạng chuỗi proxy, che mật khẩu, và request đi qua proxy thật (proxy giả tại chỗ) |
 | `test_storage.py` | ZIP hợp lệ/hỏng, giải mã Base64, bỏ qua file đã có, CSV/JSON |
 | `test_captcha.py` | Sổ đăng ký solver, nạp muộn, `normalize_text` |
 | `test_captcha_backends.py` | Smoke test từng backend OCR, tự bỏ qua nếu chưa cài thư viện |
@@ -600,6 +654,9 @@ dùng `--dump-http` để lấy lại HTML thật cần thiết.
 | `paddle` lỗi `protobuf` | Cài chồng `ddddocr` và `paddlepaddle` | `pip install "protobuf==3.20.3"` |
 | Cổng trả lỗi lạ, cần xem request thật | Cổng đổi tham số/header | `-v`, hoặc `--log-file logs/run.log --dump-http http-dump` |
 | Cổng đòi header mới | Cổng nâng cấp giao diện | `--header "Tên=Giá trị"` để thử ngay |
+| Lỗi kết nối / `Max retries exceeded` khi chạy trên VPS nước ngoài | Cổng chỉ phục vụ IP Việt Nam | Dùng `--proxy`/`GDT_PROXY_URL` với proxy Việt Nam |
+| `ProxyError`, proxy hết hạn hoặc sai tài khoản | Cấu hình proxy sai | Kiểm tra `GDT_PROXY_URL`; thử bằng `curl -x … https://ipinfo.io/json`; hoặc bỏ proxy để đi trực tiếp |
+| Log hiện `***` ở địa chỉ proxy | `SecretsFilter` che tài khoản proxy | Bình thường, cố ý |
 | Nghi header gây lỗi | Một header mới không hợp với cổng | `GDT_HEADER_PROFILE=minimal` để loại trừ, rồi báo lại để sửa `headers.py` |
 | Muốn xem log của lần chạy trước | Log chỉ in ra màn hình | Chạy lại với `--log-file`; file log được ghi thêm, không xoá lần trước |
 

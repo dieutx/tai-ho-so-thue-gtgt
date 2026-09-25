@@ -110,6 +110,13 @@ class ParserTests(unittest.TestCase):
         args = build_parser().parse_args(["--header-profile", "browser"])
         self.assertEqual(args.header_profile, "browser")
 
+    def test_doc_proxy(self):
+        args = build_parser().parse_args(["--proxy", "1.2.3.4:8080:u:p"])
+        self.assertEqual(args.proxy, "1.2.3.4:8080:u:p")
+
+    def test_mac_dinh_khong_co_proxy(self):
+        self.assertIsNone(build_parser().parse_args([]).proxy)
+
     def test_header_profile_la_khong_hop_le_thi_bao_loi(self):
         with self.assertRaises(SystemExit), redirect_stderr(io.StringIO()):
             build_parser().parse_args(["--header-profile", "chrome"])
@@ -149,6 +156,15 @@ class MainTests(unittest.TestCase):
             stdout, stderr = io.StringIO(), io.StringIO()
             with redirect_stdout(stdout), redirect_stderr(stderr):
                 code = main(["--list-solvers", "--log-file", tmp])
+        self.assertEqual(code, 2)
+        self.assertIn("LỖI CẤU HÌNH", stderr.getvalue())
+
+    def test_proxy_sai_tra_ve_ma_loi_2_truoc_khi_goi_mang(self):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        env = {"GDT_USERNAME": "0101234567-QL", "GDT_PASSWORD": "mat-khau"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = main(["--proxy", "1.2.3.4", "--env-file", "khong-co.env"])
         self.assertEqual(code, 2)
         self.assertIn("LỖI CẤU HÌNH", stderr.getvalue())
 

@@ -23,6 +23,7 @@ from .headers import PROFILE_BROWSER, PROFILE_MINIMAL, PROFILES, header_names
 from .http import HttpClient
 from .logging_setup import configure_logging
 from .pipeline import Pipeline
+from .proxy import parse_proxy
 
 LOGGER_NAME = "gdt_tax"
 
@@ -42,6 +43,9 @@ Khi cổng đổi giao diện, chạy kèm các tham số chẩn đoán:
   python -m gdt_tax -v --log-file logs/run.log --dump-http http-dump
   python -m gdt_tax --header "Referer=https://dichvucong.gdt.gov.vn/tthc/tchs"
   python -m gdt_tax --header-profile minimal   # loại trừ lỗi do header (mặc định: browser)
+
+Chạy trên máy ở nước ngoài (cổng chặn IP ngoài Việt Nam):
+  python -m gdt_tax --proxy 1.2.3.4:8080:tai-khoan:mat-khau
 """
 
 
@@ -127,11 +131,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Lưu nguyên request/response ra thư mục để dựng fixture khi cổng đổi",
     )
     parser.add_argument(
+        "--proxy",
+        metavar="HOST:PORT:USER:PASS",
+        help=(
+            "Đi qua proxy cho mọi request, ví dụ 1.2.3.4:8080:tai-khoan:mat-khau "
+            "hoặc http://tai-khoan:mat-khau@1.2.3.4:8080 (cần proxy Việt Nam khi "
+            "chạy trên máy ở nước ngoài)"
+        ),
+    )
+    parser.add_argument(
         "--header-profile",
         choices=list(PROFILES),
         help=(
-            f"Bộ header gửi đi: {PROFILE_MINIMAL} (mặc định) hoặc {PROFILE_BROWSER} "
-            "(thêm Sec-Fetch-*, sec-ch-ua* như Chrome thật)"
+            f"Bộ header gửi đi: {PROFILE_BROWSER} (mặc định, gửi Sec-Fetch-*, "
+            f"sec-ch-ua* như Chrome thật) hoặc {PROFILE_MINIMAL} (để loại trừ lỗi "
+            "do header)"
         ),
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Log chi tiết")
@@ -166,18 +180,26 @@ def main(argv: list[str] | None = None) -> int:
             log_file=args.log_file,
             http_dump_dir=args.dump_http,
             header_profile=args.header_profile,
+            proxy_url=args.proxy,
         )
     except (ConfigError, ValueError) as error:
         print(f"LỖI CẤU HÌNH: {error}", file=sys.stderr)
         return EXIT_CONFIG_ERROR
 
+    proxy = parse_proxy(settings.proxy_url)
     try:
-        configure_logging(args.verbose, log_file=settings.log_file or None)
+        configure_logging(
+            args.verbose,
+            log_file=settings.log_file or None,
+            secrets=proxy.secrets() if proxy else (),
+        )
     except OSError as error:
         print(f"LỖI CẤU HÌNH: không mở được file log: {error}", file=sys.stderr)
         return EXIT_CONFIG_ERROR
 
     logger = logging.getLogger(LOGGER_NAME)
+    if proxy is not None:
+        logger.info("Dùng proxy %s", proxy.label)
     logger.debug(
         "gdt-tax %s | Python %s | %s | header profile=%s",
         __version__,
@@ -201,6 +223,7 @@ def main(argv: list[str] | None = None) -> int:
         extra_headers=settings.extra_headers,
         dump_dir=settings.http_dump_dir or None,
         header_profile=settings.header_profile,
+        proxy=proxy,
     )
     try:
         summary = Pipeline(settings, http, captcha, logger=logger).run()

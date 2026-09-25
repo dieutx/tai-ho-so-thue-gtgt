@@ -39,7 +39,7 @@ class Portal(ABC):
 
     @property
     def profile(self) -> str:
-        """Bộ header đang dùng: ``minimal`` (mặc định) hoặc ``browser``."""
+        """Bộ header đang dùng: ``browser`` (mặc định) hoặc ``minimal``."""
         return self.settings.header_profile
 
     # --- Phần từng nguồn phải tự cài ---

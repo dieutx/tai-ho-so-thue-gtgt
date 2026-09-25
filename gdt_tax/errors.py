@@ -19,6 +19,15 @@ class LoginError(GdtError):
     """Không đăng nhập được vào Cổng Dịch vụ công."""
 
 
+class NetworkError(GdtError):
+    """Không gửi được request (mạng, proxy, hoặc cổng chặn kết nối).
+
+    ``HttpClient`` đổi mọi lỗi của ``requests`` thành lỗi này để chương trình báo
+    bằng một dòng dễ hiểu thay vì traceback, và để thông báo đã được che mật khẩu
+    proxy.
+    """
+
+
 class CaptchaError(GdtError):
     """Không nạp hoặc không dùng được bộ nhận dạng CAPTCHA."""
 

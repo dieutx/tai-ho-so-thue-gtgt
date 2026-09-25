@@ -13,9 +13,10 @@ quy tắc ngày tháng) đều tách riêng để thay mà không ảnh hưởng
 | `errors.py` | Cây ngoại lệ | — |
 | `dates.py` | Đọc/ghi ngày, chia đoạn tra cứu, mốc ETAX | Gọi mạng |
 | `config.py` | `Settings` từ `.env` + biến môi trường | Gọi mạng |
-| `http.py` | `HttpClient`: nối URL, timeout, thử lại khi 429, log và dump từng request | Hiểu nghiệp vụ |
+| `http.py` | `HttpClient`: nối URL, timeout, thử lại khi 429, gắn proxy, log và dump từng request | Hiểu nghiệp vụ |
+| `proxy.py` | Đọc chuỗi proxy của mọi nhà cung cấp thành `Proxy` (URL cho `requests`, cách che bí mật) | Gọi mạng, hiểu nghiệp vụ |
 | `traffic.py` | Che dữ liệu nhạy cảm, định dạng log, ghi file dump request/response | Gọi mạng, hiểu nghiệp vụ |
-| `logging_setup.py` | Cấu hình log ra màn hình và ra file | Ghi log nghiệp vụ |
+| `logging_setup.py` | Cấu hình log ra màn hình và ra file, gắn `SecretsFilter` để che bí mật (mật khẩu proxy) | Ghi log nghiệp vụ |
 | `csrf.py` | Đọc CSRF token từ HTML | Gọi mạng |
 | `parsing.py` | Đọc bảng kết quả thành `CaseRecord` | Gọi mạng |
 | `naming.py` | Tạo tên file ZIP | Đọc/ghi file |
@@ -32,12 +33,14 @@ Quan hệ phụ thuộc chỉ đi một chiều:
 cli ─► pipeline ─► auth, portals, storage, config
                        │           │
                        │           ├─► parsing, csrf, constants
-                       │           └─► http ─► headers, traffic, constants
+                       │           └─► http ─► headers, traffic, proxy, constants
                        └─► captcha ─► http, headers, constants
+config ─► proxy
 ```
 
-`config`, `dates`, `models`, `naming` là lá: chỉ dùng thư viện chuẩn và không
-import module nào ở trên chúng.
+`config` chỉ import `proxy` để kiểm tra chuỗi proxy lúc khởi động; `dates`,
+`models`, `naming` là lá: chỉ dùng thư viện chuẩn và không import module nào ở
+trên chúng.
 
 ## Năm giai đoạn của một lần chạy
 
@@ -94,6 +97,9 @@ Thứ tự cột của bảng kết quả nằm ở đầu `gdt_tax/parsing.py`.
   gặp lỗi `validateIdTkhai` (xem phần Năm giai đoạn).
 - **Cổng có lúc trả `429`** khi tra cứu nhanh; `HttpClient` tự đọc `Retry-After`,
   còn `Pipeline._pause()` thêm jitter (chỉ cộng thêm) để nhịp không đều như máy.
+- **Cổng chặn theo IP quốc gia.** Đo thật từ Đức: `GET /tthc/login` hỏng ngay ở
+  tầng kết nối (`Max retries exceeded`); cùng request qua proxy Hà Nội trả `200`
+  kèm thẻ CSRF. Đây là lý do proxy Việt Nam là bắt buộc khi chạy trên VPS nước ngoài.
 - **Cổng không kiểm dấu vân tay trình duyệt** (chỉ 429 ở tầng ứng dụng + CAPTCHA ở
   bước đăng nhập), nhưng công cụ vẫn mặc định gửi header như Chrome. Phần không sửa
   được bằng header là HTTP/1.1 (không ALPN/HTTP2) và dấu vân tay TLS — xem mục
@@ -115,9 +121,27 @@ Thứ tự cột của bảng kết quả nằm ở đầu `gdt_tax/parsing.py`.
 header, có thể xử lý ngay lúc chạy; nếu thành yêu cầu lâu dài thì sửa
 `gdt_tax/headers.py` cho đúng chỗ.
 
-`traffic.py` cũng giữ quy tắc che dữ liệu nhạy cảm (`mask_headers`, `mask_data`)
-— thêm tên header hay trường mới cần che thì sửa hai hằng số ở đầu module.
-Không module nào khác được tự ghi ra file log hay file dump.
+`traffic.py` cũng giữ quy tắc che dữ liệu nhạy cảm (`mask_headers`, `mask_data`,
+`mask_secrets`) — thêm tên header hay trường mới cần che thì sửa hai hằng số ở đầu
+module. Không module nào khác được tự ghi ra file log hay file dump.
+
+## Proxy (chạy ở nước ngoài)
+
+Cổng chỉ phục vụ IP Việt Nam, nên `Settings.proxy_url` (từ `--proxy` hoặc
+`GDT_PROXY_URL`) được `proxy.parse_proxy()` đọc thành một `Proxy`, rồi truyền vào
+`HttpClient`; `http.py` chỉ làm một việc là `kwargs.setdefault("proxies",
+proxy.proxies())` cho **mọi** request, kể cả tải ZIP. Lỗi mạng được đổi thành
+`NetworkError` đã che bí mật thay vì traceback của `urllib3`.
+
+Hai điểm cần nhớ khi sửa:
+
+1. `proxy.py` chỉ hiểu **chuỗi**, không biết gì về `requests` ngoài `proxies()`.
+   Thêm nhà cung cấp hay dạng chuỗi mới thì sửa `parse_proxy` và bổ sung test
+   trong `tests/test_proxy.py`.
+2. **Mật khẩu proxy không bao giờ được lọt vào log.** `urllib3` in cả URL proxy
+   kèm tài khoản khi lỗi, nên `configure_logging` gắn `SecretsFilter(secrets)` cho
+   mọi handler. Solver CAPTCHA `remote` gọi dịch vụ ngoài vẫn đi trực tiếp, không
+   qua proxy — cố ý, vì proxy chỉ dành cho cổng thuế.
 
 ## Header gửi đi (không bị nhận diện là Python)
 
