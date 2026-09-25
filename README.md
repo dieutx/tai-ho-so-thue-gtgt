@@ -10,6 +10,23 @@ tải về dạng ZIP kèm danh sách chi tiết để biết **loại tờ khai
 
 Chạy trên **Windows, Linux và macOS**, Python **3.10+**.
 
+### Bộ công cụ họ Tải dữ liệu thuế điện tử của cùng tác giả
+
+Cùng giải quyết bài toán **tự động hóa khai thác hệ thống thuế điện tử của
+GDT** (đăng nhập CAPTCHA, tra cứu, tải về) nhưng mỗi công cụ nhắm một hệ
+thống và một nền tảng:
+
+| Công cụ | Nền tảng | Hệ thống GDT | Dữ liệu tải về |
+|---|---|---|---|
+| [**hddt-downloader-windows**](https://github.com/dieutx/hddt-downloader-windows) | PowerShell — Windows | `hoadondientu.gdt.gov.vn` (Hóa đơn điện tử) | XML hóa đơn mua vào/bán ra → Excel |
+| **tai-ho-so-thue-gtgt** (repo này) | Python 3.10+ — Windows/Linux/macOS | `dichvucong.gdt.gov.vn` (Cổng Dịch vụ công, tự chuyển nguồn ETAX trước 01/07/2025 và trang Thuế điện tử cũ) | ZIP tờ khai + metadata CSV/JSON |
+| [**TaiHoaDonDienTu**](https://github.com/dieutx/TaiHoaDonDienTu) | Excel VBA | `hoadondientu.gdt.gov.vn` (Hóa đơn điện tử) | XML hóa đơn → Excel |
+
+Hai công cụ đầu dùng chung cách tiếp cận: tự nhận dạng CAPTCHA, tự đăng nhập,
+chia nhỏ khoảng tra cứu theo giới hạn của hệ thống, retry/backoff khi bị giới
+hạn tốc độ và lưu dữ liệu kèm danh sách chi tiết. Nếu bạn cần cả **hóa đơn**
+và **tờ khai** thì có thể dùng song song hai công cụ này.
+
 ---
 
 ## Mục lục
