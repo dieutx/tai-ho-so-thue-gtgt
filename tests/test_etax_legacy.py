@@ -16,11 +16,12 @@ from gdt_tax.constants import SOURCE_ETAX, SOURCE_ETAX_LEGACY
 from gdt_tax.errors import LegacyEtaxError
 from gdt_tax.models import CaseRecord, PageResult, SearchPeriod
 from gdt_tax.parsing import parse_records
+from gdt_tax.pipeline import Pipeline
 from gdt_tax.portals.etax_legacy import (
     EtaxLegacyFallback,
     EtaxLegacyPortal,
 )
-from gdt_tax.storage import decode_zip_bytes
+from gdt_tax.storage import ZipStore, decode_zip_bytes
 from tests.support import (
     FAKE_CAPTCHA_BYTES,
     FakeHttp,
@@ -135,6 +136,8 @@ def make_legacy_handler(state: dict):
             if event == "query":
                 state["queries"] = state.get("queries", []) + [dict(data)]
                 return FakeResponse(state.get("query_html", fixture("etax_legacy_results.html")), url=url)
+        # Ghi lại request không khớp route để dễ chẩn đoán khi thêm endpoint mới.
+        state.setdefault("unmatched", []).append((method, route, str(kwargs)[:200]))
         return FakeResponse("<html></html>", status_code=404)
 
     return handler
@@ -284,6 +287,124 @@ class LegacyFallbackTests(unittest.TestCase):
         other_record = CaseRecord(ma_ho_so="X", nguon=SOURCE_ETAX)
         fallback.fetch_detail_csrf(other_record)
         primary.fetch_detail_csrf.assert_called_once_with(other_record)
+
+
+class PipelineLegacySwitchTests(unittest.TestCase):
+    """Quy tắc chuyển nguồn: cổng lỗi tải ở một đoạn thì quét legacy từ đầu
+    khoảng, các đoạn cũ hơn chạy thẳng legacy, đoạn 0 bản ghi không tính là lỗi.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.directory = Path(self._tmp.name)
+        self.state: dict = {}
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def settings_for(self, **overrides) -> Settings:
+        values = dict(
+            username="u",
+            password="p",
+            from_date=date(2020, 1, 1),
+            to_date=date(2020, 3, 31),
+            download_dir=self.directory,
+            login_attempts=1,
+            search_attempts=1,
+            pause_between_records=0.0,
+            pause_between_pages=0.0,
+            etax_cutoff=date(2025, 7, 1),
+            legacy_etax=True,
+        )
+        values.update(overrides)
+        return Settings(**values)
+
+    def make_handler(self, state: dict, etax_results: str | None = None):
+        """Handler cổng ETAX (hiện hồ sơ nhưng tải ZIP trả 500) + legacy đầy đủ."""
+        results = etax_results if etax_results is not None else fixture("etax_results.html")
+
+        def handler(method, path, kwargs):
+            route = path.split("?", 1)[0]
+            if method == "POST" and route in ("/tchs/thuedientu", "/ho-so/search"):
+                return FakeResponse(results)
+            if method == "POST" and route == "/loginLDAP":
+                return FakeResponse(json_payload={"status": "200"})
+            if method == "GET" and route == "/login":
+                return FakeResponse(
+                    '<html><meta name="csrf-token" content="csrf"></html>'
+                )
+            if route in ("/login/getCaptcha", "/getCaptcha"):
+                return FakeResponse(content=FAKE_CAPTCHA_BYTES, headers=IMAGE_HEADERS)
+            if method == "GET" and route == "/tchs":
+                return FakeResponse(
+                    '<html><input type="hidden" name="_csrf" value="csrf"></html>'
+                )
+            if route.startswith("/tchs/files/detail/"):
+                return FakeResponse(
+                    '<html><input type="hidden" name="_csrf" value="csrf"></html>'
+                )
+            if route == "/tchs/downloadhoso-tdt":
+                return FakeResponse(
+                    json_payload={"error": "Không tìm thấy hồ sơ tương ứng!"},
+                    status_code=500,
+                )
+            return make_legacy_handler(state)(method, path, kwargs)
+
+        return handler
+
+    def run_pipeline(self, state: dict):
+        settings = self.settings_for()
+        http = FakeHttp(self.make_handler(state))
+        pipeline = Pipeline(
+            settings,
+            http,
+            StubCaptcha(),
+            store=ZipStore(settings.download_dir),
+            sleep=lambda _seconds: None,
+        )
+        return pipeline.run(), state, settings
+
+    def test_etax_loi_500_thi_quet_legacy_tu_dau_khoang(self):
+        """Đoạn 1/2020 cổng hiện hồ sơ nhưng 500 → legacy quét 01/01→31/01."""
+        state: dict = {}
+        summary, state, settings = self.run_pipeline(state)
+        queries = state.get("queries", [])
+        # Đoạn 1 bị lỗi → legacy quét từ đầu khoảng (01/01/2020) đến hết đoạn lỗi.
+        self.assertTrue(queries)
+        first = queries[0]
+        self.assertEqual(first["qryFromDate"], "01/01/2020")
+        self.assertEqual(first["qryToDate"], "31/01/2020")
+        # Đoạn 2+ chạy thẳng legacy, không gọi cổng nữa (mỗi đoạn ≤31 ngày).
+        self.assertEqual(queries[1]["qryFromDate"], "01/02/2020")
+        self.assertEqual(queries[1]["qryToDate"], "02/03/2020")
+        self.assertEqual(queries[2]["qryToDate"], "31/03/2020")
+        # File legacy đã lưu.
+        zips = list(self.directory.glob("*.zip"))
+        self.assertTrue(zips)
+
+    def test_doan_khong_co_ban_ghi_khong_kich_hoat_legacy(self):
+        """Cổng trả 0 bản ghi thì không chuyển legacy, vẫn thử cổng đoạn sau."""
+        state: dict = {}
+        settings = self.settings_for()
+        # Bảng kết quả rỗng nhưng vẫn có phần tử phân trang (1 trang).
+        empty_results = (
+            "<html><body>"
+            "<input id='goToPage_tdt' min='1' max='1' type='number'>"
+            "<table id='bangKetQuaTraCuu_tdt'><tbody></tbody></table>"
+            "</body></html>"
+        )
+        http = FakeHttp(self.make_handler(state, etax_results=empty_results))
+        pipeline = Pipeline(
+            settings,
+            http,
+            StubCaptcha(),
+            store=ZipStore(settings.download_dir),
+            sleep=lambda _seconds: None,
+        )
+        pipeline.run()
+        # Không có lần gọi legacy nào (trang legacy không được hỏi).
+        legacy_requests = [p for p in http.paths("POST") if "thuedientu.gdt" in p]
+        self.assertEqual(legacy_requests, [])
 
 
 if __name__ == "__main__":

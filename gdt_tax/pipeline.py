@@ -21,12 +21,12 @@ import time
 from collections.abc import Callable
 
 from .auth import login, open_landing
-from .constants import METADATA_CSV, METADATA_JSON
+from .constants import METADATA_CSV, METADATA_JSON, SOURCE_ETAX_LEGACY
 from .csrf import csrf_token
 from .dates import format_date
 from .errors import LegacyEtaxError, LoginError, SearchError
 from .http import HttpClient
-from .models import CaseRecord, PageResult, RunSummary
+from .models import CaseRecord, PageResult, RunSummary, SearchPeriod
 from .portals import build_portals
 from .storage import ZipStore, write_metadata
 
@@ -55,6 +55,8 @@ class Pipeline:
         self.portal_factory = portal_factory
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.sleep = sleep
+        #: Đoạn hiện tại có hồ sơ mà cổng trả lỗi tải (HTTP 500) hay không.
+        self._period_had_download_error = False
 
     # --- Giai đoạn 1 + điều phối ---
     def run(self) -> RunSummary:
@@ -76,24 +78,43 @@ class Pipeline:
 
         records: dict[str, CaseRecord] = {}
         succeeded: set[str] = set()
-        #: (đoạn, đúng là không tải được hồ sơ nào) của đoạn vừa chạy xong.
-        self._period_without_download = (None, False)
+        #: Đoạn đầu tiên gặp lỗi tải (HTTP 500) trên cổng — mốc mà từ đó dữ
+        #: liệu cổng không còn đáng tin và phải chuyển sang trang legacy.
+        self._first_failed_period: SearchPeriod | None = None
+        #: True khi đã phát hiện lỗi tải: mọi đoạn sau đó chạy thẳng legacy.
+        self._switched_to_legacy = False
 
         for period in self.settings.periods():
             summary.periods += 1
-            self.logger.info("=== %s: %s ===", period.source, period.label)
             portal = portals[period.source]
-            if self._run_period(portal, period, records, succeeded):
-                break
-            # Nguồn dự phòng trang Thuế điện tử cũ: đoạn ngày trước mốc mà cổng
-            # không tải được hồ sơ nào (kể cả khi cổng vẫn "hiện" hồ sơ cũ) thì
-            # hỏi thêm trang legacy, nơi một số tờ khai cũ chỉ còn tồn tại.
-            if (
-                not self.settings.case_id
+            use_legacy = (
+                self._switched_to_legacy
                 and period.end < self.settings.etax_cutoff
                 and getattr(portal, "legacy", None) is not None
+                and not self.settings.case_id
+            )
+            if use_legacy:
+                self.logger.info("=== %s (trang cũ): %s ===", period.source, period.label)
+                self._search_and_download(portal.legacy, period, records, succeeded)
+                continue
+
+            self.logger.info("=== %s: %s ===", period.source, period.label)
+            if self._run_period(portal, period, records, succeeded):
+                break
+
+            # Một đoạn bất kỳ trước mốc mà cổng có hồ sơ nhưng không tải được
+            # (HTTP 500 "Không tìm thấy hồ sơ tương ứng") thì dữ liệu cổng từ
+            # đầu khoảng đến hết đoạn này không còn đáng tin: quét legacy từ
+            # đầu khoảng đến hết đoạn để không sót tờ khai, và các đoạn cũ
+            # hơn chạy thẳng legacy luôn không thử cổng nữa.
+            if (
+                self._first_failed_period is not None
+                and period.end < self.settings.etax_cutoff
+                and getattr(portal, "legacy", None) is not None
+                and not self.settings.case_id
             ):
-                self._run_legacy_fallback(portal, period, records, succeeded)
+                self._switched_to_legacy = True
+                self._run_legacy_fallback(portal, records, succeeded)
 
         if write_metadata(self.settings.download_dir, records):
             self.logger.info("Metadata: %s và %s", METADATA_CSV, METADATA_JSON)
@@ -111,12 +132,20 @@ class Pipeline:
         succeeded: set[str],
     ) -> bool:
         """Xử lý mọi trang của một đoạn; trả ``True`` khi đã tìm thấy hồ sơ đích."""
-        before = len(succeeded)
+        self._period_had_download_error = False
         found_target = self._search_and_download(portal, period, records, succeeded)
         if found_target:
             return True
-        # Ghi nhớ đoạn có portal gốc nhưng không tải được hồ sơ nào để fallback.
-        self._period_without_download = (period, before == len(succeeded))
+        # Đoạn có hồ sơ nhưng lỗi tải (HTTP 500): ghi nhận đoạn ĐẦU TIÊN gặp
+        # lỗi. Đoạn 0 bản ghi thì không — cổng trả rỗng là bình thường với
+        # khoảng không có hồ sơ.
+        if self._period_had_download_error and self._first_failed_period is None:
+            self._first_failed_period = period
+            self.logger.warning(
+                "Cổng có hồ sơ nhưng không tải được ở %s — sẽ quét trang Thuế điện tử "
+                "cũ từ đầu khoảng đến hết đoạn này",
+                period.label,
+            )
         return False
 
     def _search_and_download(
@@ -129,17 +158,25 @@ class Pipeline:
         """Duyệt hết trang của một đoạn trên một portal; trả ``True`` khi tìm thấy hồ sơ đích."""
         page = 1
         total_pages: int | None = None
+        seen_ids: set[str] = set()
 
         while total_pages is None or page <= total_pages:
             result = self._search_page(portal, period, page)
             if result.total_pages is not None:
                 total_pages = result.total_pages
             self.logger.info("TRANG %s: %s hồ sơ", page, len(result.records))
+            page_ids = {found.ma_ho_so for found in result.records}
+            new_ids = page_ids - seen_ids
+            seen_ids.update(page_ids)
 
             for index, found in enumerate(result.records, start=1):
-                record = records.setdefault(found.ma_ho_so, found)
-                if self.settings.case_id and record.ma_ho_so != self.settings.case_id:
+                if self.settings.case_id and found.ma_ho_so != self.settings.case_id:
                     continue
+                record = records.setdefault(found.ma_ho_so, found)
+                # Bản ghi legacy thay thế bản cổng (cùng mã): hồ sơ cổng bị 500
+                # cần được tải lại qua portal legacy với đúng nguồn của nó.
+                if found.nguon == SOURCE_ETAX_LEGACY and record.nguon != SOURCE_ETAX_LEGACY:
+                    record.__dict__.update(found.__dict__)
 
                 self.logger.info(
                     "TẢI trang=%s mục=%s/%s: %s",
@@ -155,7 +192,9 @@ class Pipeline:
                     return True
                 self._pause(self.settings.pause_between_records)
 
-            if total_pages is None and not result.records:
+            # Cổng không báo tổng số trang: dừng khi trang kế tiếp không còn hồ sơ
+            # mới. Nếu không, trang sau lặp lại đúng bảng kết quả sẽ quay vô hạn.
+            if total_pages is None and not new_ids:
                 break
             page += 1
             if total_pages is None or page <= total_pages:
@@ -165,27 +204,36 @@ class Pipeline:
     def _run_legacy_fallback(
         self,
         portal,
-        period,
         records: dict[str, CaseRecord],
         succeeded: set[str],
     ) -> None:
-        """Hỏi trang Thuế điện tử cũ khi cổng không tải được hồ sơ nào của đoạn.
+        """Quét trang Thuế điện tử cũ từ đầu khoảng đến hết đoạn lỗi.
 
-        Cổng có lúc còn hiển thị hồ sơ cũ trong kết quả tra cứu nhưng máy chủ
-        tải ZIP trả "Không tìm thấy hồ sơ tương ứng" — những tờ khai này chỉ còn
-        lấy được trên trang legacy. Kết quả legacy được ghi nhận như hồ sơ bình
-        thường (``nguon = ETAX_LEGACY``) và tải qua ``portal.legacy``.
+        Khi cổng trả lỗi tải (HTTP 500) ở một đoạn bất kỳ trước mốc, các tờ
+        khai cũ có thể bị mất khỏi cổng dù vẫn hiện trong kết quả tra cứu.
+        Để không sót, mọi đoạn đã lập kế hoạch từ ``from_date`` đến hết đoạn lỗi
+        được quét lại trên trang legacy, vẫn giữ nguyên kích thước đoạn (≤31 ngày)
+        để trang cũ không từ chối khoảng quá dài; hồ sơ đã tải thành công từ cổng
+        thì bỏ qua (dựa trên ``succeeded``), hồ sơ cổng trả 500 được thay bằng
+        bản ghi legacy để tải lại.
         """
-        period, without_download = self._period_without_download
-        if not without_download:
+        failed_period = self._first_failed_period
+        if failed_period is None:
             return
-        self.logger.info(
-            "Cổng không tải được hồ sơ nào cho %s — hỏi trang Thuế điện tử cũ", period.label
-        )
-        try:
-            self._search_and_download(portal.legacy, period, records, succeeded)
-        except LegacyEtaxError as error:
-            self.logger.error("Trang legacy lỗi: %s — bỏ qua nguồn dự phòng", error)
+        for period in self.settings.periods():
+            if period.start > failed_period.end:
+                break
+            legacy_period = SearchPeriod(
+                start=period.start,
+                end=min(period.end, failed_period.end),
+                source=SOURCE_ETAX_LEGACY,
+            )
+            self.logger.info("Quét trang Thuế điện tử cũ cho %s", legacy_period.label)
+            try:
+                self._search_and_download(portal.legacy, legacy_period, records, succeeded)
+            except LegacyEtaxError as error:
+                self.logger.error("Trang legacy lỗi: %s — bỏ qua nguồn dự phòng", error)
+                return
 
     def _pause(self, seconds: float) -> None:
         """Nghỉ giữa hai request, thêm chút ngẫu nhiên cho nhịp tự nhiên hơn.
@@ -236,6 +284,7 @@ class Pipeline:
         # các nguồn DVC/ETAX trên cổng đều phải có token mới tải được.
         if not csrf and not getattr(portal, "csrf_optional", False):
             self.logger.error("LỖI TẢI: không lấy được CSRF token cho %s", record.ma_ho_so)
+            self._period_had_download_error = True
             return False
 
         response = portal.download(record, detail_url, csrf)
@@ -243,9 +292,11 @@ class Pipeline:
             status = getattr(response, "status_code", "-")
             body = (getattr(response, "text", "") or "")[:300]
             self.logger.error("LỖI TẢI: %s HTTP=%s %s", record.ma_ho_so, status, body)
+            self._period_had_download_error = True
             return False
 
         if self.store.save_from_response(record, response) is None:
+            self._period_had_download_error = True
             return False
         succeeded.add(record.ma_ho_so)
         return True
