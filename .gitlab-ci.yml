@@ -1,0 +1,35 @@
+# CI cho GitLab: chạy đúng hai lệnh mà README/CONTRIBUTING yêu cầu người đóng
+# góp chạy trước khi mở merge request. Test offline, không cần thư viện OCR và
+# không cần tài khoản.
+
+stages:
+  - test
+  - lint
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key: pip
+  paths:
+    - .cache/pip
+
+test:
+  stage: test
+  image: python:$PYTHON_VERSION
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.10", "3.12"]
+  script:
+    - python -m pip install --upgrade pip
+    - python -m pip install beautifulsoup4 lxml requests
+    - python -m unittest discover -s tests -t . -v
+
+lint:
+  stage: lint
+  image: python:3.12
+  script:
+    - python -m pip install --upgrade pip
+    - python -m pip install ruff mypy beautifulsoup4 lxml requests
+    - ruff check .
+    - mypy gdt_tax

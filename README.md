@@ -1,6 +1,6 @@
 # Tải hồ sơ thuế GTGT từ Cổng Dịch vụ công
 
-[![CI](https://github.com/dieutx/tai-ho-so-thue-gtgt/actions/workflows/ci.yml/badge.svg)](https://github.com/dieutx/tai-ho-so-thue-gtgt/actions/workflows/ci.yml)
+[![CI](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/badges/main/pipeline.svg)](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/pipelines)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -97,10 +97,22 @@ Khoảng ngày bất kỳ ──► tự cắt thành các đoạn ≤ 31 ngày
 
 ## Cài đặt
 
+Repo này ở chế độ **private** trên GitLab, nên `git clone` sẽ hỏi tài khoản.
+Dùng Personal Access Token làm mật khẩu (quyền tối thiểu `read_repository`,
+tạo ở *Preferences → Access tokens*):
+
+```bash
+git clone https://gitlab.com/dieutx/tai-ho-so-thue-gtgt.git
+# Username: <tên đăng nhập GitLab>
+# Password: <personal access token, không phải mật khẩu web>
+```
+
+Nếu đã cấu hình SSH key cho GitLab thì dùng luôn `git@gitlab.com:dieutx/tai-ho-so-thue-gtgt.git`.
+
 ### Windows (PowerShell)
 
 ```powershell
-git clone https://github.com/dieutx/tai-ho-so-thue-gtgt.git
+git clone https://gitlab.com/dieutx/tai-ho-so-thue-gtgt.git
 cd tai-ho-so-thue-gtgt
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -110,7 +122,7 @@ python -m pip install -r requirements.txt
 ### Linux / macOS
 
 ```bash
-git clone https://github.com/dieutx/tai-ho-so-thue-gtgt.git
+git clone https://gitlab.com/dieutx/tai-ho-so-thue-gtgt.git
 cd tai-ho-so-thue-gtgt
 python3 -m venv .venv
 source .venv/bin/activate
@@ -586,7 +598,7 @@ hai là port hợp lệ.
   gọi dịch vụ ngoài nên vẫn đi trực tiếp.
 - **Mật khẩu proxy không bao giờ vào log.** `SecretsFilter` che ở mọi handler — kể
   cả log của `urllib3`, vốn in cả URL proxy kèm tài khoản — và `--dump-http` cũng
-  không ghi proxy. Bạn vẫn không nên dán `GDT_PROXY_URL` vào issue hay PR.
+  không ghi proxy. Bạn vẫn không nên dán `GDT_PROXY_URL` vào issue hay merge request.
 - Lỗi proxy được đổi thành một dòng `NetworkError` (đã che mật khẩu) kèm gợi ý,
   thay vì traceback dài.
 - Kiểm tra proxy bằng tay: `curl -x http://user:pass@1.2.3.4:8080 https://ipinfo.io/json`
@@ -634,9 +646,15 @@ GDT_HEADER_PROFILE=minimal python -m gdt_tax --dry-run
 ## Kiểm thử
 
 ```bash
-python -m unittest discover -s tests -t . -v   # 257 test, chạy offline
+python -m unittest discover -s tests -t . -v   # 269 test, chạy offline
 ruff check .                                   # lint
-mypy gdt_tax                                   # kiểm tra kiểu (32 file)
+mypy gdt_tax                                   # kiểm tra kiểu (33 file)
+```
+
+`unittest` chỉ cần 3 thư viện ở trên; riêng `ruff`/`mypy` phải cài trước:
+
+```bash
+pip install -r requirements-dev.txt   # requirements.txt + ruff + mypy
 ```
 
 Bộ test **không cần Internet và không cần tài khoản**: `tests/support.py` cung cấp

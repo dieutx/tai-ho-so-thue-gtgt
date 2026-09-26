@@ -6,7 +6,7 @@ dự án và gửi thay đổi nhanh.
 ## Chuẩn bị môi trường
 
 ```bash
-git clone https://github.com/dieutx/tai-ho-so-thue-gtgt.git
+git clone https://gitlab.com/dieutx/tai-ho-so-thue-gtgt.git
 cd tai-ho-so-thue-gtgt
 python -m venv .venv
 ```
@@ -32,8 +32,9 @@ ruff check .
 mypy gdt_tax
 ```
 
-Test phải xanh trên cả Windows và Linux trước khi mở pull request — CI cũng chạy
-đúng hai hệ điều hành này.
+Test phải xanh trước khi mở merge request — CI trên GitLab chạy đúng các lệnh ở
+trên trên Linux; nếu bạn sửa code liên quan tới Windows thì chạy thử thêm trên
+Windows trước khi mở MR.
 
 ## Chuẩn cho một bộ nhận dạng CAPTCHA mới
 
@@ -88,12 +89,15 @@ Cổng từ chối khoảng dài kể cả trước mốc 01/07/2025, nên chư�
 nhỏ và tự chuyển nguồn tại mốc đó.
 ```
 
-## Quy trình pull request
+## Quy trình merge request
 
 1. Tạo nhánh từ `main`: `git switch -c fix/ten-ngan`.
 2. Chạy test và lint.
-3. Mở PR, mô tả hiện tượng trước — sau, và cách bạn đã kiểm chứng.
+3. Mở merge request, mô tả hiện tượng trước — sau, và cách bạn đã kiểm chứng.
 4. Nếu thay đổi luồng chạy hoặc module, cập nhật `docs/ARCHITECTURE.md`.
+
+Merge request cần pipeline xanh (job `test` và `lint` trong `.gitlab-ci.yml`)
+trước khi được duyệt.
 
 ## Báo lỗi khi cổng đổi giao diện
 
