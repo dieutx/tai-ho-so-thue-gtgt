@@ -38,3 +38,7 @@ class SearchError(GdtError):
 
 class DownloadError(GdtError):
     """Không tải được hồ sơ."""
+
+
+class LegacyEtaxError(GdtError):
+    """Không đăng nhập hoặc không tra cứu được trang Thuế điện tử cũ."""

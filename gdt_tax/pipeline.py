@@ -24,7 +24,7 @@ from .auth import login, open_landing
 from .constants import METADATA_CSV, METADATA_JSON
 from .csrf import csrf_token
 from .dates import format_date
-from .errors import LoginError, SearchError
+from .errors import LegacyEtaxError, LoginError, SearchError
 from .http import HttpClient
 from .models import CaseRecord, PageResult, RunSummary
 from .portals import build_portals
@@ -76,12 +76,24 @@ class Pipeline:
 
         records: dict[str, CaseRecord] = {}
         succeeded: set[str] = set()
+        #: (đoạn, đúng là không tải được hồ sơ nào) của đoạn vừa chạy xong.
+        self._period_without_download = (None, False)
 
         for period in self.settings.periods():
             summary.periods += 1
             self.logger.info("=== %s: %s ===", period.source, period.label)
-            if self._run_period(portals[period.source], period, records, succeeded):
+            portal = portals[period.source]
+            if self._run_period(portal, period, records, succeeded):
                 break
+            # Nguồn dự phòng trang Thuế điện tử cũ: đoạn ngày trước mốc mà cổng
+            # không tải được hồ sơ nào (kể cả khi cổng vẫn "hiện" hồ sơ cũ) thì
+            # hỏi thêm trang legacy, nơi một số tờ khai cũ chỉ còn tồn tại.
+            if (
+                not self.settings.case_id
+                and period.end < self.settings.etax_cutoff
+                and getattr(portal, "legacy", None) is not None
+            ):
+                self._run_legacy_fallback(portal, period, records, succeeded)
 
         if write_metadata(self.settings.download_dir, records):
             self.logger.info("Metadata: %s và %s", METADATA_CSV, METADATA_JSON)
@@ -99,6 +111,22 @@ class Pipeline:
         succeeded: set[str],
     ) -> bool:
         """Xử lý mọi trang của một đoạn; trả ``True`` khi đã tìm thấy hồ sơ đích."""
+        before = len(succeeded)
+        found_target = self._search_and_download(portal, period, records, succeeded)
+        if found_target:
+            return True
+        # Ghi nhớ đoạn có portal gốc nhưng không tải được hồ sơ nào để fallback.
+        self._period_without_download = (period, before == len(succeeded))
+        return False
+
+    def _search_and_download(
+        self,
+        portal,
+        period,
+        records: dict[str, CaseRecord],
+        succeeded: set[str],
+    ) -> bool:
+        """Duyệt hết trang của một đoạn trên một portal; trả ``True`` khi tìm thấy hồ sơ đích."""
         page = 1
         total_pages: int | None = None
 
@@ -133,6 +161,31 @@ class Pipeline:
             if total_pages is None or page <= total_pages:
                 self._pause(self.settings.pause_between_pages)
         return False
+
+    def _run_legacy_fallback(
+        self,
+        portal,
+        period,
+        records: dict[str, CaseRecord],
+        succeeded: set[str],
+    ) -> None:
+        """Hỏi trang Thuế điện tử cũ khi cổng không tải được hồ sơ nào của đoạn.
+
+        Cổng có lúc còn hiển thị hồ sơ cũ trong kết quả tra cứu nhưng máy chủ
+        tải ZIP trả "Không tìm thấy hồ sơ tương ứng" — những tờ khai này chỉ còn
+        lấy được trên trang legacy. Kết quả legacy được ghi nhận như hồ sơ bình
+        thường (``nguon = ETAX_LEGACY``) và tải qua ``portal.legacy``.
+        """
+        period, without_download = self._period_without_download
+        if not without_download:
+            return
+        self.logger.info(
+            "Cổng không tải được hồ sơ nào cho %s — hỏi trang Thuế điện tử cũ", period.label
+        )
+        try:
+            self._search_and_download(portal.legacy, period, records, succeeded)
+        except LegacyEtaxError as error:
+            self.logger.error("Trang legacy lỗi: %s — bỏ qua nguồn dự phòng", error)
 
     def _pause(self, seconds: float) -> None:
         """Nghỉ giữa hai request, thêm chút ngẫu nhiên cho nhịp tự nhiên hơn.
@@ -179,7 +232,9 @@ class Pipeline:
             return False
 
         detail_url, csrf = portal.fetch_detail_csrf(record)
-        if not csrf:
+        # Trang Thuế điện tử cũ không dùng CSRF token khi tải (csrf_optional=True);
+        # các nguồn DVC/ETAX trên cổng đều phải có token mới tải được.
+        if not csrf and not getattr(portal, "csrf_optional", False):
             self.logger.error("LỖI TẢI: không lấy được CSRF token cho %s", record.ma_ho_so)
             return False
 

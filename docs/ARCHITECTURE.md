@@ -23,6 +23,7 @@ quy tắc ngày tháng) đều tách riêng để thay mà không ảnh hưởng
 | `storage.py` | Kiểm tra ZIP, chống tải trùng, ghi ZIP, CSV/JSON | Gọi mạng |
 | `captcha/` | Nhận dạng CAPTCHA (nhiều backend) | Gọi endpoint nghiệp vụ |
 | `portals/` | Tra cứu và tải theo từng nguồn | Đọc/ghi file |
+| `portals/etax_legacy.py` | Nguồn dự phòng trang Thuế điện tử cũ (login DSE, XML→ZIP) + fallback khi cổng thiếu tờ khai cũ | Đọc/ghi file |
 | `auth.py` | Đăng nhập, mở trang hồ sơ | Đọc/ghi file |
 | `pipeline.py` | Ghép các giai đoạn | Chi tiết giao thức |
 | `cli.py` | Tham số dòng lệnh, mã thoát, log | Nghiệp vụ |
@@ -80,6 +81,9 @@ vào nhau thay vì chạy tuần tự.
 | chung | Trang chi tiết (lấy CSRF) | `GET /tthc/tchs/files/detail/{id}?loai=` |
 | ETAX | Tra cứu | `POST /tthc/tchs/thuedientu` |
 | ETAX | Tải ZIP | `POST /tthc/tchs/downloadhoso-tdt?loaiTraCuu=ETAX` |
+| legacy | Đăng nhập trang cũ | `GET/POST thuedientu.gdt.gov.vn/etaxnnt/...` (EstablishSession → loginForm) |
+| legacy | Tra cứu | `POST thuedientu.gdt.gov.vn/etaxnnt/Request` (`traCuuToKhaiProc/query`) |
+| legacy | Tải XML | `GET thuedientu.gdt.gov.vn/etaxnnt/Request` (`downTkhai&messageId=...`) |
 | DVC | Tra cứu | `GET /tthc/ho-so/search` |
 | DVC | Kiểm tra trước khi tải | `GET /tthc/tchs/validateIdTkhai` |
 | DVC | Tải ZIP | `POST /tthc/tchs/downloadhoso` |

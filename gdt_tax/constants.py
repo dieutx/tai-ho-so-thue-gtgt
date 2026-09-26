@@ -9,6 +9,10 @@ from __future__ import annotations
 ORIGIN = "https://dichvucong.gdt.gov.vn"
 BASE = f"{ORIGIN}/tthc"
 
+# --- Trang Thuế điện tử cũ (một số tờ khai cũ chỉ còn ở đây) ---
+LEGACY_ETAX_ORIGIN = "https://thuedientu.gdt.gov.vn"
+LEGACY_ETAX_BASE = f"{LEGACY_ETAX_ORIGIN}/etaxnnt"
+
 # --- Đăng nhập ---
 LOGIN_PAGE = "/login"
 LOGIN_ENDPOINT = "/loginLDAP"
@@ -41,7 +45,11 @@ DEFAULT_HEADERS = {
 
 SOURCE_ETAX = "ETAX"
 SOURCE_DVC = "DVC"
+#: Trang Thuế điện tử cũ — nguồn dự phòng khi DVC không còn tờ khai cũ.
+SOURCE_ETAX_LEGACY = "ETAX_LEGACY"
 SOURCES = (SOURCE_DVC, SOURCE_ETAX)
+#: Mọi nguồn có thể xuất hiện trong metadata.
+ALL_SOURCES = (SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY)
 
 METADATA_CSV = "danh_sach_ho_so.csv"
 METADATA_JSON = "danh_sach_ho_so.json"
