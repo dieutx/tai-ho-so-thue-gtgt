@@ -5,6 +5,10 @@ dự án và gửi thay đổi nhanh.
 
 ## Chuẩn bị môi trường
 
+Nếu tiếp tục công việc trên máy khác, đọc
+[bàn giao](docs/development/HANDOFF.md) và [trạng thái stage](docs/development/README.md)
+trước; chỉ làm phần còn thiếu. Tạo lại venv, không copy môi trường từ máy cũ.
+
 ```bash
 git clone https://gitlab.com/dieutx/tai-ho-so-thue-gtgt.git
 cd tai-ho-so-thue-gtgt
@@ -60,7 +64,8 @@ cài (xem `tests/test_captcha_backends.py`).
   rồi chạy `tests/test_headers.py`; đừng khai `Accept-Encoding` bằng tay, xem
   `accept_encoding()` để biết vì sao `zstd` bị loại.
 - Thông báo log và ngoại lệ viết bằng tiếng Việt, không dấu ở tên biến/hàm.
-- Thêm hàm phức tạp thì thêm test; ưu tiên fixture HTML thật trong `tests/fixtures/`.
+- Thêm hàm phức tạp thì thêm test; ưu tiên fixture đại diện trong `tests/fixtures/`,
+  đã ẩn danh trước khi đưa vào Git.
 - Không hard-code tài khoản, mật khẩu, cookie, CSRF token hay proxy (kể cả trong
   test và tài liệu). Mọi chuỗi proxy đi qua `gdt_tax/proxy.py`; thêm dạng mới thì
   bổ sung test vào `tests/test_proxy.py`.
@@ -107,9 +112,11 @@ trước khi được duyệt.
   ```bash
   python -m gdt_tax --from-date ... --to-date ... --log-file logs/run.log --dump-http http-dump
   ```
-  File log luôn ở mức `DEBUG` (kèm header/body của từng request); `Cookie`,
-  `Set-Cookie`, `Authorization`, `matKhau`, `_csrf` đã bị che thành `***` trước khi
-  ghi, nên gửi kèm được. Xem mục **Ghi log và lưu lại traffic** trong README.
+  File log ở mức `DEBUG` (kèm header/body của từng request). Bộ che một số
+  header/trường có cấu trúc không bảo đảm che bí mật trong URL, Referer và
+  HTML/XML response. Không gửi nguyên file; chỉ gửi bản đã kiểm tra và ẩn danh
+  tài khoản, mật khẩu, cookie/token/phiên, mã hồ sơ và dữ liệu thuế.
+  Xem mục **Ghi log và lưu lại traffic** trong README.
 - File `*.response.txt` liên quan trong `http-dump/` — HTML thật của cổng. Nhớ
   **che mã số thuế và mã hồ sơ** của bạn (log không tự che phần này).
 - Tên solver CAPTCHA đang dùng (`GDT_CAPTCHA_SOLVER`).
@@ -117,4 +124,5 @@ trước khi được duyệt.
   không (`curl -x … https://ipinfo.io/json`). **Không dán chuỗi proxy kèm tài khoản
   của bạn vào issue.**
 
-Dán HTML vào `tests/fixtures/` là cách nhanh nhất để người khác tái hiện lỗi.
+Đưa bản HTML đã ẩn danh vào `tests/fixtures/` để người khác tái hiện lỗi.
+Không commit `.env`, ZIP/XML tải thật, log/dump thô hoặc token GitLab.

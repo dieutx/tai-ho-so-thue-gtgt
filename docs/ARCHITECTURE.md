@@ -4,7 +4,18 @@ Tài liệu này dành cho người đọc mã nguồn hoặc muốn mở rộng
 mỗi module chỉ có một trách nhiệm, và mọi phần dễ đổi (CAPTCHA, nguồn dữ liệu,
 quy tắc ngày tháng) đều tách riêng để thay mà không ảnh hưởng phần còn lại.
 
+Trạng thái triển khai, test thật và quy trình chuyển máy ở
+[HANDOFF](development/HANDOFF.md); backlog và giới hạn ở
+[REVIEW](development/REVIEW.md). Phân loại hiện chỉ ở metadata cấp hồ sơ,
+chưa có artifact inventory hoặc parser chỉ tiêu XML.
+
 ## Bản đồ module
+
+Chính sách hiện tại: `Settings.periods()` ánh xạ đoạn trước cutoff thành
+`ETAX_LEGACY` mặc định; `Settings.source_enabled()` chặn ETAX/DVC trên cổng DVC
+khi `dvc_enabled=False`. Pipeline lập kế hoạch trước khi đăng nhập DVC. Legacy
+tự đăng nhập phiên DSE riêng ở lần tra cứu đầu. `EtaxLegacyFallback` chỉ còn
+được giữ như adapter cũ, không tham gia luồng mặc định.
 
 | Module | Trách nhiệm | Không được làm |
 |---|---|---|
@@ -20,10 +31,11 @@ quy tắc ngày tháng) đều tách riêng để thay mà không ảnh hưởng
 | `csrf.py` | Đọc CSRF token từ HTML | Gọi mạng |
 | `parsing.py` | Đọc bảng kết quả thành `CaseRecord` | Gọi mạng |
 | `naming.py` | Tạo tên file ZIP | Đọc/ghi file |
+| `classification.py` | Phân nhóm hồ sơ từ tên tờ khai/TTHC, ghi lý do và phiên bản rule | Gọi mạng, parse chỉ tiêu XML |
 | `storage.py` | Kiểm tra ZIP, chống tải trùng, ghi ZIP, CSV/JSON | Gọi mạng |
 | `captcha/` | Nhận dạng CAPTCHA (nhiều backend) | Gọi endpoint nghiệp vụ |
 | `portals/` | Tra cứu và tải theo từng nguồn | Đọc/ghi file |
-| `portals/etax_legacy.py` | Nguồn dự phòng trang Thuế điện tử cũ (login DSE, XML→ZIP) + fallback khi cổng thiếu tờ khai cũ | Đọc/ghi file |
+| `portals/etax_legacy.py` | Nguồn chính trước cutoff: login DSE, kiểm tra XML rồi gói ZIP; adapter fallback cũ được giữ | Đọc/ghi file |
 | `auth.py` | Đăng nhập, mở trang hồ sơ | Đọc/ghi file |
 | `pipeline.py` | Ghép các giai đoạn | Chi tiết giao thức |
 | `cli.py` | Tham số dòng lệnh, mã thoát, log | Nghiệp vụ |
@@ -52,8 +64,8 @@ main()  (gdt_tax/cli.py)
   ▼
 Pipeline.run()  (gdt_tax/pipeline.py)
   │
-  ├─ Giai đoạn 1  login() + open_landing()             → CSRF của trang hồ sơ
-  ├─ Giai đoạn 2  Settings.periods() → nhiều đoạn 31 ngày, mỗi đoạn một nguồn
+  ├─ Giai đoạn 1  Settings.periods() + source_enabled() → đoạn chạy / đoạn bỏ qua
+  ├─ Giai đoạn 2  DVC: login() + open_landing() nếu cần; legacy: login trì hoãn
   │
   ├─ Giai đoạn 3  với mỗi đoạn: portal.search(period, page) cho tới hết trang
   │                  portal lấy CAPTCHA → gọi endpoint tra cứu → parsing đọc bảng
@@ -61,7 +73,7 @@ Pipeline.run()  (gdt_tax/pipeline.py)
   ├─ Giai đoạn 4  với mỗi hồ sơ: portal.fetch_detail_csrf() → portal.download()
   │                  → storage.decode_zip_bytes() → ZipStore.save()
   │
-  └─ Giai đoạn 5  write_metadata() → danh_sach_ho_so.csv + .json
+  └─ Giai đoạn 5  classify_record() + write_metadata() → CSV/JSON + danh mục nhóm
 ```
 
 **Vì sao tải ngay trong lúc phân trang?** Cổng chỉ giữ danh sách hồ sơ của trang
@@ -70,6 +82,9 @@ tra cứu gần nhất trong phiên. Nếu gom hết mã hồ sơ rồi mới t�
 vào nhau thay vì chạy tuần tự.
 
 ## Endpoint đang dùng
+
+Các đường `/tthc/...` dưới đây thuộc adapter DVC/ETAX được giữ để phát triển
+sau, không gọi khi `GDT_DVC_ENABLED=false`. Luồng mặc định chỉ dùng các dòng legacy.
 
 | Nguồn | Việc | Gọi |
 |---|---|---|
@@ -92,6 +107,9 @@ vào nhau thay vì chạy tuần tự.
 Thứ tự cột của bảng kết quả nằm ở đầu `gdt_tax/parsing.py`.
 
 ## Một số điều đã kiểm chứng khi chạy thật
+
+Các ghi chép DVC sau là lịch sử trước đợt sửa 27/09/2026; chưa xác minh lại
+DVC ở đợt này. Test legacy mới và giới hạn suy luận được ghi ở REVIEW.
 
 - **CAPTCHA chỉ thực sự bị kiểm ở bước đăng nhập.** Gửi CAPTCHA sai, thậm chí
   để rỗng, ở `GET /tthc/ho-so/search` vẫn nhận đủ kết quả của trang tra cứu.
@@ -181,6 +199,11 @@ trị mâu thuẫn: hint được tính lại, hoặc bị bỏ hẳn nếu ``Us
 Chrome.
 
 ## Mở rộng
+
+Lộ trình inventory → phân loại file theo nội dung → parser theo mẫu/phiên bản
+→ export và các prompt triển khai độc lập nằm ở
+[development/README.md](development/README.md). `parsing.py` hiện chỉ đọc HTML,
+không dùng làm module parse XML tờ khai trong các stage mới.
 
 ### Bộ nhận dạng CAPTCHA có sẵn
 
