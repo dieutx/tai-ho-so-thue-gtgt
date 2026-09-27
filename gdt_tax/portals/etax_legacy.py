@@ -32,12 +32,14 @@ from typing import Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from bs4 import BeautifulSoup
+from lxml import etree
 
-from ..constants import LEGACY_ETAX_BASE, SOURCE_ETAX_LEGACY
+from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from ..errors import LegacyEtaxError
 from ..headers import build_image_headers, build_page_headers, build_xhr_headers
 from ..http import HttpClient
 from ..models import CaseRecord, PageResult, SearchPeriod
+from ..naming import safe_filename_part
 from ..parsing import parse_records
 from .base import Portal
 
@@ -273,7 +275,7 @@ class EtaxLegacyPortal(Portal):
                 accept="text/html,application/xhtml+xml,*/*;q=0.8",
                 headers={
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "Origin": LEGACY_ETAX_BASE,
+                    "Origin": LEGACY_ETAX_ORIGIN,
                     "Referer": referer,
                 },
             ),
@@ -303,10 +305,17 @@ class EtaxLegacyPortal(Portal):
         )
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
+        # Không thay form tốt bằng trang lỗi/hết phiên HTTP 200.
+        empty_result = "Chưa có tờ khai nào" in response.text
+        if _SEARCH_FORM_ID not in response.text or (
+            _RESULT_TABLE_ID not in response.text and not empty_result
+        ):
+            self.logger.warning("Legacy không trả bảng kết quả/form tra cứu; có thể đã hết phiên")
+            return PageResult(http_status=response.status_code)
         self._search_page_html = response.text
         self._search_page_url = response.url
         records = parse_records(response.text, self.source)
-        return PageResult(records=records, total_pages=_total_pages(response.text) or None,
+        return PageResult(records=records, total_pages=_total_pages(response.text),
                           http_status=response.status_code)
 
     def _open_search_page(self) -> None:
@@ -364,9 +373,18 @@ class EtaxLegacyPortal(Portal):
         if response.status_code != 200:
             return response
         content_type = response.headers.get("content-type", "").lower()
-        if "text/html" in content_type:
+        parser = etree.XMLParser(resolve_entities=False, load_dtd=False, no_network=True)
+        try:
+            root = etree.fromstring(response.content, parser=parser)
+            xml_ok = (
+                etree.QName(root).localname.lower() not in {"html", "error"}
+                and not root.getroottree().docinfo.doctype
+            )
+        except (etree.XMLSyntaxError, ValueError, TypeError):
+            xml_ok = False
+        if "text/html" in content_type or not xml_ok:
             self.logger.error(
-                "Legacy trả HTML thay vì XML cho %s (hết phiên hoặc tờ khai không tải được)",
+                "Legacy không trả XML hợp lệ cho %s (hết phiên hoặc tờ khai không tải được)",
                 record.ma_ho_so,
             )
             return _HtmlInsteadOfFile(response)
@@ -397,7 +415,7 @@ class _XmlZipResponse:
     def __init__(self, record: CaseRecord, xml: bytes) -> None:
         buffer = BytesIO()
         with zipfile.ZipFile(buffer, "w") as archive:
-            archive.writestr(f"{record.ma_ho_so}.xml", xml)
+            archive.writestr(f"{safe_filename_part(record.ma_ho_so, 50)}.xml", xml)
         self.status_code = 200
         self.headers = {"content-type": "application/json"}
         self._payload = {

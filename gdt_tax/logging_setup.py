@@ -11,6 +11,7 @@ from .traffic import mask_secrets
 
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 DATE_FORMAT = "%H:%M:%S"
+_OWNED_HANDLERS: set[logging.Handler] = set()
 
 
 class SecretsFilter(logging.Filter):
@@ -55,6 +56,7 @@ def configure_logging(
     ở chế độ verbose.
     """
     _reconfigure_streams()
+    close_logging()
 
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(logging.DEBUG if verbose else logging.INFO)
@@ -70,6 +72,8 @@ def configure_logging(
         for handler in handlers:
             handler.addFilter(secrets_filter)
 
+    _OWNED_HANDLERS.update(handlers)
+
     logging.basicConfig(
         level=logging.DEBUG if (verbose or log_file) else logging.INFO,
         format=LOG_FORMAT,
@@ -77,6 +81,16 @@ def configure_logging(
         handlers=handlers,
         force=True,
     )
+
+
+def close_logging() -> None:
+    """Giải phóng handler do CLI tạo, kể cả khi main() chạy nhiều lần trên Windows."""
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        if handler in _OWNED_HANDLERS:
+            root.removeHandler(handler)
+            handler.close()
+            _OWNED_HANDLERS.discard(handler)
 
 
 def _reconfigure_streams() -> None:
@@ -96,4 +110,4 @@ def _file_handler(log_file: str | Path) -> logging.FileHandler:
     return handler
 
 
-__all__ = ["DATE_FORMAT", "LOG_FORMAT", "SecretsFilter", "configure_logging"]
+__all__ = ["DATE_FORMAT", "LOG_FORMAT", "SecretsFilter", "close_logging", "configure_logging"]

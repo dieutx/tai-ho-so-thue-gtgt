@@ -21,12 +21,13 @@ from gdt_tax.portals.etax_legacy import (
     EtaxLegacyFallback,
     EtaxLegacyPortal,
 )
-from gdt_tax.storage import ZipStore, decode_zip_bytes
+from gdt_tax.storage import decode_zip_bytes
 from tests.support import (
     FAKE_CAPTCHA_BYTES,
     FakeHttp,
     FakeResponse,
     StubCaptcha,
+    cleanup_temporary_directory,
     fixture,
 )
 
@@ -169,7 +170,7 @@ class LegacyPortalTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.state: dict = {}
         self.settings = Settings(
-            username="0101234567-QL",
+            username="synthetic-taxpayer-QL",
             password="mat-khau",
             from_date=date(2020, 1, 1),
             to_date=date(2020, 2, 29),
@@ -181,7 +182,7 @@ class LegacyPortalTests(unittest.TestCase):
         )
 
     def tearDown(self):
-        self._tmp.cleanup()
+        cleanup_temporary_directory(self._tmp)
 
     def make_portal(self, state: dict | None = None) -> EtaxLegacyPortal:
         self.state = state if state is not None else {}
@@ -248,6 +249,24 @@ class LegacyPortalTests(unittest.TestCase):
         response = portal.download(record, "https://x", "")
         self.assertIsNone(decode_zip_bytes(response))
 
+    def test_html_mime_sai_va_xml_hong_khong_duoc_goi_zip(self):
+        for body in (b"<html><body>expired</body></html>", b"error", b"<HSoThueDTu>",
+                     b'<!DOCTYPE x [<!ENTITY a "secret">]><x>&a;</x>'):
+            with self.subTest(body=body):
+                portal = self.make_portal({"download_response": FakeResponse(
+                    content=body, headers={"content-type": "application/octet-stream"})})
+                record = portal.search(self.period(), page=1).records[0]
+                self.assertIsNone(decode_zip_bytes(portal.download(record, "", "")))
+
+    def test_trang_loi_khong_ghi_de_form_tra_cuu_dang_co(self):
+        portal = self.make_portal()
+        portal.search(self.period(), 1)
+        form = portal._search_page_html
+        self.state["query_html"] = "<html>expired</html>"
+        result = portal.search(self.period(), 2)
+        self.assertIsNone(result.total_pages)
+        self.assertEqual(portal._search_page_html, form)
+
 
 class LegacyFallbackTests(unittest.TestCase):
     def setUp(self):
@@ -262,7 +281,7 @@ class LegacyFallbackTests(unittest.TestCase):
         )
 
     def tearDown(self):
-        self._tmp.cleanup()
+        cleanup_temporary_directory(self._tmp)
 
     def make_fallback(self):
         primary = mock.Mock()
@@ -289,122 +308,89 @@ class LegacyFallbackTests(unittest.TestCase):
         primary.fetch_detail_csrf.assert_called_once_with(other_record)
 
 
-class PipelineLegacySwitchTests(unittest.TestCase):
-    """Quy tắc chuyển nguồn: cổng lỗi tải ở một đoạn thì quét legacy từ đầu
-    khoảng, các đoạn cũ hơn chạy thẳng legacy, đoạn 0 bản ghi không tính là lỗi.
-    """
+class PipelineLegacyRoutingTests(unittest.TestCase):
+    """Legacy là nguồn chính trước cutoff, không cần request DVC."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.directory = Path(self._tmp.name)
-        self.state: dict = {}
 
     def tearDown(self):
-        self._tmp.cleanup()
+        cleanup_temporary_directory(self._tmp)
 
-    def settings_for(self, **overrides) -> Settings:
+    def run_pipeline(self, state=None, **overrides):
         values = dict(
-            username="u",
-            password="p",
-            from_date=date(2020, 1, 1),
-            to_date=date(2020, 3, 31),
-            download_dir=self.directory,
-            login_attempts=1,
-            search_attempts=1,
-            pause_between_records=0.0,
-            pause_between_pages=0.0,
-            etax_cutoff=date(2025, 7, 1),
-            legacy_etax=True,
+            username="u", password="p",
+            from_date=date(2020, 1, 1), to_date=date(2020, 3, 31),
+            download_dir=self.directory, login_attempts=1, search_attempts=1,
+            pause_between_records=0.0, pause_between_pages=0.0,
         )
         values.update(overrides)
-        return Settings(**values)
+        state = {} if state is None else state
+        http = FakeHttp(make_legacy_handler(state))
+        summary = Pipeline(Settings(**values), http, StubCaptcha(),
+                           sleep=lambda _seconds: None).run()
+        return summary, http, state
 
-    def make_handler(self, state: dict, etax_results: str | None = None):
-        """Handler cổng ETAX (hiện hồ sơ nhưng tải ZIP trả 500) + legacy đầy đủ."""
-        results = etax_results if etax_results is not None else fixture("etax_results.html")
+    def test_legacy_duoc_dung_ngay_tu_doan_dau(self):
+        summary, http, state = self.run_pipeline()
+        queries = state["queries"]
+        self.assertEqual([(q["qryFromDate"], q["qryToDate"]) for q in queries], [
+            ("01/01/2020", "31/01/2020"),
+            ("01/02/2020", "02/03/2020"),
+            ("03/03/2020", "31/03/2020"),
+        ])
+        self.assertTrue(all(path.startswith("/etaxnnt/") for path in http.paths()))
+        self.assertEqual(state["login_posts"], 1)
+        self.assertEqual(summary.downloaded, 2)
+        self.assertTrue(summary.complete)
 
-        def handler(method, path, kwargs):
-            route = path.split("?", 1)[0]
-            if method == "POST" and route in ("/tchs/thuedientu", "/ho-so/search"):
-                return FakeResponse(results)
-            if method == "POST" and route == "/loginLDAP":
-                return FakeResponse(json_payload={"status": "200"})
-            if method == "GET" and route == "/login":
-                return FakeResponse(
-                    '<html><meta name="csrf-token" content="csrf"></html>'
-                )
-            if route in ("/login/getCaptcha", "/getCaptcha"):
-                return FakeResponse(content=FAKE_CAPTCHA_BYTES, headers=IMAGE_HEADERS)
-            if method == "GET" and route == "/tchs":
-                return FakeResponse(
-                    '<html><input type="hidden" name="_csrf" value="csrf"></html>'
-                )
-            if route.startswith("/tchs/files/detail/"):
-                return FakeResponse(
-                    '<html><input type="hidden" name="_csrf" value="csrf"></html>'
-                )
-            if route == "/tchs/downloadhoso-tdt":
-                return FakeResponse(
-                    json_payload={"error": "Không tìm thấy hồ sơ tương ứng!"},
-                    status_code=500,
-                )
-            return make_legacy_handler(state)(method, path, kwargs)
+    def test_ket_qua_rong_la_hop_le_va_khong_thu_lai(self):
+        summary, http, state = self.run_pipeline(
+            {"query_html": fixture("etax_legacy_empty.html")})
+        self.assertEqual(summary.expected, 0)
+        self.assertTrue(summary.complete)
+        self.assertEqual(len(state["queries"]), 3)
+        self.assertTrue(all(path.startswith("/etaxnnt/") for path in http.paths()))
 
-        return handler
+    def test_khoang_vat_cutoff_chi_tra_cuu_phan_legacy(self):
+        summary, http, state = self.run_pipeline(
+            from_date=date(2025, 6, 30), to_date=date(2025, 7, 2))
+        self.assertEqual(summary.skipped_periods, 1)
+        self.assertEqual(summary.periods, 1)
+        self.assertFalse(summary.complete)
+        self.assertEqual(state["queries"][0]["qryToDate"], "30/06/2025")
+        self.assertTrue(all(path.startswith("/etaxnnt/") for path in http.paths()))
 
-    def run_pipeline(self, state: dict):
-        settings = self.settings_for()
-        http = FakeHttp(self.make_handler(state))
-        pipeline = Pipeline(
-            settings,
-            http,
-            StubCaptcha(),
-            store=ZipStore(settings.download_dir),
-            sleep=lambda _seconds: None,
-        )
-        return pipeline.run(), state, settings
+    def test_chi_sau_cutoff_khong_goi_mang_va_bao_chua_day_du(self):
+        summary, http, state = self.run_pipeline(
+            from_date=date(2025, 7, 1), to_date=date(2025, 7, 31))
+        self.assertEqual(http.calls, [])
+        self.assertEqual(state, {})
+        self.assertEqual(summary.skipped_periods, 1)
+        self.assertFalse(summary.complete)
+        self.assertFalse(summary.search_complete)
 
-    def test_etax_loi_500_thi_quet_legacy_tu_dau_khoang(self):
-        """Đoạn 1/2020 cổng hiện hồ sơ nhưng 500 → legacy quét 01/01→31/01."""
-        state: dict = {}
-        summary, state, settings = self.run_pipeline(state)
-        queries = state.get("queries", [])
-        # Đoạn 1 bị lỗi → legacy quét từ đầu khoảng (01/01/2020) đến hết đoạn lỗi.
-        self.assertTrue(queries)
-        first = queries[0]
-        self.assertEqual(first["qryFromDate"], "01/01/2020")
-        self.assertEqual(first["qryToDate"], "31/01/2020")
-        # Đoạn 2+ chạy thẳng legacy, không gọi cổng nữa (mỗi đoạn ≤31 ngày).
-        self.assertEqual(queries[1]["qryFromDate"], "01/02/2020")
-        self.assertEqual(queries[1]["qryToDate"], "02/03/2020")
-        self.assertEqual(queries[2]["qryToDate"], "31/03/2020")
-        # File legacy đã lưu.
-        zips = list(self.directory.glob("*.zip"))
-        self.assertTrue(zips)
+    def test_dry_run_chi_sau_cutoff_khong_bao_thanh_cong(self):
+        summary, http, _ = self.run_pipeline(
+            from_date=date(2025, 7, 1), to_date=date(2025, 7, 31), dry_run=True)
+        self.assertFalse(summary.search_complete)
+        self.assertEqual(http.calls, [])
 
-    def test_doan_khong_co_ban_ghi_khong_kich_hoat_legacy(self):
-        """Cổng trả 0 bản ghi thì không chuyển legacy, vẫn thử cổng đoạn sau."""
-        state: dict = {}
-        settings = self.settings_for()
-        # Bảng kết quả rỗng nhưng vẫn có phần tử phân trang (1 trang).
-        empty_results = (
-            "<html><body>"
-            "<input id='goToPage_tdt' min='1' max='1' type='number'>"
-            "<table id='bangKetQuaTraCuu_tdt'><tbody></tbody></table>"
-            "</body></html>"
-        )
-        http = FakeHttp(self.make_handler(state, etax_results=empty_results))
-        pipeline = Pipeline(
-            settings,
-            http,
-            StubCaptcha(),
-            store=ZipStore(settings.download_dir),
-            sleep=lambda _seconds: None,
-        )
-        pipeline.run()
-        # Không có lần gọi legacy nào (trang legacy không được hỏi).
-        legacy_requests = [p for p in http.paths("POST") if "thuedientu.gdt" in p]
-        self.assertEqual(legacy_requests, [])
+    def test_case_id_khong_tim_thay_duoc_ghi_nhan(self):
+        summary, _, _ = self.run_pipeline(case_id="missing", dry_run=True)
+        self.assertEqual(summary.discovered, 0)
+        self.assertEqual(summary.expected, 1)
+        self.assertFalse(summary.search_complete)
+
+    def test_phan_loai_hai_nhom_tu_legacy(self):
+        import json
+
+        self.run_pipeline()
+        groups = json.loads((self.directory / "phan_loai_ho_so.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(groups["groups"]["GTGT"]), 1)
+        self.assertEqual(len(groups["groups"]["TNCN"]), 1)
+        self.assertTrue(all(row["tep_zip"] for group in groups["groups"].values() for row in group))
 
 
 if __name__ == "__main__":

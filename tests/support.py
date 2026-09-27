@@ -7,6 +7,8 @@ Các test chạy hoàn toàn offline: lớp :class:`FakeHttp` thay cho
 from __future__ import annotations
 
 import base64
+import tempfile
+import time
 import zipfile
 from collections import namedtuple
 from io import BytesIO
@@ -16,6 +18,24 @@ from gdt_tax.captcha.base import CaptchaSolver
 
 FIXTURES = Path(__file__).parent / "fixtures"
 Call = namedtuple("Call", "method path kwargs")
+
+
+def cleanup_temporary_directory(directory: tempfile.TemporaryDirectory) -> None:
+    """Thử lại WinError 145 do Windows giữ thư mục sau os.replace.
+
+    Chỉ retry directory-not-empty; lỗi file log còn mở (32) vẫn phải lộ ra.
+    """
+    target = Path(directory.name).resolve()
+    if target.parent != Path(tempfile.gettempdir()).resolve():
+        raise ValueError("Chỉ dọn thư mục tạm trực tiếp do test tạo")
+    for attempt in range(10):
+        try:
+            directory.cleanup()
+            return
+        except OSError as error:
+            if getattr(error, "winerror", None) != 145 or attempt == 9:
+                raise
+            time.sleep(0.1)
 
 PNG_HEADER = b"\x89PNG\r\n\x1a\n"
 FAKE_CAPTCHA_BYTES = PNG_HEADER + b"0" * 600

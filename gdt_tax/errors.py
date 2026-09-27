@@ -40,5 +40,9 @@ class DownloadError(GdtError):
     """Không tải được hồ sơ."""
 
 
+class StorageError(GdtError):
+    """Không đọc/ghi được file hoặc metadata; giữ nguyên dữ liệu cũ khi lỗi."""
+
+
 class LegacyEtaxError(GdtError):
     """Không đăng nhập hoặc không tra cứu được trang Thuế điện tử cũ."""

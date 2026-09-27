@@ -45,7 +45,7 @@ DEFAULT_HEADERS = {
 
 SOURCE_ETAX = "ETAX"
 SOURCE_DVC = "DVC"
-#: Trang Thuế điện tử cũ — nguồn dự phòng khi DVC không còn tờ khai cũ.
+#: Trang Thuế điện tử cũ — nguồn chính mặc định trước cutoff.
 SOURCE_ETAX_LEGACY = "ETAX_LEGACY"
 SOURCES = (SOURCE_DVC, SOURCE_ETAX)
 #: Mọi nguồn có thể xuất hiện trong metadata.

@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from gdt_tax.logging_setup import SecretsFilter, configure_logging
+from gdt_tax.logging_setup import SecretsFilter, close_logging, configure_logging
 
 
 class SecretsFilterTests(unittest.TestCase):
@@ -47,6 +47,7 @@ class SecretsFilterTests(unittest.TestCase):
                 for handler in logging.getLogger().handlers:
                     handler.flush()
             text = path.read_text(encoding="utf-8")
+            close_logging()
         self.assertNotIn("bi-mat", text)
         self.assertIn("***", text)
 
@@ -88,6 +89,7 @@ class ConfigureLoggingTests(unittest.TestCase):
 
             text = path.read_text(encoding="utf-8")
             existed = path.is_file()
+            close_logging()
 
         self.assertTrue(existed)
         self.assertIn("chi tiet", text)
@@ -107,6 +109,7 @@ class ConfigureLoggingTests(unittest.TestCase):
                 for handler in logging.getLogger().handlers:
                     handler.flush()
             text = path.read_text(encoding="utf-8")
+            close_logging()
         self.assertIn("lan chay truoc", text)
         self.assertIn("lan nay", text)
 

@@ -3,11 +3,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from gdt_tax.errors import StorageError
 from gdt_tax.models import CaseRecord
 from gdt_tax.naming import zip_filename
 from gdt_tax.storage import ZipStore, decode_zip_bytes, valid_zip, write_metadata
-from tests.support import FakeResponse, sample_zip, zip_payload
+from tests.support import FakeResponse, cleanup_temporary_directory, sample_zip, zip_payload
 
 
 def make_record(case_id: str = "11320250292469209") -> CaseRecord:
@@ -53,7 +55,7 @@ class ZipStoreTests(unittest.TestCase):
         self.store = ZipStore(self.directory)
 
     def tearDown(self):
-        self._tmp.cleanup()
+        cleanup_temporary_directory(self._tmp)
 
     def test_luu_file_va_dat_ten(self):
         record = make_record()
@@ -99,6 +101,22 @@ class ZipStoreTests(unittest.TestCase):
         response = FakeResponse(json_payload={"content": zip_payload()})
         self.assertIsNotNone(self.store.save_from_response(record, response))
 
+    def test_khong_nham_ma_ho_so_la_chuoi_con(self):
+        for name in ("9123.zip", "1234__ten.zip", "prefix123.zip"):
+            (self.directory / name).write_bytes(sample_zip())
+        self.assertIsNone(self.store.find_existing(make_record("123")))
+        self.assertEqual(len(list(self.directory.glob("*.zip"))), 3)
+
+    def test_ghi_loi_khong_lam_hong_file_cu(self):
+        record = make_record()
+        saved = self.store.save(record, sample_zip())
+        original = saved.read_bytes()
+        with mock.patch("gdt_tax.storage.os.replace", side_effect=OSError("disk error")):
+            with self.assertRaises(StorageError):
+                self.store.save(record, sample_zip())
+        self.assertEqual(saved.read_bytes(), original)
+        self.assertEqual(list(self.directory.glob("*.tmp")), [])
+
 
 class WriteMetadataTests(unittest.TestCase):
     def setUp(self):
@@ -106,7 +124,7 @@ class WriteMetadataTests(unittest.TestCase):
         self.directory = Path(self._tmp.name)
 
     def tearDown(self):
-        self._tmp.cleanup()
+        cleanup_temporary_directory(self._tmp)
 
     def test_ghi_ca_csv_va_json(self):
         records = {"b": make_record("B-2"), "a": make_record("A-1")}
@@ -124,6 +142,36 @@ class WriteMetadataTests(unittest.TestCase):
     def test_khong_co_ho_so_thi_khong_ghi(self):
         self.assertIsNone(write_metadata(self.directory, {}))
         self.assertEqual(list(self.directory.iterdir()), [])
+
+    def test_chay_khoang_moi_khong_mat_metadata_khoang_cu(self):
+        write_metadata(self.directory, [make_record("A")])
+        write_metadata(self.directory, [make_record("B")])
+        rows = json.loads((self.directory / "danh_sach_ho_so.json").read_text(encoding="utf-8"))
+        self.assertEqual([row["ma_ho_so"] for row in rows], ["A", "B"])
+
+    def test_dry_run_khong_xoa_tham_chieu_file_da_tai(self):
+        record = make_record("A")
+        record.tep_zip = "A.zip"
+        write_metadata(self.directory, [record])
+        write_metadata(self.directory, [make_record("A")])
+        rows = json.loads((self.directory / "danh_sach_ho_so.json").read_text(encoding="utf-8"))
+        self.assertEqual(rows[0]["tep_zip"], "A.zip")
+
+    def test_metadata_hong_khong_bi_ghi_de(self):
+        path = self.directory / "danh_sach_ho_so.json"
+        path.write_text("{broken", encoding="utf-8")
+        with self.assertRaises(StorageError):
+            write_metadata(self.directory, [make_record()])
+        self.assertEqual(path.read_text(encoding="utf-8"), "{broken")
+
+    def test_danh_muc_nhom_chi_chua_ho_so_co_file_da_tai(self):
+        downloaded = make_record("A")
+        downloaded.tep_zip = "A.zip"
+        downloaded.nhom_to_khai = "GTGT"
+        write_metadata(self.directory, [downloaded, make_record("B")])
+        groups = json.loads((self.directory / "phan_loai_ho_so.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(groups["groups"]["GTGT"]), 1)
+        self.assertEqual(groups["groups"]["UNKNOWN"], [])
 
 
 if __name__ == "__main__":

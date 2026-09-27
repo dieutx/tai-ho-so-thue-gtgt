@@ -21,7 +21,7 @@ from .config import DEFAULT_ENV_FILE, Settings
 from .errors import CaptchaError, ConfigError, GdtError
 from .headers import PROFILE_BROWSER, PROFILE_MINIMAL, PROFILES, header_names
 from .http import HttpClient
-from .logging_setup import configure_logging
+from .logging_setup import close_logging, configure_logging
 from .pipeline import Pipeline
 from .proxy import Proxy, parse_proxy
 
@@ -34,7 +34,7 @@ EXIT_CONFIG_ERROR = 2
 EXAMPLES = """\
 Ví dụ:
   python -m gdt_tax --from-date 01/01/2025 --to-date 31/01/2025
-  python -m gdt_tax --from-date 01/01/2026 --to-date 31/01/2026 --output-dir download/2026-01
+  python -m gdt_tax --from-date 01/01/2026 --to-date 31/01/2026 --output-dir download/2026-01 --enable-dvc
   python -m gdt_tax --case-id 11320250292469209
   python -m gdt_tax --solver manual            # tự nhập CAPTCHA từng lần
   python -m gdt_tax --dry-run                  # chỉ tra cứu, không tải
@@ -86,7 +86,7 @@ def parse_headers(items: list[str] | None) -> dict[str, str]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gdt-tax",
-        description="Tải hồ sơ thuế GTGT từ Cổng Dịch vụ công của Cục Thuế.",
+        description="Tải hồ sơ thuế: legacy trước cutoff; DVC tạm tắt mặc định.",
         epilog=EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -143,9 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--legacy-etax",
         action="store_true",
         help=(
-            "Bật nguồn dự phòng trang Thuế điện tử cũ: đoạn ngày trước mốc "
-            "mà cổng không trả hồ sơ nào sẽ được tra cứu thêm trên "
-            "thuedientu.gdt.gov.vn (dùng chung tài khoản)"
+            "Dùng trực tiếp trang Thuế điện tử cũ trước cutoff (đã bật mặc định)"
         ),
     )
     parser.add_argument(
@@ -157,6 +155,11 @@ def build_parser() -> argparse.ArgumentParser:
             "do header)"
         ),
     )
+    dvc = parser.add_mutually_exclusive_group()
+    dvc.add_argument("--enable-dvc", dest="dvc_enabled", action="store_true", default=None,
+                     help="Mở lại tra cứu trên dichvucong.gdt.gov.vn")
+    dvc.add_argument("--disable-dvc", dest="dvc_enabled", action="store_false",
+                     help="Tạm tắt DVC, kể cả khi GDT_DVC_ENABLED=true")
     parser.add_argument("-v", "--verbose", action="store_true", help="Log chi tiết")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
@@ -176,6 +179,13 @@ def log_secrets(settings, proxy: Proxy | None) -> tuple[str, ...]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    finally:
+        close_logging()
+
+
+def _main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -204,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
             header_profile=args.header_profile,
             proxy_url=args.proxy,
             legacy_etax=True if args.legacy_etax else None,
+            dvc_enabled=args.dvc_enabled,
         )
     except (ConfigError, ValueError) as error:
         print(f"LỖI CẤU HÌNH: {error}", file=sys.stderr)
@@ -232,6 +243,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     if settings.extra_headers:
         logger.debug("Header ghi đè: %s", header_names(settings.extra_headers))
+    if not any(settings.source_enabled(p.source) for p in settings.periods()):
+        logger.warning("Không có đoạn ngày được bật: DVC đang tạm tắt. Chọn ngày trước cutoff hoặc dùng --enable-dvc.")
+        return EXIT_INCOMPLETE
     try:
         register_plugins(settings.captcha_plugins)
         captcha = create_solver(settings.captcha_solver, **settings.captcha_options)
@@ -250,17 +264,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     try:
         summary = Pipeline(settings, http, captcha, logger=logger).run()
-    except GdtError as error:
+    except (GdtError, OSError) as error:
         logger.error("%s", error)
         return EXIT_INCOMPLETE
     finally:
         http.close()
         captcha.close()
 
-    logger.info("HOÀN TẤT: %s/%s hồ sơ đã tải", summary.downloaded, summary.expected)
+    logger.info("KẾT QUẢ: %s/%s hồ sơ đã tải, %s đoạn bị bỏ qua",
+                summary.downloaded, summary.expected, summary.skipped_periods)
     if settings.dry_run:
-        logger.info("Dry-run: đã tra cứu %s hồ sơ, không tải file nào.", summary.expected)
-        return EXIT_OK
+        logger.info("Dry-run: tìm thấy %s hồ sơ, %s đoạn bị bỏ qua.", summary.discovered, summary.skipped_periods)
+        return EXIT_OK if summary.search_complete else EXIT_INCOMPLETE
     if settings.case_id and summary.expected == 1 and summary.downloaded == 0:
         logger.warning(
             "Không tìm thấy hoặc không tải được %s trong khoảng ngày đã cấu hình",

@@ -12,6 +12,8 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
+from bs4 import BeautifulSoup
+
 from gdt_tax.config import Settings
 from gdt_tax.constants import (
     DVC_DOWNLOAD,
@@ -39,6 +41,7 @@ from tests.support import (
     FakeHttp,
     FakeResponse,
     StubCaptcha,
+    cleanup_temporary_directory,
     fixture,
     route_of,
     sample_zip,
@@ -88,17 +91,27 @@ def etax_search(_kwargs) -> str:
     return fixture("etax_results.html")
 
 
+def dvc_search(kwargs) -> str:
+    """Một hồ sơ/trang, hai trang có dữ liệu khác nhau (fixture gốc có hai hàng)."""
+    page = kwargs.get("params", {}).get("page", 1)
+    soup = BeautifulSoup(fixture("dvc_results_page1.html"), "lxml")
+    for index, row in enumerate(soup.select("tbody tr"), start=1):
+        if index != page:
+            row.decompose()
+    return str(soup)
+
+
 class PipelineTestCase(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.directory = Path(self._tmp.name)
 
     def tearDown(self):
-        self._tmp.cleanup()
+        cleanup_temporary_directory(self._tmp)
 
     def settings_for(self, **overrides) -> Settings:
         values = dict(
-            username="0101234567-QL",
+            username="synthetic-taxpayer-QL",
             password="mat-khau",
             from_date=date(2025, 1, 1),
             to_date=date(2025, 1, 31),
@@ -107,6 +120,9 @@ class PipelineTestCase(unittest.TestCase):
             search_attempts=1,
             pause_between_records=0.0,
             pause_between_pages=0.0,
+            # Các test này kiểm tra adapter cổng khi được mở lại rõ ràng.
+            dvc_enabled=True,
+            legacy_etax=False,
         )
         values.update(overrides)
         return Settings(**values)
@@ -220,11 +236,7 @@ class DvcFlowTests(PipelineTestCase):
         return self.settings_for(from_date=date(2026, 1, 1), to_date=date(2026, 1, 31))
 
     def test_phan_trang_va_tai_du_ho_so(self):
-        def search(kwargs) -> str:
-            page = kwargs.get("params", {}).get("page")
-            return fixture("dvc_results_page1.html" if page == 1 else "dvc_results_page2.html")
-
-        summary, http = self.run_pipeline(make_handler(search=search), self.dvc_settings())
+        summary, http = self.run_pipeline(make_handler(search=dvc_search), self.dvc_settings())
         self.assertEqual(summary.expected, 2)
         self.assertEqual(summary.downloaded, 2)
 
@@ -236,10 +248,7 @@ class DvcFlowTests(PipelineTestCase):
         self.assertEqual(dates["denNgay"], "31/01/2026")
 
     def test_di_qua_buoc_kiem_tra_truoc_khi_tai(self):
-        def search(_kwargs) -> str:
-            return fixture("dvc_results_page1.html")
-
-        _, http = self.run_pipeline(make_handler(search=search), self.dvc_settings())
+        _, http = self.run_pipeline(make_handler(search=dvc_search), self.dvc_settings())
         validates = [call for call in http.calls if route_of(call.path) == DVC_VALIDATE]
         downloads = [call for call in http.calls if route_of(call.path) == DVC_DOWNLOAD]
         self.assertEqual(len(validates), 2)
@@ -264,7 +273,7 @@ class PauseJitterTests(PipelineTestCase):
             pause_between_pages=0.0,
             **settings_overrides,
         )
-        handler = make_handler(search=lambda _kwargs: fixture("dvc_results_page1.html"))
+        handler = make_handler(search=dvc_search)
         pipeline = Pipeline(
             settings,
             FakeHttp(handler),
@@ -302,11 +311,8 @@ class HeaderProfileTests(PipelineTestCase):
         )
 
     def browse(self, **settings_overrides):
-        def search(_kwargs) -> str:
-            return fixture("dvc_results_page1.html")
-
         return self.run_pipeline(
-            make_handler(search=search), self.dvc_settings(**settings_overrides)
+            make_handler(search=dvc_search), self.dvc_settings(**settings_overrides)
         )
 
     def headers_by_route(self, http) -> dict[str, dict]:
@@ -360,6 +366,40 @@ class HeaderProfileTests(PipelineTestCase):
 
 
 class FailureTests(PipelineTestCase):
+    def test_khong_bao_du_khi_trang_tiep_theo_lap(self):
+        settings = self.settings_for(from_date=date(2026, 1, 1), to_date=date(2026, 1, 31))
+        with self.assertRaises(SearchError):
+            self.run_pipeline(make_handler(search=lambda _kwargs: fixture("dvc_results_page1.html")), settings)
+
+    def test_khong_bao_du_khi_trang_tiep_theo_rong_du_co_total(self):
+        settings = self.settings_for(from_date=date(2026, 1, 1), to_date=date(2026, 1, 31))
+        def search(kwargs):
+            return fixture("dvc_results_page1.html" if kwargs["params"]["page"] == 1 else "dvc_results_page2.html")
+        with self.assertRaises(SearchError):
+            self.run_pipeline(make_handler(search=search), settings)
+
+    def test_dry_run_khong_doi_ten_file_cu_va_khong_tinh_la_tai(self):
+        old = self.directory / "11320250292469209-ten-cu.zip"
+        old.write_bytes(sample_zip())
+        summary, _ = self.run_pipeline(make_handler(search=etax_search), self.settings_for(dry_run=True))
+        self.assertTrue(old.is_file())
+        self.assertEqual(summary.downloaded, 0)
+        self.assertTrue(summary.search_complete)
+
+    def test_case_id_loi_tai_van_tim_tiep_doan_sau(self):
+        attempts = []
+        handler = make_handler(search=etax_search)
+        def fail_first(method, path, kwargs):
+            if route_of(path) == ETAX_DOWNLOAD:
+                attempts.append(path)
+                if len(attempts) == 1:
+                    return FakeResponse("error", status_code=500)
+            return handler(method, path, kwargs)
+        settings = self.settings_for(to_date=date(2025, 2, 28), case_id="11320250292469209")
+        summary, _ = self.run_pipeline(fail_first, settings)
+        self.assertTrue(summary.complete)
+        self.assertEqual(len(attempts), 2)
+
     def test_dang_nhap_that_bai_thi_bao_loi(self):
         def handler(method, path, kwargs):
             route = route_of(path)

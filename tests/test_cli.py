@@ -60,6 +60,14 @@ class ParseHeadersTests(unittest.TestCase):
 
 
 class ParserTests(unittest.TestCase):
+    def test_co_bat_tat_dvc_va_mac_dinh_khong_ghi_de_env(self):
+        parser = build_parser()
+        self.assertIsNone(parser.parse_args([]).dvc_enabled)
+        self.assertTrue(parser.parse_args(["--enable-dvc"]).dvc_enabled)
+        self.assertFalse(parser.parse_args(["--disable-dvc"]).dvc_enabled)
+        with self.assertRaises(SystemExit), redirect_stderr(io.StringIO()):
+            parser.parse_args(["--enable-dvc", "--disable-dvc"])
+
     def test_gia_tri_mac_dinh(self):
         args = build_parser().parse_args([])
         self.assertIsNone(args.from_date)
@@ -162,6 +170,16 @@ class LogSecretsTests(unittest.TestCase):
 
 
 class MainTests(unittest.TestCase):
+    def test_khoang_dvc_tam_tat_khong_nap_solver_hoac_goi_http(self):
+        env = {"GDT_USERNAME": "test", "GDT_PASSWORD": "secret", "GDT_FROM_DATE": "01/07/2025",
+               "GDT_TO_DATE": "31/07/2025"}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch("gdt_tax.cli.create_solver") as solver:
+            with mock.patch("gdt_tax.cli.HttpClient") as http, redirect_stdout(io.StringIO()):
+                code = main(["--env-file", "missing.env"])
+        self.assertEqual(code, 1)
+        solver.assert_not_called()
+        http.assert_not_called()
+
     def test_liet_ke_solver(self):
         buffer = io.StringIO()
         with redirect_stdout(buffer):
@@ -188,7 +206,7 @@ class MainTests(unittest.TestCase):
 
     def test_proxy_sai_tra_ve_ma_loi_2_truoc_khi_goi_mang(self):
         stdout, stderr = io.StringIO(), io.StringIO()
-        env = {"GDT_USERNAME": "0101234567-QL", "GDT_PASSWORD": "mat-khau"}
+        env = {"GDT_USERNAME": "synthetic-taxpayer-QL", "GDT_PASSWORD": "mat-khau"}
         with mock.patch.dict(os.environ, env, clear=True):
             with redirect_stdout(stdout), redirect_stderr(stderr):
                 code = main(["--proxy", "1.2.3.4", "--env-file", "khong-co.env"])

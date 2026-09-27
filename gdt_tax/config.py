@@ -12,14 +12,15 @@ Mọi biến đều có tiền tố ``GDT_`` để không lẫn với biến kh�
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from .constants import SOURCE_DVC, SOURCE_ETAX
+from .constants import SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
 from .dates import (
     ETAX_CUTOFF_DEFAULT,
     MAX_DAYS_PER_SEARCH_DEFAULT,
@@ -144,21 +145,32 @@ class Settings:
     #: Proxy cho mọi request (``--proxy``/``GDT_PROXY_URL``); trống là đi trực tiếp.
     #: Cần proxy Việt Nam khi chạy trên máy ở nước ngoài vì cổng chặn IP ngoài VN.
     proxy_url: str = ""
-    #: Bật nguồn dự phòng trang Thuế điện tử cũ (``--legacy-etax``/
-    #: ``GDT_LEGACY_ETAX``): đoạn ngày trước mốc mà cổng không trả hồ sơ nào
-    #: sẽ được tra cứu thêm trên ``thuedientu.gdt.gov.vn``.
-    legacy_etax: bool = False
+    #: Trước cutoff dùng trực tiếp trang cũ. False chỉ dùng để kiểm tra lại
+    #: ETAX trên DVC khi dvc_enabled=True; không còn cơ chế fallback ngầm.
+    legacy_etax: bool = True
+    #: Tạm tắt toàn bộ request tới dichvucong.gdt.gov.vn, kể cả đăng nhập.
+    dvc_enabled: bool = False
 
     # --- Dẫn xuất ---
     def periods(self) -> list[SearchPeriod]:
         """Danh sách đoạn tra cứu cần chạy, theo thứ tự thời gian."""
-        return list(
+        planned = list(
             split_periods(
                 self.from_date,
                 self.to_date,
                 cutoff=self.etax_cutoff,
                 max_days=self.max_days_per_search,
             )
+        )
+        return [
+            SearchPeriod(p.start, p.end, SOURCE_ETAX_LEGACY)
+            if p.source == SOURCE_ETAX and (self.legacy_etax or not self.dvc_enabled) else p
+            for p in planned
+        ]
+
+    def source_enabled(self, source: str) -> bool:
+        return source == SOURCE_ETAX_LEGACY or (
+            self.dvc_enabled and source in {SOURCE_ETAX, SOURCE_DVC}
         )
 
     def validate(self) -> None:
@@ -177,8 +189,21 @@ class Settings:
         if self.page_size < 1:
             raise ConfigError("GDT_PAGE_SIZE phải lớn hơn 0")
         parse_proxy(self.proxy_url)  # lỗi cấu hình phải hiện ra ngay lúc khởi động
-        if self.pause_jitter < 0:
-            raise ConfigError("GDT_PAUSE_JITTER không được là số âm")
+        for name, value in (
+            ("LOGIN_ATTEMPTS", self.login_attempts),
+            ("SEARCH_ATTEMPTS", self.search_attempts),
+            ("REQUEST_TIMEOUT", self.request_timeout),
+            ("HTTP_RETRIES", self.http_retries),
+        ):
+            if value < 1:
+                raise ConfigError(f"GDT_{name} phải lớn hơn 0")
+        for name, delay_value in (
+            ("PAUSE_JITTER", self.pause_jitter),
+            ("PAUSE_BETWEEN_RECORDS", self.pause_between_records),
+            ("PAUSE_BETWEEN_PAGES", self.pause_between_pages),
+        ):
+            if not math.isfinite(delay_value) or delay_value < 0:
+                raise ConfigError(f"GDT_{name} phải là số hữu hạn không âm")
         if not all(isinstance(name, str) and name for name in self.extra_headers):
             raise ConfigError("GDT_EXTRA_HEADERS phải là đối tượng JSON với khoá là tên header")
         if self.header_profile not in PROFILES:
@@ -207,9 +232,11 @@ class Settings:
             return fallback if value is None else value
 
         try:
-            from_raw = pick("from_date", env.text("FROM_DATE", "01/09/2026"))
-            to_raw = pick("to_date", env.text("TO_DATE", "25/09/2026"))
             cutoff_raw = pick("etax_cutoff", env.text("ETAX_CUTOFF", ""))
+            cutoff = parse_date(cutoff_raw) if cutoff_raw else ETAX_CUTOFF_DEFAULT
+            default_end = cutoff - timedelta(days=1)
+            from_raw = pick("from_date", env.text("FROM_DATE", f"{default_end.replace(day=1):%d/%m/%Y}"))
+            to_raw = pick("to_date", env.text("TO_DATE", f"{default_end:%d/%m/%Y}"))
             settings = cls(
                 username=pick("username", env.text("USERNAME")),
                 password=pick("password", env.text("PASSWORD")),
@@ -220,7 +247,7 @@ class Settings:
                 captcha_solver=pick("captcha_solver", env.text("CAPTCHA_SOLVER", DEFAULT_CAPTCHA_SOLVER)),
                 captcha_options=pick("captcha_options", env.json("CAPTCHA_OPTIONS")) or {},
                 captcha_plugins=env.text("CAPTCHA_PLUGINS"),
-                etax_cutoff=parse_date(cutoff_raw) if cutoff_raw else ETAX_CUTOFF_DEFAULT,
+                etax_cutoff=cutoff,
                 max_days_per_search=env.integer("MAX_DAYS_PER_SEARCH", MAX_DAYS_PER_SEARCH_DEFAULT),
                 page_size=env.integer("PAGE_SIZE", 10),
                 login_attempts=env.integer("LOGIN_ATTEMPTS", 10),
@@ -236,7 +263,8 @@ class Settings:
                 http_dump_dir=pick("http_dump_dir", env.text("HTTP_DUMP_DIR")),
                 header_profile=pick("header_profile", env.text("HEADER_PROFILE", DEFAULT_PROFILE)),
                 proxy_url=pick("proxy_url", env.text("PROXY_URL")),
-                legacy_etax=bool(pick("legacy_etax", env.boolean("LEGACY_ETAX", False))),
+                legacy_etax=bool(pick("legacy_etax", env.boolean("LEGACY_ETAX", True))),
+                dvc_enabled=bool(pick("dvc_enabled", env.boolean("DVC_ENABLED", False))),
             )
         except ValueError as error:  # parse_date
             raise ConfigError(str(error)) from error

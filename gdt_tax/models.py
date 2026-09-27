@@ -8,10 +8,10 @@ from datetime import date
 
 @dataclass
 class CaseRecord:
-    """Một hồ sơ (hoặc thông báo) tra cứu được từ Cổng Dịch vụ công.
+    """Một hồ sơ (hoặc thông báo) tra cứu được từ legacy, ETAX hoặc DVC.
 
-    Hai nguồn dữ liệu trả về số cột khác nhau nên một số trường để rỗng tùy nguồn:
-    ``ten_tthc`` chỉ có ở nguồn DVC, còn ``lan_nop`` chỉ có ở nguồn ETAX.
+    Các nguồn trả số cột khác nhau nên một số trường để rỗng tùy nguồn;
+    ``ten_tthc`` chỉ có ở nguồn DVC.
     """
 
     ma_ho_so: str
@@ -26,6 +26,11 @@ class CaseRecord:
     noi_nop: str = ""
     trang_thai: str = ""
     tep_zip: str = ""
+    #: Nhóm thuế khác với loai_to_khai (chính thức/bổ sung).
+    nhom_to_khai: str = "UNKNOWN"
+    loai_tai_lieu: str = "UNKNOWN"
+    quy_tac_phan_loai: str = ""
+    ly_do_phan_loai: str = ""
 
     def to_dict(self) -> dict[str, str]:
         """Chuyển sang ``dict`` để ghi CSV/JSON."""
@@ -62,7 +67,13 @@ class RunSummary:
     expected: int = 0
     periods: int = 0
     dry_run: bool = False
+    discovered: int = 0
+    skipped_periods: int = 0
 
     @property
     def complete(self) -> bool:
-        return self.downloaded == self.expected
+        return self.skipped_periods == 0 and self.downloaded == self.expected
+
+    @property
+    def search_complete(self) -> bool:
+        return self.skipped_periods == 0 and self.discovered == self.expected

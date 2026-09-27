@@ -4,12 +4,12 @@ from datetime import date
 from pathlib import Path
 
 from gdt_tax.config import Settings, load_env_file
-from gdt_tax.constants import SOURCE_ETAX
+from gdt_tax.constants import SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
 from gdt_tax.errors import ConfigError
 from gdt_tax.headers import PROFILE_BROWSER, PROFILE_MINIMAL
 
 BASE_ENV = {
-    "GDT_USERNAME": "0101234567-QL",
+    "GDT_USERNAME": "synthetic-taxpayer-QL",
     "GDT_PASSWORD": "mat-khau",
 }
 
@@ -32,8 +32,8 @@ class LoadEnvFileTests(unittest.TestCase):
 class SettingsFromEnvTests(unittest.TestCase):
     def test_gia_tri_mac_dinh(self):
         settings = Settings.from_env(BASE_ENV, env_file=None)
-        self.assertEqual(settings.from_date, date(2026, 9, 1))
-        self.assertEqual(settings.to_date, date(2026, 9, 25))
+        self.assertEqual(settings.from_date, date(2025, 6, 1))
+        self.assertEqual(settings.to_date, date(2025, 6, 30))
         self.assertEqual(settings.download_dir, Path("download"))
         self.assertEqual(settings.captcha_solver, "ddddocr")
         self.assertEqual(settings.page_size, 10)
@@ -177,7 +177,44 @@ class SettingsFromEnvTests(unittest.TestCase):
         settings = Settings.from_env(env, env_file=None)
         periods = settings.periods()
         self.assertEqual(len(periods), 1)
-        self.assertEqual(periods[0].source, SOURCE_ETAX)
+        self.assertEqual(periods[0].source, SOURCE_ETAX_LEGACY)
+
+    def test_mac_dinh_legacy_va_tat_dvc(self):
+        settings = Settings.from_env(BASE_ENV, env_file=None)
+        self.assertTrue(settings.legacy_etax)
+        self.assertFalse(settings.dvc_enabled)
+        self.assertTrue(settings.source_enabled(SOURCE_ETAX_LEGACY))
+        self.assertFalse(settings.source_enabled(SOURCE_ETAX))
+        self.assertFalse(settings.source_enabled(SOURCE_DVC))
+
+    def test_mo_lai_dvc_va_ghi_de_tu_cli(self):
+        env = {**BASE_ENV, "GDT_DVC_ENABLED": "true"}
+        self.assertTrue(Settings.from_env(env, env_file=None).dvc_enabled)
+        self.assertFalse(Settings.from_env(env, env_file=None, dvc_enabled=False).dvc_enabled)
+
+    def test_env_legacy_false_cu_khong_chan_legacy_khi_dvc_tat(self):
+        settings = Settings.from_env({**BASE_ENV, "GDT_LEGACY_ETAX": "false"}, env_file=None)
+        self.assertFalse(settings.dvc_enabled)
+        self.assertTrue(all(p.source == SOURCE_ETAX_LEGACY for p in settings.periods()))
+
+    def test_doan_vat_qua_cutoff_khong_trung_ngay(self):
+        settings = Settings.from_env(BASE_ENV, env_file=None,
+                                     from_date="30/06/2025", to_date="01/07/2025")
+        self.assertEqual([(p.start, p.end, p.source) for p in settings.periods()], [
+            (date(2025, 6, 30), date(2025, 6, 30), SOURCE_ETAX_LEGACY),
+            (date(2025, 7, 1), date(2025, 7, 1), SOURCE_DVC),
+        ])
+
+    def test_cau_hinh_retry_va_pause_khong_hop_le(self):
+        for name, value in (
+            ("LOGIN_ATTEMPTS", "0"), ("SEARCH_ATTEMPTS", "-1"),
+            ("REQUEST_TIMEOUT", "0"), ("HTTP_RETRIES", "0"),
+            ("PAUSE_BETWEEN_RECORDS", "-1"), ("PAUSE_BETWEEN_PAGES", "nan"),
+            ("PAUSE_JITTER", "inf"),
+        ):
+            with self.subTest(name=name):
+                with self.assertRaises(ConfigError):
+                    Settings.from_env({**BASE_ENV, f"GDT_{name}": value}, env_file=None)
 
 
 if __name__ == "__main__":

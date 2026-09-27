@@ -33,7 +33,8 @@ SENSITIVE_HEADERS = frozenset(
 )
 #: Trường trong body bị che (so khớp không phân biệt hoa thường).
 SENSITIVE_FIELDS = frozenset(
-    {"matkhau", "mat_khau", "password", "pwd", "_csrf", "token", "api_key"}
+    {"matkhau", "mat_khau", "password", "_password", "pwd", "_csrf", "token", "api_key",
+     "dse_sessionid", "dse_processorid"}
 )
 MASK = "***"
 #: Độ dài tối đa của body khi in ra log.
