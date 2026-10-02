@@ -107,6 +107,7 @@ class PipelineTestCase(unittest.TestCase):
             search_attempts=1,
             pause_between_records=0.0,
             pause_between_pages=0.0,
+            legacy_etax=False,
         )
         values.update(overrides)
         return Settings(**values)
@@ -171,8 +172,10 @@ class EtaxFlowTests(PipelineTestCase):
         self.run_pipeline(make_handler(search=etax_search))
         csv_path = self.directory / "danh_sach_ho_so.csv"
         json_path = self.directory / "danh_sach_ho_so.json"
+        xlsx_path = self.directory / "danh_sach_to_khai.xlsx"
         self.assertTrue(csv_path.is_file())
         self.assertTrue(json_path.is_file())
+        self.assertTrue(xlsx_path.is_file())
 
         payload = json.loads(json_path.read_text(encoding="utf-8"))
         self.assertEqual(len(payload), 2)

@@ -6,7 +6,7 @@
     Giai đoạn 2  Lập kế hoạch đoạn tra cứu 31 ngày    gdt_tax.dates
     Giai đoạn 3  Tra cứu từng trang, đọc bảng kết quả gdt_tax.portals
     Giai đoạn 4  Tải ZIP từng hồ sơ, lưu + metadata  gdt_tax.storage
-    Giai đoạn 5  Xuất danh sách hồ sơ cuối cùng       gdt_tax.storage
+    Giai đoạn 5  Xuất báo cáo Excel + metadata        gdt_tax.storage
 
 Cổng lưu danh sách hồ sơ của trang tra cứu gần nhất trong phiên, nên phải tải
 ngay trên từng trang (giai đoạn 3 → 4) thay vì gom hết mã hồ sơ rồi mới tải;
@@ -21,12 +21,12 @@ import time
 from collections.abc import Callable
 
 from .auth import login, open_landing
-from .constants import METADATA_CSV, METADATA_JSON, SOURCE_ETAX_LEGACY
+from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX, SOURCE_ETAX_LEGACY
 from .csrf import csrf_token
 from .dates import format_date
-from .errors import LegacyEtaxError, LoginError, SearchError
+from .errors import LoginError, SearchError
 from .http import HttpClient
-from .models import CaseRecord, PageResult, RunSummary, SearchPeriod
+from .models import CaseRecord, PageResult, RunSummary
 from .portals import build_portals
 from .storage import ZipStore, write_metadata
 
@@ -55,8 +55,6 @@ class Pipeline:
         self.portal_factory = portal_factory
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.sleep = sleep
-        #: Đoạn hiện tại có hồ sơ mà cổng trả lỗi tải (HTTP 500) hay không.
-        self._period_had_download_error = False
 
     # --- Giai đoạn 1 + điều phối ---
     def run(self) -> RunSummary:
@@ -78,76 +76,26 @@ class Pipeline:
 
         records: dict[str, CaseRecord] = {}
         succeeded: set[str] = set()
-        #: Đoạn đầu tiên gặp lỗi tải (HTTP 500) trên cổng — mốc mà từ đó dữ
-        #: liệu cổng không còn đáng tin và phải chuyển sang trang legacy.
-        self._first_failed_period: SearchPeriod | None = None
-        #: True khi đã phát hiện lỗi tải: mọi đoạn sau đó chạy thẳng legacy.
-        self._switched_to_legacy = False
-
         for period in self.settings.periods():
             summary.periods += 1
             portal = portals[period.source]
-            use_legacy = (
-                self._switched_to_legacy
-                and period.end < self.settings.etax_cutoff
-                and getattr(portal, "legacy", None) is not None
-                and not self.settings.case_id
-            )
-            if use_legacy:
-                self.logger.info("=== %s (trang cũ): %s ===", period.source, period.label)
-                self._search_and_download(portal.legacy, period, records, succeeded)
-                continue
-
-            self.logger.info("=== %s: %s ===", period.source, period.label)
-            if self._run_period(portal, period, records, succeeded):
+            self.logger.info("=== %s: %s ===", portal.source, period.label)
+            if self._search_and_download(portal, period, records, succeeded):
                 break
 
-            # Một đoạn bất kỳ trước mốc mà cổng có hồ sơ nhưng không tải được
-            # (HTTP 500 "Không tìm thấy hồ sơ tương ứng") thì dữ liệu cổng từ
-            # đầu khoảng đến hết đoạn này không còn đáng tin: quét legacy từ
-            # đầu khoảng đến hết đoạn để không sót tờ khai, và các đoạn cũ
-            # hơn chạy thẳng legacy luôn không thử cổng nữa.
-            if (
-                self._first_failed_period is not None
-                and period.end < self.settings.etax_cutoff
-                and getattr(portal, "legacy", None) is not None
-                and not self.settings.case_id
-            ):
-                self._switched_to_legacy = True
-                self._run_legacy_fallback(portal, records, succeeded)
-
         if write_metadata(self.settings.download_dir, records):
-            self.logger.info("Metadata: %s và %s", METADATA_CSV, METADATA_JSON)
+            self.logger.info(
+                "Báo cáo: %s; metadata: %s và %s",
+                METADATA_XLSX,
+                METADATA_CSV,
+                METADATA_JSON,
+            )
 
         summary.downloaded = len(succeeded)
         summary.expected = 1 if self.settings.case_id else len(records)
         return summary
 
     # --- Giai đoạn 3 + 4 ---
-    def _run_period(
-        self,
-        portal,
-        period,
-        records: dict[str, CaseRecord],
-        succeeded: set[str],
-    ) -> bool:
-        """Xử lý mọi trang của một đoạn; trả ``True`` khi đã tìm thấy hồ sơ đích."""
-        self._period_had_download_error = False
-        found_target = self._search_and_download(portal, period, records, succeeded)
-        if found_target:
-            return True
-        # Đoạn có hồ sơ nhưng lỗi tải (HTTP 500): ghi nhận đoạn ĐẦU TIÊN gặp
-        # lỗi. Đoạn 0 bản ghi thì không — cổng trả rỗng là bình thường với
-        # khoảng không có hồ sơ.
-        if self._period_had_download_error and self._first_failed_period is None:
-            self._first_failed_period = period
-            self.logger.warning(
-                "Cổng có hồ sơ nhưng không tải được ở %s — sẽ quét trang Thuế điện tử "
-                "cũ từ đầu khoảng đến hết đoạn này",
-                period.label,
-            )
-        return False
-
     def _search_and_download(
         self,
         portal,
@@ -201,40 +149,6 @@ class Pipeline:
                 self._pause(self.settings.pause_between_pages)
         return False
 
-    def _run_legacy_fallback(
-        self,
-        portal,
-        records: dict[str, CaseRecord],
-        succeeded: set[str],
-    ) -> None:
-        """Quét trang Thuế điện tử cũ từ đầu khoảng đến hết đoạn lỗi.
-
-        Khi cổng trả lỗi tải (HTTP 500) ở một đoạn bất kỳ trước mốc, các tờ
-        khai cũ có thể bị mất khỏi cổng dù vẫn hiện trong kết quả tra cứu.
-        Để không sót, mọi đoạn đã lập kế hoạch từ ``from_date`` đến hết đoạn lỗi
-        được quét lại trên trang legacy, vẫn giữ nguyên kích thước đoạn (≤31 ngày)
-        để trang cũ không từ chối khoảng quá dài; hồ sơ đã tải thành công từ cổng
-        thì bỏ qua (dựa trên ``succeeded``), hồ sơ cổng trả 500 được thay bằng
-        bản ghi legacy để tải lại.
-        """
-        failed_period = self._first_failed_period
-        if failed_period is None:
-            return
-        for period in self.settings.periods():
-            if period.start > failed_period.end:
-                break
-            legacy_period = SearchPeriod(
-                start=period.start,
-                end=min(period.end, failed_period.end),
-                source=SOURCE_ETAX_LEGACY,
-            )
-            self.logger.info("Quét trang Thuế điện tử cũ cho %s", legacy_period.label)
-            try:
-                self._search_and_download(portal.legacy, legacy_period, records, succeeded)
-            except LegacyEtaxError as error:
-                self.logger.error("Trang legacy lỗi: %s — bỏ qua nguồn dự phòng", error)
-                return
-
     def _pause(self, seconds: float) -> None:
         """Nghỉ giữa hai request, thêm chút ngẫu nhiên cho nhịp tự nhiên hơn.
 
@@ -284,7 +198,6 @@ class Pipeline:
         # các nguồn DVC/ETAX trên cổng đều phải có token mới tải được.
         if not csrf and not getattr(portal, "csrf_optional", False):
             self.logger.error("LỖI TẢI: không lấy được CSRF token cho %s", record.ma_ho_so)
-            self._period_had_download_error = True
             return False
 
         response = portal.download(record, detail_url, csrf)
@@ -292,11 +205,9 @@ class Pipeline:
             status = getattr(response, "status_code", "-")
             body = (getattr(response, "text", "") or "")[:300]
             self.logger.error("LỖI TẢI: %s HTTP=%s %s", record.ma_ho_so, status, body)
-            self._period_had_download_error = True
             return False
 
         if self.store.save_from_response(record, response) is None:
-            self._period_had_download_error = True
             return False
         succeeded.add(record.ma_ho_so)
         return True

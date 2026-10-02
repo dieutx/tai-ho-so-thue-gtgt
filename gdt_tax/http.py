@@ -48,8 +48,9 @@ REQUESTS_DEFAULT_HEADERS = ("User-Agent", "Accept-Encoding", "Accept", "Connecti
 class HttpClient:
     """Bọc :class:`requests.Session` với vài hành vi dùng chung của cổng thuế.
 
-    Cổng Dịch vụ công trả ``429 Too Many Requests`` khi tra cứu quá nhanh, nên
-    lớp này tự nghỉ theo header ``Retry-After`` trước khi thử lại.
+    Cổng Dịch vụ công trả ``429 Too Many Requests`` khi tra cứu quá nhanh, còn
+    proxy có thể timeout hoặc ngắt kết nối tạm thời. Lớp này tự nghỉ rồi thử lại
+    cả hai nhóm lỗi trước khi báo thất bại.
 
     ``extra_headers`` cho phép thêm hoặc ghi đè header cho **mọi** request ngay
     lúc chạy (``--header``/``GDT_EXTRA_HEADERS``), nên khi cổng yêu cầu thêm một
@@ -129,7 +130,19 @@ class HttpClient:
             try:
                 response = self.session.request(method, url, **kwargs)
             except requests.exceptions.RequestException as error:
-                raise self._network_error(method, url, error) from error
+                network_error = self._network_error(method, url, error)
+                if attempt == self.retries:
+                    raise network_error from error
+                delay = max(self.min_backoff, self.default_backoff)
+                self.logger.warning(
+                    "%s; chờ %s giây rồi thử lại (lần %s/%s)...",
+                    network_error,
+                    delay,
+                    attempt + 1,
+                    self.retries,
+                )
+                time.sleep(delay)
+                continue
             elapsed = time.monotonic() - started
             body = getattr(response, "content", b"") or b""
             self.logger.info(

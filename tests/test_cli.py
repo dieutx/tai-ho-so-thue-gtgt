@@ -72,6 +72,11 @@ class ParserTests(unittest.TestCase):
         self.assertIsNone(args.log_file)
         self.assertIsNone(args.dump_http)
         self.assertIsNone(args.header_profile)
+        self.assertIsNone(args.legacy_etax)
+
+    def test_co_the_tat_legacy_tu_dong_lenh(self):
+        self.assertFalse(build_parser().parse_args(["--no-legacy-etax"]).legacy_etax)
+        self.assertTrue(build_parser().parse_args(["--legacy-etax"]).legacy_etax)
 
     def test_doc_tham_so_day_du(self):
         args = build_parser().parse_args(

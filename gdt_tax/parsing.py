@@ -109,6 +109,7 @@ def dvc_record(cells: list[str], case_id: str) -> CaseRecord | None:
         noi_nop=cells[9],
         ngay_nop=cells[10],
         trang_thai=cells[11],
+        ho_so_dinh_kem=cells[12] if len(cells) > 12 else "",
     )
 
 

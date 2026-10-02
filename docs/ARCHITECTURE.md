@@ -20,10 +20,10 @@ quy tắc ngày tháng) đều tách riêng để thay mà không ảnh hưởng
 | `csrf.py` | Đọc CSRF token từ HTML | Gọi mạng |
 | `parsing.py` | Đọc bảng kết quả thành `CaseRecord` | Gọi mạng |
 | `naming.py` | Tạo tên file ZIP | Đọc/ghi file |
-| `storage.py` | Kiểm tra ZIP, chống tải trùng, ghi ZIP, CSV/JSON | Gọi mạng |
+| `storage.py` | Kiểm tra ZIP, chống tải trùng, ghi ZIP, Excel/CSV/JSON | Gọi mạng |
 | `captcha/` | Nhận dạng CAPTCHA (nhiều backend) | Gọi endpoint nghiệp vụ |
 | `portals/` | Tra cứu và tải theo từng nguồn | Đọc/ghi file |
-| `portals/etax_legacy.py` | Nguồn dự phòng trang Thuế điện tử cũ (login DSE, XML→ZIP) + fallback khi cổng thiếu tờ khai cũ | Đọc/ghi file |
+| `portals/etax_legacy.py` | Nguồn mặc định trước cutoff: Thuế điện tử cũ (login DSE, XML→ZIP) | Đọc/ghi file |
 | `auth.py` | Đăng nhập, mở trang hồ sơ | Đọc/ghi file |
 | `pipeline.py` | Ghép các giai đoạn | Chi tiết giao thức |
 | `cli.py` | Tham số dòng lệnh, mã thoát, log | Nghiệp vụ |
@@ -61,7 +61,7 @@ Pipeline.run()  (gdt_tax/pipeline.py)
   ├─ Giai đoạn 4  với mỗi hồ sơ: portal.fetch_detail_csrf() → portal.download()
   │                  → storage.decode_zip_bytes() → ZipStore.save()
   │
-  └─ Giai đoạn 5  write_metadata() → danh_sach_ho_so.csv + .json
+  └─ Giai đoạn 5  write_metadata() → danh_sach_to_khai.xlsx + CSV/JSON
 ```
 
 **Vì sao tải ngay trong lúc phân trang?** Cổng chỉ giữ danh sách hồ sơ của trang
@@ -79,8 +79,8 @@ vào nhau thay vì chạy tuần tự.
 | chung | CAPTCHA tra cứu | `GET /tthc/getCaptcha` |
 | chung | Trang hồ sơ | `GET /tthc/tchs` |
 | chung | Trang chi tiết (lấy CSRF) | `GET /tthc/tchs/files/detail/{id}?loai=` |
-| ETAX | Tra cứu | `POST /tthc/tchs/thuedientu` |
-| ETAX | Tải ZIP | `POST /tthc/tchs/downloadhoso-tdt?loaiTraCuu=ETAX` |
+| ETAX trên DVC (khi tắt legacy) | Tra cứu | `POST /tthc/tchs/thuedientu` |
+| ETAX trên DVC (khi tắt legacy) | Tải ZIP | `POST /tthc/tchs/downloadhoso-tdt?loaiTraCuu=ETAX` |
 | legacy | Đăng nhập trang cũ | `GET/POST thuedientu.gdt.gov.vn/etaxnnt/...` (EstablishSession → loginForm) |
 | legacy | Tra cứu | `POST thuedientu.gdt.gov.vn/etaxnnt/Request` (`traCuuToKhaiProc/query`) |
 | legacy | Tải XML | `GET thuedientu.gdt.gov.vn/etaxnnt/Request` (`downTkhai&messageId=...`) |

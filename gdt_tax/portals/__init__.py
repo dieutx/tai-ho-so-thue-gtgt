@@ -21,9 +21,9 @@ PORTAL_CLASSES = {
 def build_portals(http, captcha, settings, csrf: str = "", logger=None) -> dict[str, Portal]:
     """Tạo sẵn portal cho mọi nguồn; chỉ nguồn ETAX cần ``csrf`` của trang hồ sơ.
 
-    Khi ``settings.legacy_etax`` bật, portal ETAX (nguồn phục vụ các đoạn ngày
-    trước mốc) được bọc bởi :class:`EtaxLegacyFallback`: đoạn nào cổng không trả
-    hồ sơ sẽ được tra cứu thêm trên trang Thuế điện tử cũ.
+    Khi ``settings.legacy_etax`` bật (mặc định), mọi đoạn trước cutoff được tra
+    cứu thẳng trên trang Thuế điện tử cũ. Tắt cấu hình này để dùng endpoint ETAX
+    trên Cổng Dịch vụ công sau khi dữ liệu cũ đã được đồng bộ đầy đủ.
     """
     portals: dict[str, Portal] = {}
     for source, portal_class in PORTAL_CLASSES.items():
@@ -33,8 +33,7 @@ def build_portals(http, captcha, settings, csrf: str = "", logger=None) -> dict[
             portals[source] = portal_class(http, captcha, settings, logger=logger)
 
     if settings.legacy_etax and SOURCE_ETAX in portals:
-        legacy = EtaxLegacyPortal(http, captcha, settings, logger=logger)
-        portals[SOURCE_ETAX] = EtaxLegacyFallback(portals[SOURCE_ETAX], legacy, logger=logger)
+        portals[SOURCE_ETAX] = EtaxLegacyPortal(http, captcha, settings, logger=logger)
     return portals
 
 

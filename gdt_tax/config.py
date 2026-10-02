@@ -144,10 +144,10 @@ class Settings:
     #: Proxy cho mọi request (``--proxy``/``GDT_PROXY_URL``); trống là đi trực tiếp.
     #: Cần proxy Việt Nam khi chạy trên máy ở nước ngoài vì cổng chặn IP ngoài VN.
     proxy_url: str = ""
-    #: Bật nguồn dự phòng trang Thuế điện tử cũ (``--legacy-etax``/
-    #: ``GDT_LEGACY_ETAX``): đoạn ngày trước mốc mà cổng không trả hồ sơ nào
-    #: sẽ được tra cứu thêm trên ``thuedientu.gdt.gov.vn``.
-    legacy_etax: bool = False
+    #: Tra cứu mọi đoạn trước mốc trực tiếp trên trang Thuế điện tử cũ
+    #: (``--legacy-etax``/``GDT_LEGACY_ETAX``). Tắt cờ này sau khi dữ liệu cũ
+    #: đã được đồng bộ đầy đủ sang Cổng Dịch vụ công.
+    legacy_etax: bool = True
 
     # --- Dẫn xuất ---
     def periods(self) -> list[SearchPeriod]:
@@ -236,7 +236,7 @@ class Settings:
                 http_dump_dir=pick("http_dump_dir", env.text("HTTP_DUMP_DIR")),
                 header_profile=pick("header_profile", env.text("HEADER_PROFILE", DEFAULT_PROFILE)),
                 proxy_url=pick("proxy_url", env.text("PROXY_URL")),
-                legacy_etax=bool(pick("legacy_etax", env.boolean("LEGACY_ETAX", False))),
+                legacy_etax=bool(pick("legacy_etax", env.boolean("LEGACY_ETAX", True))),
             )
         except ValueError as error:  # parse_date
             raise ConfigError(str(error)) from error

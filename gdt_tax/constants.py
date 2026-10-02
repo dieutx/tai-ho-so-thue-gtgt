@@ -45,7 +45,7 @@ DEFAULT_HEADERS = {
 
 SOURCE_ETAX = "ETAX"
 SOURCE_DVC = "DVC"
-#: Trang Thuế điện tử cũ — nguồn dự phòng khi DVC không còn tờ khai cũ.
+#: Trang Thuế điện tử cũ — nguồn mặc định cho các đoạn trước cutoff.
 SOURCE_ETAX_LEGACY = "ETAX_LEGACY"
 SOURCES = (SOURCE_DVC, SOURCE_ETAX)
 #: Mọi nguồn có thể xuất hiện trong metadata.
@@ -53,3 +53,4 @@ ALL_SOURCES = (SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY)
 
 METADATA_CSV = "danh_sach_ho_so.csv"
 METADATA_JSON = "danh_sach_ho_so.json"
+METADATA_XLSX = "danh_sach_to_khai.xlsx"

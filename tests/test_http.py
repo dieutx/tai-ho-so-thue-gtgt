@@ -2,6 +2,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import requests
+
+from gdt_tax.errors import NetworkError
 from gdt_tax.headers import PROFILE_BROWSER, PROFILE_MINIMAL, build_page_headers
 from gdt_tax.http import HttpClient
 from gdt_tax.traffic import MASK
@@ -27,7 +30,10 @@ class FakeSession:
     def request(self, method, url, **kwargs):
         self.calls.append((method, url))
         self.sent.append(kwargs)
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return response
 
     def close(self):
         self.closed = True
@@ -89,6 +95,21 @@ class RetryTests(unittest.TestCase):
         )
         self.assertEqual(client.get("/tchs").status_code, 200)
         self.assertEqual(len(session.calls), 2)
+
+    def test_thu_lai_khi_timeout_tam_thoi(self):
+        client, session = make_client(
+            [requests.exceptions.ReadTimeout("tam thoi"), StubResponse(200)]
+        )
+        self.assertEqual(client.get("/tchs").status_code, 200)
+        self.assertEqual(len(session.calls), 2)
+
+    def test_bao_loi_mang_sau_khi_dung_het_so_lan_thu(self):
+        client, session = make_client(
+            [requests.exceptions.ConnectionError("dut ket noi")] * 3
+        )
+        with self.assertRaisesRegex(NetworkError, "Không gửi được GET"):
+            client.get("/tchs")
+        self.assertEqual(len(session.calls), 3)
 
     def test_dong_session(self):
         client, session = make_client([])

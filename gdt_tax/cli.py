@@ -141,11 +141,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--legacy-etax",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help=(
-            "Bật nguồn dự phòng trang Thuế điện tử cũ: đoạn ngày trước mốc "
-            "mà cổng không trả hồ sơ nào sẽ được tra cứu thêm trên "
-            "thuedientu.gdt.gov.vn (dùng chung tài khoản)"
+            "Dùng trang Thuế điện tử cũ cho kỳ trước cutoff (mặc định bật); "
+            "dùng --no-legacy-etax khi dữ liệu cũ đã đồng bộ đầy đủ sang DVC"
         ),
     )
     parser.add_argument(
@@ -203,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
             http_dump_dir=args.dump_http,
             header_profile=args.header_profile,
             proxy_url=args.proxy,
-            legacy_etax=True if args.legacy_etax else None,
+            legacy_etax=args.legacy_etax,
         )
     except (ConfigError, ValueError) as error:
         print(f"LỖI CẤU HÌNH: {error}", file=sys.stderr)
