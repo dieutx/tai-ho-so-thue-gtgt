@@ -53,3 +53,4 @@ ALL_SOURCES = (SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY)
 
 METADATA_CSV = "danh_sach_ho_so.csv"
 METADATA_JSON = "danh_sach_ho_so.json"
+METADATA_XLSX = "danh_sach_to_khai.xlsx"

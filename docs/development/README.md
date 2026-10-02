@@ -10,7 +10,8 @@ Stage 01 có phần nền tảng đã làm trong lần rà soát này: legacy tr
 tạm tắt, summary cho khoảng bỏ qua, sửa dry-run và metadata. Phân loại metadata
 cũng đã có. Prompt vẫn yêu cầu đọc code hiện tại và chỉ làm phần thiếu.
 
-Cập nhật 27/09/2026: 297 test/lint/mypy qua; test thật legacy 6/6, chạy lại
+Cập nhật 02/10/2026: đã thêm báo cáo Excel 11 cột từ metadata tra cứu và lưu
+trường hồ sơ đính kèm của DVC. Test thật legacy trước đó 6/6, chạy lại
 không tải lại ZIP, không có request DVC. Các kết quả này **không** có nghĩa
 stage 01 hoặc parser GTGT/TNCN/TNDN đã hoàn tất.
 
@@ -23,7 +24,7 @@ stage 01 hoặc parser GTGT/TNCN/TNDN đã hoàn tất.
 | 05 | Parser một mẫu GTGT có fixture đại diện | 04 | [05](prompts/05-gtgt.md) | Chưa làm |
 | 06 | Parser TNCN, bảng chi tiết/phụ lục được chọn | 04; ưu tiên sau 05 | [06](prompts/06-tncn.md) | Chưa làm |
 | 07 | Parser TNDN, phiên bản/phụ lục được chọn | 04; ưu tiên sau 05 | [07](prompts/07-tndn.md) | Chưa làm |
-| 08 | Export và truy vấn theo nhóm/kỳ/phiên bản nộp, báo cáo chất lượng | 05; tận dụng 06–07 nếu có | [08](prompts/08-export.md) | Chưa làm |
+| 08 | Export và truy vấn theo nhóm/kỳ/phiên bản nộp, báo cáo chất lượng | 05; tận dụng 06–07 nếu có | [08](prompts/08-export.md) | Mới có Excel metadata hồ sơ; query/export dữ liệu parse chưa làm |
 | 09 | Xác minh adapter DVC, có thể bật lại chủ động, vẫn giữ mặc định tắt | 01; không chặn 02–08 | [09](prompts/09-dvc.md) | Hoãn tới khi cần |
 
 Trật tự chính: 01 → 02 → 03 → 04 → 05 → 06 → 07 → 08. Stage 09 độc lập.

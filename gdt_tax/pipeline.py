@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 from .auth import login, open_landing
 from .classification import classify_record
-from .constants import METADATA_CSV, METADATA_JSON, SOURCE_ETAX_LEGACY
+from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX, SOURCE_ETAX_LEGACY
 from .csrf import csrf_token
 from .dates import format_date
 from .errors import LoginError, SearchError
@@ -75,7 +75,10 @@ class Pipeline:
                 break
 
         if write_metadata(self.settings.download_dir, records):
-            self.logger.info("Metadata: %s và %s; danh mục nhóm: phan_loai_ho_so.json", METADATA_CSV, METADATA_JSON)
+            self.logger.info(
+                "Metadata: %s, %s và %s; danh mục nhóm: phan_loai_ho_so.json",
+                METADATA_CSV, METADATA_JSON, METADATA_XLSX,
+            )
         summary.downloaded = len(succeeded)
         summary.discovered = len(records)
         summary.expected = 1 if self.settings.case_id else len(records)

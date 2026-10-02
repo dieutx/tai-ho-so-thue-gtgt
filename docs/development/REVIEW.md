@@ -24,6 +24,7 @@ mật khẩu hay proxy trong `.env`. Đây không phải công cụ quét bí m�
 | Đóng gói mọi body không có MIME text/html thành ZIP | HTML MIME sai/XML hỏng được tính là tải xong | Kiểm tra XML well-formed, chặn HTML và DTD; không giải entity, không đọc mạng |
 | Header Origin legacy chứa `/etaxnnt` | Origin không đúng dạng scheme + host | Dùng `LEGACY_ETAX_ORIGIN` |
 | Metadata ghi đè danh sách mỗi lần chạy; ghi file trực tiếp | Mất danh sách khoảng trước, có thể có file dang dở | Gộp JSON theo nguồn/mã hồ sơ; ghi từng file bằng temp + replace; từ chối ghi đè JSON hỏng |
+| Chưa có báo cáo Excel theo danh sách tờ khai | Người dùng phải tự chuyển metadata | Xuất Excel 11 cột từ danh mục đã gộp; filter/freeze header, chống formula injection |
 | Số retry/timeout <=0, pause âm/NaN/Inf được nhận | Vòng retry không chạy hoặc sleep lỗi | Validate ngay khi đọc cấu hình |
 | Thiếu `_password`, DSE fields trong bộ che log | Request legacy có thể lộ mật khẩu/trạng thái phiên ở dữ liệu có cấu trúc | Bổ sung tên trường; vấn đề raw response/URL vẫn cần stage 01 |
 | CLI để file log mở sau khi main trả về | Test Windows và ứng dụng nhúng không dọn được file | Đóng handler thuộc CLI trong finally; test đóng handler trước cleanup |
@@ -52,7 +53,7 @@ cũ. Một nhóm ở cấp hồ sơ chưa chứng minh mọi file trong ZIP thu�
 | P1 | Chưa có mẫu XML đại diện để biết mã mẫu, phiên bản, chỉ tiêu | Fixture ẩn danh, inventory và schema matrix trước viết parser, stage 02–07 |
 | P2 | Config `pick()` đánh giá env trước override; env sai kiểu có thể chặn CLI override hợp lệ | Đọc lazy theo đúng ưu tiên, kiểm tra `max_days<=31`, capability page size legacy; stage 01 |
 | P2 | HTTP chỉ retry 429, Retry-After mới đọc dạng số, không có trần chờ | Chính sách theo loại request, đọc HTTP-date, backoff trần/cancellation; stage 01 |
-| P2 | Ghi toàn bộ metadata sau từng hồ sơ; ba file không có transaction chung | JSON là danh mục chính hiện tại; snapshot theo trang hoặc SQLite/manifest journal sau benchmark, stage 01/08 |
+| P2 | Ghi toàn bộ metadata sau từng hồ sơ; bốn file không có transaction chung | JSON là danh mục chính hiện tại; snapshot theo trang hoặc SQLite/manifest journal sau benchmark, stage 01/08 |
 | P2 | Parse HTML theo chỉ số cột, marker/form đơn giản; chưa phát hiện mọi biến thể layout | Validate headers/schema HTML, fixture layout thay đổi, stage 01/09 |
 | P2 | Chưa phân loại file đính kèm, chưa biết form/schema từ nội dung | Inventory một Case → nhiều Artifact, rồi classifier độc lập, stage 02–03 |
 
@@ -71,9 +72,10 @@ ruff check .
 mypy gdt_tax
 ```
 
-Kết quả sau thay đổi: 297 test, OK; môi trường tối thiểu có 8 skip backend OCR
-tùy chọn. Sau cài `ddddocr`, lần kiểm tra cuối có 6 skip. Ruff và mypy (34 file)
-qua trên Python 3.11.15/Windows. Chưa chạy lại ma trận Linux Python 3.10/3.12 của CI.
+Kết quả nền tảng trước đây: 297 test OK trên Windows. Sau khi thêm báo cáo Excel,
+kiểm tra ngày 02/10/2026 có 298 test OK, 6 skip backend OCR tùy chọn; Ruff và
+mypy (34 file) qua trên Linux/Python 3.11. Chưa chạy lại ma trận Python 3.10/3.12
+của GitLab CI.
 
 Môi trường `.venv` đang trỏ Python đã bị gỡ. Đã tạo riêng `.venv-review` dùng
 Python 3.11, cài thư viện test/lint, không thay môi trường cũ. Các test có nhiều

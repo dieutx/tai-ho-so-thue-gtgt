@@ -1,6 +1,6 @@
 # Bàn giao: tiếp tục trên máy khác
 
-Cập nhật: **27/09/2026**. Repo private:
+Cập nhật: **02/10/2026**. Repo chính:
 `https://gitlab.com/dieutx/tai-ho-so-thue-gtgt.git`, nhánh bàn giao `main`.
 Baseline trước đợt thay đổi: `a9e7223`. Xem `git log -5 --oneline` để biết
 commit mới nhất; tài liệu này được version cùng code, không gắn hash tự tham chiếu.
@@ -24,7 +24,10 @@ phát triển từng lần, kiểm thử thật và chuyển máy không mất t
 - Legacy nhận kết quả rỗng hợp lệ, giữ form khi gặp HTML lỗi, sửa Origin,
   kiểm XML well-formed và chặn HTML/DTD trước khi gói ZIP.
 - Metadata gộp theo `(nguon, ma_ho_so)`, giữ dòng cũ/trường lạ, không ghi đè
-  JSON hỏng. Ghi atomically từng file; chưa có transaction chung ba file.
+  JSON hỏng. Ghi atomically từng file; chưa có transaction chung bốn file.
+- Tạo `danh_sach_to_khai.xlsx` gồm 11 cột nghiệp vụ, có filter/freeze header;
+  lưu cả trường hồ sơ đính kèm từ cột 13 của bảng DVC. Excel dùng danh mục đã
+  gộp nên giữ các kỳ trước và escape text có thể bị Excel hiểu là công thức.
 - Rule `metadata-keyword-v1`: GTGT/TNCN/TNDN/OTHER/UNKNOWN và vai trò tài liệu,
   có lý do/version; tạo `phan_loai_ho_so.json`. Không di chuyển file ZIP cũ.
 - Validate retry/timeout/pause; bổ sung che trường legacy; đóng log handler
@@ -47,6 +50,8 @@ mọi file đính kèm có cùng nhóm. DVC vẫn hoãn, chưa xác minh lại c
    6 ZIP hợp lệ và 6 XML well-formed, không gọi DVC.
 5. Chạy lại cùng khoảng: 6/6 hồ sơ dùng ZIP sẵn, **0 request tải lại**, không
    gọi DVC, metadata không tăng trùng. Cập nhật README và bàn giao trước commit/push.
+6. Ngày 02/10/2026, tích hợp báo cáo Excel trên nền GitLab: 298 test OK (6 skip
+   backend tùy chọn), ruff và mypy qua trên Linux/Python 3.11.
 
 Chi tiết và giới hạn trong [REVIEW](REVIEW.md). Chưa kiểm tra lại CI Linux
 Python 3.10/3.12; xem pipeline GitLab của commit sau push, không suy ra CI xanh
@@ -117,7 +122,7 @@ tài khoản hay Internet; test OCR không có dependency được skip.
 | Nội dung | Cách xử lý |
 |---|---|
 | `.env` và credentials/proxy | Chuyển bằng kênh riêng an toàn hoặc tạo lại từ `.env.example`; không dán vào chat/issue/commit |
-| `download/` | Nếu muốn resume, chuyển cả ZIP và `danh_sach_ho_so.json`, `.csv`, `phan_loai_ho_so.json` cùng thư mục |
+| `download/` | Nếu muốn resume, chuyển cả ZIP, `danh_sach_ho_so.json`, `.csv`, `danh_sach_to_khai.xlsx`, `phan_loai_ho_so.json` cùng thư mục |
 | `logs/`, HTTP dump, live-test harness/report | Chỉ chuyển riêng khi cần điều tra; không có sẵn sau clone và không an toàn để chia sẻ thô |
 | `.venv`, `.venv-review`, `.cache` | Không chuyển; cài lại môi trường trên máy mới |
 
@@ -158,7 +163,7 @@ DVC cần một nhiệm vụ riêng ở stage 09, không bật chỉ để trán
 | Flags CLI, exit code, vòng đời log | `gdt_tax/cli.py`, `logging_setup.py`, `tests/test_cli.py` |
 | Chia ngày, trang, tải/resume, summary | `dates.py`, `pipeline.py`, `models.py`, `tests/test_pipeline.py` |
 | Login/HTML/XML legacy | `portals/etax_legacy.py`, `tests/test_etax_legacy.py` |
-| ZIP, metadata merge, index nhóm | `storage.py`, `tests/test_storage.py` |
+| ZIP, metadata merge, Excel, index nhóm | `storage.py`, `tests/test_storage.py` |
 | Phân nhóm từ metadata | `classification.py`, `tests/test_classification.py` |
 | Raw log/dump, HTTP/retry | `traffic.py`, `http.py`, các test tương ứng |
 | Việc chưa làm và hướng triển khai | `REVIEW.md`, `README.md` trong thư mục này, `prompts/` |
