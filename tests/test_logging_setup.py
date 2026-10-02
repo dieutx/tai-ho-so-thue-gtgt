@@ -9,6 +9,15 @@ from unittest import mock
 from gdt_tax.logging_setup import SecretsFilter, configure_logging
 
 
+def close_root_handlers() -> None:
+    """Đóng handler trước khi Windows xoá file log trong thư mục tạm."""
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        handler.flush()
+        handler.close()
+        root.removeHandler(handler)
+
+
 class SecretsFilterTests(unittest.TestCase):
     def record(self, message: str, args=(), exc_text: str | None = None) -> logging.LogRecord:
         record = logging.LogRecord("urllib3.connectionpool", logging.DEBUG, "f", 1, message, args, None)
@@ -47,6 +56,7 @@ class SecretsFilterTests(unittest.TestCase):
                 for handler in logging.getLogger().handlers:
                     handler.flush()
             text = path.read_text(encoding="utf-8")
+            close_root_handlers()
         self.assertNotIn("bi-mat", text)
         self.assertIn("***", text)
 
@@ -88,6 +98,7 @@ class ConfigureLoggingTests(unittest.TestCase):
 
             text = path.read_text(encoding="utf-8")
             existed = path.is_file()
+            close_root_handlers()
 
         self.assertTrue(existed)
         self.assertIn("chi tiet", text)
@@ -107,6 +118,7 @@ class ConfigureLoggingTests(unittest.TestCase):
                 for handler in logging.getLogger().handlers:
                     handler.flush()
             text = path.read_text(encoding="utf-8")
+            close_root_handlers()
         self.assertIn("lan chay truoc", text)
         self.assertIn("lan nay", text)
 

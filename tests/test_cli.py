@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import tempfile
 import unittest
@@ -182,6 +183,9 @@ class MainTests(unittest.TestCase):
                 code = main(["--list-solvers", "--log-file", str(path)])
             self.assertEqual(code, 0)
             self.assertTrue(path.is_file())
+            for handler in list(logging.getLogger().handlers):
+                handler.close()
+                logging.getLogger().removeHandler(handler)
 
     def test_file_log_khong_mo_duoc_tra_ve_ma_loi_2(self):
         with tempfile.TemporaryDirectory() as tmp:
