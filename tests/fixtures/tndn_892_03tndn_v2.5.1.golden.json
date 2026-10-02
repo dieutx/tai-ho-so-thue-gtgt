@@ -1,0 +1,24 @@
+{
+  "form_code": "892",
+  "form_version": "2.5.1",
+  "status": "MAPPED",
+  "mapping_id": "TNDN_892_03-TNDN_v2.5.1",
+  "filing_type": "C",
+  "supplement_number": "0",
+  "taxpayer_tax_code": "0000000000",
+  "period_raw": "2023",
+  "period_type": "Y",
+  "period_year": 2023,
+  "period_from": "01/01/2023",
+  "period_to": "31/12/2023",
+  "indicators": {
+    "ctA1": "-1000",
+    "ctB13": "-750",
+    "ctC1": "-750",
+    "ctC2": null,
+    "ctC7": "500",
+    "ctC8a": "10.5",
+    "ctE": "10.5",
+    "ctI1": "10.5"
+  }
+}

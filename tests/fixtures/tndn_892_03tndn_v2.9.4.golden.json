@@ -1,0 +1,24 @@
+{
+  "form_code": "892",
+  "form_version": "2.9.4",
+  "status": "MAPPED",
+  "mapping_id": "TNDN_892_03-TNDN_v2.9.4",
+  "filing_type": "B",
+  "supplement_number": "2",
+  "taxpayer_tax_code": "0000000000",
+  "period_raw": "2024",
+  "period_type": "Y",
+  "period_year": 2024,
+  "period_from": "01/04/2024",
+  "period_to": "31/03/2025",
+  "indicators": {
+    "ctA1": "-1000",
+    "ctC2": null,
+    "ctC7_tenThueSuat": "Thuế suất phổ thông",
+    "ctC7_thueSuat": "20",
+    "ctC7_thuNhap": "500",
+    "ctC8a": "10.5",
+    "ctE": "10.5",
+    "ctI1": "10.5"
+  }
+}
