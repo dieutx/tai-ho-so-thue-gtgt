@@ -1,0 +1,150 @@
+{
+  "mapping_id": "TNCN_864_05KK-TT80",
+  "mapping_version": "1",
+  "tax_type": "TNCN",
+  "form_code": "864",
+  "form_version": null,
+  "note": "Mẫu 05/KK-TNCN (TT80/2021/TT-BTC) — tổ chức trả thu nhập từ tiền lương, tiền công. XPath lấy từ logic VBA người dùng cung cấp; tên chỉ tiêu đối chiếu TT80/2021. form_version=null áp cho mọi phiên bản mã 864 (XPath resolve trên 2.5.1/2.8.3/2.9.3). Chỉ tiêu [15] (phân bổ đơn vị phụ thuộc, checkbox) không đưa vào mapping.",
+  "detect": {
+    "root": "HSoThueDTu",
+    "namespace": "http://kekhaithue.gdt.gov.vn/TKhaiThue"
+  },
+  "fields": {
+    "employee_count": {
+      "canonical_name": "employee_count",
+      "indicator_code": "ct16",
+      "display_name": "Tổng số người lao động",
+      "official_indicator_name": "Tổng số người lao động",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct16"
+    },
+    "resident_with_contract": {
+      "canonical_name": "resident_with_contract",
+      "indicator_code": "ct17",
+      "display_name": "Cá nhân cư trú có hợp đồng lao động",
+      "official_indicator_name": "Cá nhân cư trú có hợp đồng lao động",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct17"
+    },
+    "deducted_persons_total": {
+      "canonical_name": "deducted_persons_total",
+      "indicator_code": "ct18",
+      "display_name": "Tổng số cá nhân đã khấu trừ thuế",
+      "official_indicator_name": "Tổng số cá nhân đã khấu trừ thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct18"
+    },
+    "deducted_resident": {
+      "canonical_name": "deducted_resident",
+      "indicator_code": "ct19",
+      "display_name": "Cá nhân cư trú đã khấu trừ thuế",
+      "official_indicator_name": "Cá nhân cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct19"
+    },
+    "deducted_non_resident": {
+      "canonical_name": "deducted_non_resident",
+      "indicator_code": "ct20",
+      "display_name": "Cá nhân không cư trú đã khấu trừ thuế",
+      "official_indicator_name": "Cá nhân không cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct20"
+    },
+    "taxable_income_total": {
+      "canonical_name": "taxable_income_total",
+      "indicator_code": "ct21",
+      "display_name": "Tổng thu nhập chịu thuế trả cho cá nhân",
+      "official_indicator_name": "Tổng thu nhập chịu thuế (TNCT) trả cho cá nhân",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct21"
+    },
+    "taxable_income_resident": {
+      "canonical_name": "taxable_income_resident",
+      "indicator_code": "ct22",
+      "display_name": "Tổng thu nhập chịu thuế - cá nhân cư trú",
+      "official_indicator_name": "Cá nhân cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct22"
+    },
+    "taxable_income_non_resident": {
+      "canonical_name": "taxable_income_non_resident",
+      "indicator_code": "ct23",
+      "display_name": "Tổng thu nhập chịu thuế - cá nhân không cư trú",
+      "official_indicator_name": "Cá nhân không cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct23"
+    },
+    "insurance_premium_income": {
+      "canonical_name": "insurance_premium_income",
+      "indicator_code": "ct24",
+      "display_name": "TNCT từ tiền phí mua bảo hiểm nhân thọ (DN bảo hiểm không thành lập tại VN)",
+      "official_indicator_name": "Tổng thu nhập chịu thuế từ tiền phí mua bảo hiểm nhân thọ, bảo hiểm không bắt buộc khác của doanh nghiệp bảo hiểm không thành lập tại Việt Nam cho người lao động",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct24"
+    },
+    "oil_contract_exempt_income": {
+      "canonical_name": "oil_contract_exempt_income",
+      "indicator_code": "ct25",
+      "display_name": "Tổng TNCT được miễn theo quy định của Hợp đồng dầu khí",
+      "official_indicator_name": "Tổng thu nhập chịu thuế được miễn theo quy định của Hợp đồng dầu khí",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct25"
+    },
+    "withheld_income_total": {
+      "canonical_name": "withheld_income_total",
+      "indicator_code": "ct26",
+      "display_name": "Tổng TNCT trả cho cá nhân thuộc diện phải khấu trừ thuế",
+      "official_indicator_name": "Tổng thu nhập chịu thuế trả cho cá nhân thuộc diện phải khấu trừ thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct26"
+    },
+    "withheld_income_resident": {
+      "canonical_name": "withheld_income_resident",
+      "indicator_code": "ct27",
+      "display_name": "TNCT phải khấu trừ - cá nhân cư trú",
+      "official_indicator_name": "Cá nhân cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct27"
+    },
+    "withheld_income_non_resident": {
+      "canonical_name": "withheld_income_non_resident",
+      "indicator_code": "ct28",
+      "display_name": "TNCT phải khấu trừ - cá nhân không cư trú",
+      "official_indicator_name": "Cá nhân không cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct28"
+    },
+    "tax_withheld_total": {
+      "canonical_name": "tax_withheld_total",
+      "indicator_code": "ct29",
+      "display_name": "Tổng số thuế TNCN đã khấu trừ",
+      "official_indicator_name": "Tổng số thuế thu nhập cá nhân đã khấu trừ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct29"
+    },
+    "tax_withheld_resident": {
+      "canonical_name": "tax_withheld_resident",
+      "indicator_code": "ct30",
+      "display_name": "Thuế TNCN đã khấu trừ - cá nhân cư trú",
+      "official_indicator_name": "Cá nhân cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct30"
+    },
+    "tax_withheld_non_resident": {
+      "canonical_name": "tax_withheld_non_resident",
+      "indicator_code": "ct31",
+      "display_name": "Thuế TNCN đã khấu trừ - cá nhân không cư trú",
+      "official_indicator_name": "Cá nhân không cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct31"
+    },
+    "tax_withheld_insurance": {
+      "canonical_name": "tax_withheld_insurance",
+      "indicator_code": "ct32",
+      "display_name": "Tổng số thuế TNCN đã khấu trừ trên tiền phí bảo hiểm nhân thọ",
+      "official_indicator_name": "Tổng số thuế TNCN đã khấu trừ trên tiền phí mua bảo hiểm nhân thọ, bảo hiểm không bắt buộc khác của doanh nghiệp bảo hiểm không thành lập tại Việt Nam cho người lao động",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct32"
+    }
+  }
+}

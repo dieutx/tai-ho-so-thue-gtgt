@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HSoThueDTu xmlns="http://kekhaithue.gdt.gov.vn/TKhaiThue" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <HSoKhaiThue id="ID_1">
+    <TTinChung>
+      <TTinDVu><maDVu>HTKK</maDVu><pbanDVu>5.3.8</pbanDVu></TTinDVu>
+      <TTinTKhaiThue>
+        <TKhaiThue>
+          <maTKhai>864</maTKhai>
+          <tenTKhai>TK khấu trừ thuế thu nhập cá nhân Mẫu 05/KK-TNCN (TT80/2021)</tenTKhai>
+          <pbanTKhaiXML>2.8.3</pbanTKhaiXML>
+          <loaiTKhai>B</loaiTKhai>
+          <soLan>1</soLan>
+          <KyKKhaiThue><kieuKy>M</kieuKy><kyKKhai>12/2024</kyKKhai></KyKKhaiThue>
+        </TKhaiThue>
+        <NNT><mst>0000000000</mst><tenNNT>CÔNG TY TNHH MẪU TỔNG HỢP</tenNNT></NNT>
+      </TTinTKhaiThue>
+    </TTinChung>
+    <CTieuTKhaiChinh>
+      <ct15>0</ct15>
+      <ct16>12</ct16>
+      <ct17>10</ct17>
+      <ct18>2</ct18>
+      <ct19>2</ct19>
+      <ct20>0</ct20>
+      <ct21>1000000</ct21>
+      <ct22>900000</ct22>
+      <ct23>0</ct23>
+      <ct24>0</ct24>
+      <ct25>0</ct25>
+      <ct26>500000</ct26>
+      <ct27>400000</ct27>
+      <ct28>0</ct28>
+      <ct29>10000</ct29>
+      <ct30>9000</ct30>
+      <ct31>0</ct31>
+      <ct32>0</ct32>
+    </CTieuTKhaiChinh>
+  </HSoKhaiThue>
+</HSoThueDTu>

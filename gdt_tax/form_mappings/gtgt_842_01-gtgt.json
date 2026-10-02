@@ -1,0 +1,230 @@
+{
+  "mapping_id": "GTGT_842_01-GTGT",
+  "mapping_version": "1",
+  "tax_type": "GTGT",
+  "form_code": "842",
+  "form_version": null,
+  "note": "Mẫu 01/GTGT (khấu trừ, SXKD). XPath và chỉ tiêu lấy từ logic VBA người dùng cung cấp; tên chỉ tiêu đối chiếu TT80/2021/TT-BTC. form_version=null nghĩa là áp cho mọi phiên bản của mã 842 vì mọi XPath đã kiểm chứng resolve trên các phiên bản 2.5.1/2.6.8/2.7.4/2.8.3 trong thư mục hiện có. Xem lại khi cơ quan thuế đổi mẫu (TT89/2026).",
+  "detect": {
+    "root": "HSoThueDTu",
+    "namespace": "http://kekhaithue.gdt.gov.vn/TKhaiThue"
+  },
+  "fields": {
+    "vat_deduction_carried_forward_in": {
+      "canonical_name": "vat_deduction_carried_forward_in",
+      "indicator_code": "ct22",
+      "display_name": "Thuế GTGT còn được khấu trừ kỳ trước chuyển sang",
+      "official_indicator_name": "Thuế GTGT còn được khấu trừ kỳ trước chuyển sang",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct22"
+    },
+    "purchase_value": {
+      "canonical_name": "purchase_value",
+      "indicator_code": "ct23",
+      "display_name": "Giá trị hàng hóa, dịch vụ mua vào",
+      "official_indicator_name": "Giá trị hàng hóa, dịch vụ mua vào",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/GiaTriVaThueGTGTHHDVMuaVao/ct23"
+    },
+    "purchase_vat": {
+      "canonical_name": "purchase_vat",
+      "indicator_code": "ct24",
+      "display_name": "Thuế GTGT của hàng hóa, dịch vụ mua vào",
+      "official_indicator_name": "Thuế giá trị gia tăng của hàng hóa, dịch vụ mua vào",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/GiaTriVaThueGTGTHHDVMuaVao/ct24"
+    },
+    "import_value": {
+      "canonical_name": "import_value",
+      "indicator_code": "ct23a",
+      "display_name": "Giá trị hàng hóa, dịch vụ nhập khẩu",
+      "official_indicator_name": "Giá trị hàng hóa, dịch vụ nhập khẩu",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/HangHoaDichVuNhapKhau/ct23a"
+    },
+    "import_vat": {
+      "canonical_name": "import_vat",
+      "indicator_code": "ct24a",
+      "display_name": "Thuế GTGT của hàng hóa, dịch vụ nhập khẩu",
+      "official_indicator_name": "Thuế giá trị gia tăng của hàng hóa, dịch vụ nhập khẩu",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/HangHoaDichVuNhapKhau/ct24a"
+    },
+    "deductible_input_vat": {
+      "canonical_name": "deductible_input_vat",
+      "indicator_code": "ct25",
+      "display_name": "Thuế GTGT của hàng hóa, dịch vụ mua vào được khấu trừ kỳ này",
+      "official_indicator_name": "Thuế giá trị gia tăng của hàng hóa, dịch vụ mua vào được khấu trừ kỳ này",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct25"
+    },
+    "sale_no_vat": {
+      "canonical_name": "sale_no_vat",
+      "indicator_code": "ct26",
+      "display_name": "Hàng hóa, dịch vụ bán ra không chịu thuế GTGT",
+      "official_indicator_name": "Hàng hóa, dịch vụ bán ra không chịu thuế giá trị gia tăng",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct26"
+    },
+    "sale_vat_subject_value": {
+      "canonical_name": "sale_vat_subject_value",
+      "indicator_code": "ct27",
+      "display_name": "Hàng hóa, dịch vụ bán ra chịu thuế GTGT",
+      "official_indicator_name": "Hàng hóa, dịch vụ bán ra chịu thuế GTGT",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/HHDVBRaChiuThueGTGT/ct27"
+    },
+    "sale_vat_subject_tax": {
+      "canonical_name": "sale_vat_subject_tax",
+      "indicator_code": "ct28",
+      "display_name": "Thuế của hàng hóa, dịch vụ bán ra chịu thuế GTGT",
+      "official_indicator_name": "Thuế của hàng hóa, dịch vụ bán ra chịu thuế GTGT",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/HHDVBRaChiuThueGTGT/ct28"
+    },
+    "sale_rate0_value": {
+      "canonical_name": "sale_rate0_value",
+      "indicator_code": "ct29",
+      "display_name": "Hàng hóa, dịch vụ bán ra chịu thuế suất 0%",
+      "official_indicator_name": "Hàng hoá, dịch vụ bán ra chịu thuế suất 0%",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct29"
+    },
+    "sale_rate5_value": {
+      "canonical_name": "sale_rate5_value",
+      "indicator_code": "ct30",
+      "display_name": "Hàng hóa, dịch vụ bán ra chịu thuế suất 5%",
+      "official_indicator_name": "Hàng hoá, dịch vụ bán ra chịu thuế suất 5%",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/HHDVBRaChiuTSuat5/ct30"
+    },
+    "sale_rate5_tax": {
+      "canonical_name": "sale_rate5_tax",
+      "indicator_code": "ct31",
+      "display_name": "Thuế GTGT của hàng hóa, dịch vụ bán ra chịu thuế suất 5%",
+      "official_indicator_name": "Thuế GTGT của Hàng hoá, dịch vụ bán ra chịu thuế suất 5%",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/HHDVBRaChiuTSuat5/ct31"
+    },
+    "sale_rate10_value": {
+      "canonical_name": "sale_rate10_value",
+      "indicator_code": "ct32",
+      "display_name": "Hàng hóa, dịch vụ bán ra chịu thuế suất 10%",
+      "official_indicator_name": "Hàng hoá, dịch vụ bán ra chịu thuế suất 10%",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/HHDVBRaChiuTSuat10/ct32"
+    },
+    "sale_not_taxed_value": {
+      "canonical_name": "sale_not_taxed_value",
+      "indicator_code": "ct32a",
+      "display_name": "Hàng hóa, dịch vụ bán ra không tính thuế",
+      "official_indicator_name": "Hàng hoá, dịch vụ bán ra không tính thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct32a"
+    },
+    "sale_rate10_tax": {
+      "canonical_name": "sale_rate10_tax",
+      "indicator_code": "ct33",
+      "display_name": "Thuế GTGT của hàng hóa, dịch vụ bán ra chịu thuế suất 10%",
+      "official_indicator_name": "Thuế GTGT của HHDV bán ra chịu thuế suất 10%",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/HHDVBRaChiuTSuat10/ct33"
+    },
+    "total_revenue": {
+      "canonical_name": "total_revenue",
+      "indicator_code": "ct34",
+      "display_name": "Tổng doanh thu của hàng hóa, dịch vụ bán ra",
+      "official_indicator_name": "Tổng doanh thu của HHDV bán ra",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/TongDThuVaThueGTGTHHDVBRa/ct34"
+    },
+    "total_output_vat": {
+      "canonical_name": "total_output_vat",
+      "indicator_code": "ct35",
+      "display_name": "Tổng số thuế GTGT của hàng hóa, dịch vụ bán ra",
+      "official_indicator_name": "Tổng số thuế GTGT của HHDV bán ra",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/TongDThuVaThueGTGTHHDVBRa/ct35"
+    },
+    "vat_incurred": {
+      "canonical_name": "vat_incurred",
+      "indicator_code": "ct36",
+      "display_name": "Thuế GTGT phát sinh trong kỳ",
+      "official_indicator_name": "Thuế GTGT phát sinh trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct36"
+    },
+    "adjust_decrease_deduction": {
+      "canonical_name": "adjust_decrease_deduction",
+      "indicator_code": "ct37",
+      "display_name": "Điều chỉnh giảm thuế GTGT còn được khấu trừ của các kỳ trước",
+      "official_indicator_name": "Điều chỉnh giảm thuế GTGT còn được khấu trừ của các kỳ trước",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct37"
+    },
+    "adjust_increase_deduction": {
+      "canonical_name": "adjust_increase_deduction",
+      "indicator_code": "ct38",
+      "display_name": "Điều chỉnh tăng thuế GTGT còn được khấu trừ của các kỳ trước",
+      "official_indicator_name": "Điều chỉnh tăng thuế GTGT còn được khấu trừ của các kỳ trước",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct38"
+    },
+    "vat_received_transfer": {
+      "canonical_name": "vat_received_transfer",
+      "indicator_code": "ct39a",
+      "display_name": "Thuế GTGT nhận bàn giao được khấu trừ trong kỳ",
+      "official_indicator_name": "Thuế GTGT nhận bàn giao được khấu trừ trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct39a"
+    },
+    "vat_payable_activity": {
+      "canonical_name": "vat_payable_activity",
+      "indicator_code": "ct40a",
+      "display_name": "Thuế GTGT phải nộp của hoạt động sản xuất kinh doanh trong kỳ",
+      "official_indicator_name": "Thuế GTGT phải nộp của hoạt động sản xuất kinh doanh trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct40a"
+    },
+    "vat_offset_investment": {
+      "canonical_name": "vat_offset_investment",
+      "indicator_code": "ct40b",
+      "display_name": "Thuế GTGT mua vào của dự án đầu tư được bù trừ",
+      "official_indicator_name": "Thuế giá trị gia tăng mua vào của dự án đầu tư được bù trừ với thuế GTGT còn phải nộp của hoạt động sản xuất kinh doanh cùng kỳ tính thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct40b"
+    },
+    "vat_payable": {
+      "canonical_name": "vat_payable",
+      "indicator_code": "ct40",
+      "display_name": "Thuế GTGT còn phải nộp trong kỳ",
+      "official_indicator_name": "Thuế GTGT còn phải nộp trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct40"
+    },
+    "vat_not_deducted": {
+      "canonical_name": "vat_not_deducted",
+      "indicator_code": "ct41",
+      "display_name": "Thuế GTGT chưa khấu trừ hết kỳ này",
+      "official_indicator_name": "Thuế GTGT chưa khấu trừ hết kỳ này",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct41"
+    },
+    "vat_refund_requested": {
+      "canonical_name": "vat_refund_requested",
+      "indicator_code": "ct42",
+      "display_name": "Thuế GTGT đề nghị hoàn",
+      "official_indicator_name": "Thuế giá trị gia tăng đề nghị hoàn",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct42"
+    },
+    "vat_carried_forward": {
+      "canonical_name": "vat_carried_forward",
+      "indicator_code": "ct43",
+      "display_name": "Thuế GTGT còn được khấu trừ chuyển kỳ sau",
+      "official_indicator_name": "Thuế GTGT còn được khấu trừ chuyển kỳ sau",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ct43"
+    }
+  }
+}

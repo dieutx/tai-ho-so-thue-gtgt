@@ -6,8 +6,9 @@ quy tắc ngày tháng) đều tách riêng để thay mà không ảnh hưởng
 
 Trạng thái triển khai, test thật và quy trình chuyển máy ở
 [HANDOFF](development/HANDOFF.md); backlog và giới hạn ở
-[REVIEW](development/REVIEW.md). Phân loại hiện chỉ ở metadata cấp hồ sơ,
-chưa có artifact inventory hoặc parser chỉ tiêu XML.
+[REVIEW](development/REVIEW.md). Đã có inventory/profile cấu trúc XML, phân loại
+artifact, khung parser theo mapping và export offline. Hiện mapping đã kiểm chứng
+cho 01/GTGT và hai phiên bản 05/KK-TNCN; TNDN và các mẫu còn lại vẫn cần làm.
 
 ## Bản đồ module
 
@@ -32,6 +33,15 @@ tự đăng nhập phiên DSE riêng ở lần tra cứu đầu. `EtaxLegacyFall
 | `parsing.py` | Đọc bảng kết quả thành `CaseRecord` | Gọi mạng |
 | `naming.py` | Tạo tên file ZIP | Đọc/ghi file |
 | `classification.py` | Phân nhóm hồ sơ từ tên tờ khai/TTHC, ghi lý do và phiên bản rule | Gọi mạng, parse chỉ tiêu XML |
+| `inventory.py` | Kiểm kê ZIP/member, SHA-256, profile cấu trúc XML, manifest + báo cáo discovery | Gọi mạng, trích xuất chỉ tiêu thuế, sửa file nguồn |
+| `parser/` | Khung parser tờ khai: reader an toàn, registry mapping, trích metadata + chỉ tiêu kèm provenance | Hard-code mẫu biểu, đoán ý nghĩa chỉ tiêu, gọi mạng |
+| `parser/models.py` | `ParsedDeclaration`, `Indicator`, `Period`, `Taxpayer` | Đọc file |
+| `parser/xml_reader.py` | Parse XML an toàn, chuẩn hóa số (giữ NULL ≠ 0) | Gọi mạng, resolve entity |
+| `parser/registry.py` | Nạp mapping từ `gdt_tax/form_mappings` hoặc thư mục CLI chỉ định | Hard-code XPath trong code |
+| `parser/extract.py` | Trích metadata + chỉ tiêu tổng hợp từ `CTieuTKhaiChinh` | Lấy bảng kê chi tiết |
+| `parser/cli.py` | Lệnh offline parse từ manifest | Gọi mạng |
+| `classify.py` | Phân loại từng artifact theo nội dung XML (nhóm thuế, vai trò, bằng chứng/conflict) | Gọi mạng, đoán khi thiếu tín hiệu |
+| `export.py` | Ghép manifest+parsed+classification, lọc, xuất Excel đa sheet/CSV | Gọi mạng, đổi số âm thành text |
 | `storage.py` | Kiểm tra ZIP, chống tải trùng, ghi ZIP, Excel/CSV/JSON | Gọi mạng |
 | `captcha/` | Nhận dạng CAPTCHA (nhiều backend) | Gọi endpoint nghiệp vụ |
 | `portals/` | Tra cứu và tải theo từng nguồn | Đọc/ghi file |
@@ -204,6 +214,104 @@ Lộ trình inventory → phân loại file theo nội dung → parser theo mẫ
 → export và các prompt triển khai độc lập nằm ở
 [development/README.md](development/README.md). `parsing.py` hiện chỉ đọc HTML,
 không dùng làm module parse XML tờ khai trong các stage mới.
+
+### Kiểm kê artifact và profile XML (stage 02)
+
+`inventory.py` là công cụ **offline, chỉ đọc**: quét đệ quy một thư mục, liệt kê
+mọi member trong ZIP, băm SHA-256, nhận diện định dạng từ bytes (không tin đuôi
+file) và dựng profile cấu trúc cho từng XML. Chạy bằng
+`python -m gdt_tax.inventory <folder> --output <dir>` (hoặc `gdt-inventory`).
+
+Hai loại dấu vết cấu trúc:
+
+* `structure_signature` — băm của root + namespace + mã mẫu + phiên bản + đường
+dẫn phần tử (path), dùng để tham chiếu chi tiết một biến thể;
+* `structure_skeleton` — băm của **tập tên phần tử** (không theo path), ổn định
+hơn: hai XML cùng mẫu chỉ khác do có/không bảng tùy chọn vẫn cùng skeleton. Dùng
+skeleton để phát hiện thay đổi cấu trúc thật và báo `MULTIPLE_STRUCTURES`.
+
+Đầu ra: `manifest_artifact.json` (schema `artifact-inventory-v2`) và
+`bao_cao_discovery.{json,md}` (schema/profile version, gợi ý nhóm thuế, mã
+mẫu/phiên bản, trạng thái tiếp nhận từ metadata, điểm cần xác nhận, câu hỏi mở).
+Cả hai chỉ chứa metadata/đường dẫn nguồn — **không** chứa chỉ tiêu thuế.
+
+An toàn: giới hạn số member/bytes/tỉ lệ nén/tổng dung lượng, chặn Zip Slip/đường
+dẫn tuyệt đối/drive Windows/`..`/symlink/ZIP mã hóa; XML dùng parser không resolve
+entity/DTD, không gọi mạng, có trần bytes/depth/nodes. File lỗi được ghi riêng và
+lượt quét tiếp tục. Chạy lại dùng cache theo `(rel_path, size, mtime)` nên không
+băm lại toàn bộ khi file không đổi. **Không** đổi tên/di chuyển/xóa file nguồn.
+
+Giới hạn hiện tại: chưa nối ZIP với hồ sơ khi tên file không khớp metadata; gợi ý
+nhóm thuế chỉ từ tên mẫu (chưa phải mapping); chưa phân loại vai trò tài liệu theo
+nội dung (stage 03).
+
+### Khung parser tờ khai (stage 04)
+
+`gdt_tax/parser/` tách **parsing engine** khỏi **form mapping**:
+
+* `xml_reader.py` — parse XML an toàn (không resolve entity/DTD, không mạng, có
+trần bytes), tìm text theo XPath (hỗ trợ cả XML không namespace), và chuẩn hóa số:
+bỏ dấu phân cách nghìn, giữ dấu trừ, **phân biệt NULL với ``0``**; số lỗi trả
+``PARSE_VALUE_ERROR`` thay vì 0.
+* `registry.py` — nạp mapping đóng gói từ `gdt_tax/form_mappings/*.json`; tra theo
+``(form_code, form_version)``. Không có bản khớp **version cụ thể** thì **không**
+tự áp bản gần nhất (spec §45).
+* `extract.py` — trích metadata chung (mã/tên/phiên bản mẫu, MST, kỳ, loại nộp,
+lần bổ sung) và chỉ tiêu từ node `CTieuTKhaiChinh`. Chỉ lấy **chỉ tiêu tổng hợp**:
+node con trực tiếp có tên dạng mã (`ct21`, `ctB12`…), đi xuống **một cấp** trong
+các node nhóm, và **không** đi vào `PLuc`/bảng kê chi tiết.
+
+Mỗi chỉ tiêu có ``code``, ``value`` (đã chuẩn hóa), ``raw_value``, ``xpath``
+(provenance), ``canonical_name``/``display_name`` (từ mapping, ``None`` nếu chưa có),
+và ``status`` (``MAPPED``/``NEED_MAPPING``). **Chưa có mapping thì trả
+``NEED_MAPPING`` và ``canonical_name = None`` — không tự suy đoán ý nghĩa** (spec §3.1).
+
+Chạy offline từ manifest: `python -m gdt_tax.parser.cli <folder> --output <dir>`
+(hoặc `gdt-parse`). Kết quả `parsed_declarations.json` có schema/parser version và
+giữ `source_zip`/`source_inner_file`/`source_sha256`/`artifact_id` để truy vết.
+
+Đã đóng gói ba mapping:
+
+* `gdt_tax/form_mappings/gtgt_842_01-gtgt.json` — 01/GTGT (mã 842), 27 chỉ tiêu `ct22`…`ct43`
+(+`ct23a`/`ct24a`), tên theo TT80/2021/TT-BTC.
+* `gdt_tax/form_mappings/tncn_864_05kk-tt80.json` — 05/KK-TNCN (mã 864), `ct16`…`ct32`, TT80/2021.
+* `gdt_tax/form_mappings/tncn_394_05kk-tt92.json` — 05/KK-TNCN (mã 394), `ct21`…`ct36`, TT92/2015.
+
+Mỗi mapping khai `form_version = null` (áp cho mọi phiên bản của mã mẫu) vì mọi
+XPath đã kiểm chứng resolve trên các phiên bản hiện có. **Hai bản TNCN là hai
+mapping tách biệt theo `form_code`** vì mã chỉ tiêu `[21]`… trùng số nhưng khác ý
+nghĩa giữa TT80 và TT92 (spec §45). Chỉ tiêu không có trong mapping (ví dụ `ct21`
+của mẫu 842 — cờ "không phát sinh", `ct15` của 864) vẫn giữ ``NEED_MAPPING``;
+mẫu/phiên bản khác chưa mapping cũng vậy. Khi mapping có XPath, extractor dùng
+đúng XPath đó; nếu XML thiếu chỉ tiêu đã mapping thì giữ ``null`` kèm cảnh báo
+``MISSING_IN_XML`` (không điền 0).
+
+Mẫu **02/KK-TNCN (TT156/2013)** chưa có mapping vì thư mục hiện tại không có XML
+nào của mẫu đó (không đủ dữ liệu để xác minh XPath).
+
+### Phân loại theo nội dung (stage 03)
+
+`classify.py` phân loại **từng artifact** từ profile XML (không chỉ metadata cấp
+hồ sơ như `classification.py`): nhóm thuế, vai trò tài liệu (`DECLARATION`/
+`NOTICE`/`APPENDIX`/`UNKNOWN`), mã mẫu, phiên bản. Ưu tiên mapping đã đăng ký
+(bằng chứng mạnh); nếu không có thì dựa tên mẫu và ghi rõ là bằng chứng yếu.
+Thiếu tín hiệu ⇒ `UNKNOWN`; mâu thuẫn ⇒ `CONFLICT` kèm bằng chứng hai phía.
+Chạy `python -m gdt_tax.classify <folder>`; kết quả `phan_loai_artifact.json`.
+
+### Xuất và truy vấn (stage 08)
+
+`export.py` ghép manifest + parsed + classification thành các dòng tờ khai, giữ
+provenance (`record_id` = SHA-256 của `source_sha256`+`artifact_id`, `source_zip`,
+`source_inner_file`, `source_sha256`). Xuất workbook `Tax_Return_Summary.xlsx`
+gồm `00_README`, `01_RETURN_INDEX`, `02_GTGT`, `03_TNCN`, `04_TNDN`,
+`06_OTHER_RETURNS`, `05_INDICATORS` (chỉ tiêu dạng dài, kèm XPath), `07_UNMAPPED_FORMS`,
+`08_PARSE_ERRORS`, `09_MAPPING_VERSIONS`, `10_AUDIT_LOG`. Lọc theo
+nhóm/mẫu/phiên bản/kỳ/loại nộp/trạng thái qua CLI; xuất thêm CSV UTF-8 BOM.
+
+Nguyên tắc: NULL (ô trống) khác `0`; **tiền âm giữ nguyên dạng số** (chỉ escape
+chuỗi không phải số bắt đầu `=,+,-,@`); **không** tự chọn bản bổ sung mới nhất
+hay cộng dồn nhiều lần nộp cùng kỳ — mọi dòng giữ nguyên, người dùng tự quyết.
+Chạy `python -m gdt_tax.export <folder> [--tax-group GTGT ...]`.
 
 ### Bộ nhận dạng CAPTCHA có sẵn
 

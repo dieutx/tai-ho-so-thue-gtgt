@@ -29,6 +29,93 @@ mật khẩu hay proxy trong `.env`. Đây không phải công cụ quét bí m�
 | Thiếu `_password`, DSE fields trong bộ che log | Request legacy có thể lộ mật khẩu/trạng thái phiên ở dữ liệu có cấu trúc | Bổ sung tên trường; vấn đề raw response/URL vẫn cần stage 01 |
 | CLI để file log mở sau khi main trả về | Test Windows và ứng dụng nhúng không dọn được file | Đóng handler thuộc CLI trong finally; test đóng handler trước cleanup |
 
+## Kiểm kê artifact và discovery (stage 02)
+
+Đã thêm `gdt_tax/inventory.py` và `tests/test_inventory.py`. Công cụ offline, chỉ
+đọc: quét đệ quy ZIP/member, SHA-256, nhận diện định dạng từ bytes, profile cấu
+trúc XML, dựng manifest + báo cáo discovery. Không trích xuất chỉ tiêu, không
+sửa file nguồn.
+
+Chạy trên `download/` (02/10/2026): 1262 file, 1268 member (1265 XML, 3 PDF),
+96 `structure_signature` / 92 `structure_skeleton`, 32 mã mẫu, 31 phiên bản,
+6 giá trị trạng thái tiếp nhận. Toàn bộ XML parse được (`ok`), 0 lỗi.
+
+An toàn đã có test: Zip Slip/`..`, ZIP hỏng, member mã hóa, member quá lớn, tỉ lệ
+nén bất thường, XML UTF-16/BOM, XML lỗi, giới hạn depth. Chạy lại dùng cache
+theo `(rel_path, size, mtime)` — nhanh hơn nhiều so với băm lại.
+
+Giới hạn còn lại (thuộc stage 02–03):
+
+* Chưa nối ZIP với hồ sơ khi tên file không khớp `danh_sach_ho_so.json`
+  (661/1262 container không khớp vì tên ZIP trong thư mục không còn đúng quy ước
+  metadata, ví dụ bản tải lại/đổi tên).
+* `possible_tax_type` chỉ suy từ tên mẫu; chưa phải phân loại nội dung.
+* `MULTIPLE_STRUCTURES` xuất hiện khi cùng form/version có nhiều skeleton; cần
+  người dùng xác nhận đâu là biến thể thật trước khi build mapping.
+* Chưa có role tài liệu (tờ khai/phụ lục/thông báo) theo nội dung và chưa có
+  parser chỉ tiêu.
+
+## Khung parser tờ khai (stage 04)
+
+Đã thêm `gdt_tax/parser/` (models, xml_reader, registry, extract, cli) và
+`tests/test_parser.py`. Khung tách parsing engine khỏi mapping: registry nạp
+`gdt_tax/form_mappings/*.json`, extractor lấy chỉ tiêu tổng hợp từ `CTieuTKhaiChinh`,
+không hard-code mẫu biểu.
+
+Chạy trên `download/` (02/10/2026): 1265 tờ khai parse được, 0 lỗi, 53 cặp
+form/version.
+
+Ba mapping dựng từ logic VBA người dùng cung cấp, tên chỉ tiêu đối chiếu thông tư:
+`gtgt_842_01-gtgt` (01/GTGT, 27 chỉ tiêu), `tncn_864_05kk-tt80` (05/KK-TNCN
+TT80, `ct16`…`ct32`), `tncn_394_05kk-tt92` (05/KK-TNCN TT92, `ct21`…`ct36`).
+Sau khi thêm: **459/1265 tờ khai `MAPPED`** (842: 245, 864: 138, 394: 76), phần
+còn lại `NEED_MAPPING`. Mọi mapping khai `form_version=null` vì XPath đã kiểm
+chứng resolve trên mọi phiên bản hiện có của từng mã mẫu.
+
+Điểm quan trọng: **hai bản TNCN giữ riêng**, không gộp chỉ tiêu — mã `[21]`… trùng
+số nhưng khác ý nghĩa giữa TT80 và TT92 (có test `test_same_code_number_different_meaning`).
+Chỉ tiêu không có trong mapping (vd `ct21` cờ "không phát sinh" của 842, `ct15`
+của 864) vẫn `NEED_MAPPING`, không tự gán. Đây là hành vi có chủ đích (spec §3.1, §45).
+
+Mẫu **02/KK-TNCN (TT156)** chưa làm vì không có XML nào trong thư mục để xác minh
+XPath; không bịa. Các mẫu còn lại (TNDN 892, quyết toán TNCN 953, …) chưa có
+mapping.
+
+Đã có test: trích metadata chung, chỉ tiêu + provenance XPath, phân biệt NULL/0,
+giữ số âm, không lấy bảng kê chi tiết, mapping theo registry, **không tự áp
+mapping cho version khác**, XML không namespace, XML lỗi vẫn giữ source reference,
+chuẩn hóa số Việt/Mỹ, nạp mapping lỗi bị bỏ qua.
+
+Giới hạn còn lại:
+
+* Mới có ba mapping 842/864/394; các mẫu còn lại giữ `NEED_MAPPING`.
+* Phân loại nội dung đã có nhưng chưa nhận diện đầy đủ vai trò phụ lục theo marker;
+  tờ khai thông báo (`TBao`) không có `CTieuTKhaiChinh` nên 0 chỉ tiêu.
+* Chưa gộp nhiều lần nộp cùng kỳ, chưa tính `declaration_family_id` và chưa nối
+  acceptance status cho mọi file không khớp metadata. Excel hiện giữ mọi lần nộp.
+
+## Phân loại nội dung và xuất báo cáo (stage 03 + 08)
+
+Đã thêm `gdt_tax/classify.py` + `tests/test_classify.py` (phân loại từng artifact
+theo nội dung XML: nhóm thuế, vai trò, bằng chứng, conflict/unknown) và
+`gdt_tax/export.py` + `tests/test_export.py` (ghép manifest+parsed+classification,
+lọc, xuất Excel 11 sheet + CSV + audit log).
+
+Chạy trên `download/` (02/10/2026): 1265 artifact phân loại (OK=776, UNKNOWN=489,
+CONFLICT=0); workbook `Tax_Return_Summary.xlsx` 11 sheet, `01_RETURN_INDEX` 1265
+dòng, `05_INDICATORS` 26213 dòng chỉ tiêu (kèm XPath).
+
+Điểm đã kiểm bằng test: `record_id` ổn định theo hash (không phải số thứ tự);
+lọc không làm mất lịch sử; NULL khác 0; **tiền âm giữ nguyên dạng số** (chỉ escape
+chuỗi bắt đầu `=,+,-,@` không phải số); CSV UTF-8 BOM; sheet đúng tên.
+
+Giới hạn còn lại:
+
+* `classify.py` chưa tách `APPENDIX` theo marker `PLuc`/`BangKe` (đang suy từ root).
+* Chưa có mapping TNDN (892) và quyết toán TNCN (953) — cần logic XPath như các
+  mapping đã có; các tờ khai đó vẫn `NEED_MAPPING` nhưng vẫn xuất được index.
+* Chưa đo benchmark thời gian/RAM (stage 08 mô tả) và chưa hỗ trợ SQLite.
+
 ## Nền tảng phân loại đã có
 
 `classification.py` là rule thuần, dùng tên tờ khai và TTHC để phân nhóm GTGT,
@@ -39,7 +126,7 @@ APPENDIX, UNKNOWN. Tín hiệu nhiều nhóm được giữ UNKNOWN kèm lý do.
 Rule có phiên bản `metadata-keyword-v1`. CSV/JSON có nhóm, loại tài liệu và lý
 do; `phan_loai_ho_so.json` nhóm các hồ sơ có `tep_zip`. Không chuyển/giải nén file
 cũ. Một nhóm ở cấp hồ sơ chưa chứng minh mọi file trong ZIP thuộc nhóm đó.
-`parsing.py` hiện chỉ parse bảng HTML; chưa có parser chỉ tiêu XML tờ khai.
+`parsing.py` chỉ parse bảng HTML; parser XML nằm riêng trong `gdt_tax/parser/`.
 
 ## Việc cần ưu tiên tiếp
 
@@ -72,10 +159,10 @@ ruff check .
 mypy gdt_tax
 ```
 
-Kết quả nền tảng trước đây: 297 test OK trên Windows. Sau khi thêm báo cáo Excel,
-kiểm tra ngày 02/10/2026 có 298 test OK, 6 skip backend OCR tùy chọn; Ruff và
-mypy (34 file) qua trên Linux/Python 3.11. Chưa chạy lại ma trận Python 3.10/3.12
-của GitLab CI.
+Kết quả nền tảng trước đây: 297 test OK trên Windows. Sau inventory/parser/
+classify/export và sửa vòng lặp tự quét workbook đầu ra, kiểm tra ngày 02/10/2026
+có 347 test OK, 6 skip backend OCR tùy chọn; Ruff và mypy (43 file) qua trên
+Linux/Python 3.11. Chưa chạy lại ma trận Python 3.10/3.12 của GitLab CI.
 
 Môi trường `.venv` đang trỏ Python đã bị gỡ. Đã tạo riêng `.venv-review` dùng
 Python 3.11, cài thư viện test/lint, không thay môi trường cũ. Các test có nhiều
