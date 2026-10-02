@@ -68,9 +68,9 @@ form/version.
 Ba mapping dựng từ logic VBA người dùng cung cấp, tên chỉ tiêu đối chiếu thông tư:
 `gtgt_842_01-gtgt` (01/GTGT, 27 chỉ tiêu), `tncn_864_05kk-tt80` (05/KK-TNCN
 TT80, `ct16`…`ct32`), `tncn_394_05kk-tt92` (05/KK-TNCN TT92, `ct21`…`ct36`).
-Sau khi thêm: **459/1265 tờ khai `MAPPED`** (842: 245, 864: 138, 394: 76), phần
-còn lại `NEED_MAPPING`. Mọi mapping khai `form_version=null` vì XPath đã kiểm
-chứng resolve trên mọi phiên bản hiện có của từng mã mẫu.
+Sau khi thêm 03/TNDN: **479/1265 tờ khai `MAPPED`** (842: 245, 864: 138,
+394: 76, 892: 20), phần còn lại `NEED_MAPPING`. Mapping 842/864/394 khai
+`form_version=null`; 892 tách chính xác 2.5.1 và 2.9.4 vì cấu trúc C7 khác nhau.
 
 Điểm quan trọng: **hai bản TNCN giữ riêng**, không gộp chỉ tiêu — mã `[21]`… trùng
 số nhưng khác ý nghĩa giữa TT80 và TT92 (có test `test_same_code_number_different_meaning`).
@@ -78,8 +78,9 @@ Chỉ tiêu không có trong mapping (vd `ct21` cờ "không phát sinh" của 8
 của 864) vẫn `NEED_MAPPING`, không tự gán. Đây là hành vi có chủ đích (spec §3.1, §45).
 
 Mẫu **02/KK-TNCN (TT156)** chưa làm vì không có XML nào trong thư mục để xác minh
-XPath; không bịa. Các mẫu còn lại (TNDN 892, quyết toán TNCN 953, …) chưa có
-mapping.
+XPath; không bịa. 03/TNDN 892 đã có fixture ẩn danh cho cả chính thức/bổ sung,
+giữ kỳ năm tài chính và không lấy BCTC/phụ lục. Các mẫu còn lại (quyết toán
+TNCN 953, …) chưa có mapping.
 
 Đã có test: trích metadata chung, chỉ tiêu + provenance XPath, phân biệt NULL/0,
 giữ số âm, không lấy bảng kê chi tiết, mapping theo registry, **không tự áp
@@ -88,7 +89,7 @@ chuẩn hóa số Việt/Mỹ, nạp mapping lỗi bị bỏ qua.
 
 Giới hạn còn lại:
 
-* Mới có ba mapping 842/864/394; các mẫu còn lại giữ `NEED_MAPPING`.
+* Có năm mapping cho 842/864/394 và 892 v2.5.1/v2.9.4; mẫu khác giữ `NEED_MAPPING`.
 * Phân loại nội dung đã có nhưng chưa nhận diện đầy đủ vai trò phụ lục theo marker;
   tờ khai thông báo (`TBao`) không có `CTieuTKhaiChinh` nên 0 chỉ tiêu.
 * Chưa gộp nhiều lần nộp cùng kỳ, chưa tính `declaration_family_id` và chưa nối
@@ -103,7 +104,7 @@ lọc, xuất Excel 11 sheet + CSV + audit log).
 
 Chạy trên `download/` (02/10/2026): 1265 artifact phân loại (OK=776, UNKNOWN=489,
 CONFLICT=0); workbook `Tax_Return_Summary.xlsx` 11 sheet, `01_RETURN_INDEX` 1265
-dòng, `05_INDICATORS` 26213 dòng chỉ tiêu (kèm XPath).
+dòng, `05_INDICATORS` 26282 dòng chỉ tiêu (kèm XPath).
 
 Điểm đã kiểm bằng test: `record_id` ổn định theo hash (không phải số thứ tự);
 lọc không làm mất lịch sử; NULL khác 0; **tiền âm giữ nguyên dạng số** (chỉ escape
@@ -112,8 +113,8 @@ chuỗi bắt đầu `=,+,-,@` không phải số); CSV UTF-8 BOM; sheet đúng 
 Giới hạn còn lại:
 
 * `classify.py` chưa tách `APPENDIX` theo marker `PLuc`/`BangKe` (đang suy từ root).
-* Chưa có mapping TNDN (892) và quyết toán TNCN (953) — cần logic XPath như các
-  mapping đã có; các tờ khai đó vẫn `NEED_MAPPING` nhưng vẫn xuất được index.
+* Chưa có mapping quyết toán TNCN (953) — cần logic XPath như các mapping đã có;
+  các tờ khai đó vẫn `NEED_MAPPING` nhưng vẫn xuất được index.
 * Chưa đo benchmark thời gian/RAM (stage 08 mô tả) và chưa hỗ trợ SQLite.
 
 ## Nền tảng phân loại đã có
@@ -161,8 +162,9 @@ mypy gdt_tax
 
 Kết quả nền tảng trước đây: 297 test OK trên Windows. Sau inventory/parser/
 classify/export và sửa vòng lặp tự quét workbook đầu ra, kiểm tra ngày 02/10/2026
-có 347 test OK, 6 skip backend OCR tùy chọn; Ruff và mypy (43 file) qua trên
-Linux/Python 3.11. Chưa chạy lại ma trận Python 3.10/3.12 của GitLab CI.
+có 347 test OK, 6 skip backend OCR tùy chọn; sau 03/TNDN có 351 test OK. Ruff và
+mypy (43 file) qua trên Linux/Python 3.11. Ma trận Python 3.10/3.12 được kiểm tra
+trên pipeline GitLab của MR.
 
 Môi trường `.venv` đang trỏ Python đã bị gỡ. Đã tạo riêng `.venv-review` dùng
 Python 3.11, cài thư viện test/lint, không thay môi trường cũ. Các test có nhiều

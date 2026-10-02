@@ -8,7 +8,8 @@ Trạng thái triển khai, test thật và quy trình chuyển máy ở
 [HANDOFF](development/HANDOFF.md); backlog và giới hạn ở
 [REVIEW](development/REVIEW.md). Đã có inventory/profile cấu trúc XML, phân loại
 artifact, khung parser theo mapping và export offline. Hiện mapping đã kiểm chứng
-cho 01/GTGT và hai phiên bản 05/KK-TNCN; TNDN và các mẫu còn lại vẫn cần làm.
+cho 01/GTGT, hai mẫu 05/KK-TNCN và 03/TNDN mã 892 phiên bản 2.5.1/2.9.4; các
+mẫu còn lại vẫn cần làm.
 
 ## Bản đồ module
 
@@ -270,15 +271,20 @@ Chạy offline từ manifest: `python -m gdt_tax.parser.cli <folder> --output <d
 (hoặc `gdt-parse`). Kết quả `parsed_declarations.json` có schema/parser version và
 giữ `source_zip`/`source_inner_file`/`source_sha256`/`artifact_id` để truy vết.
 
-Đã đóng gói ba mapping:
+Đã đóng gói năm mapping:
 
 * `gdt_tax/form_mappings/gtgt_842_01-gtgt.json` — 01/GTGT (mã 842), 27 chỉ tiêu `ct22`…`ct43`
 (+`ct23a`/`ct24a`), tên theo TT80/2021/TT-BTC.
 * `gdt_tax/form_mappings/tncn_864_05kk-tt80.json` — 05/KK-TNCN (mã 864), `ct16`…`ct32`, TT80/2021.
 * `gdt_tax/form_mappings/tncn_394_05kk-tt92.json` — 05/KK-TNCN (mã 394), `ct21`…`ct36`, TT92/2015.
+* `gdt_tax/form_mappings/tndn_892_03-tndn_v2.5.1.json` — 03/TNDN (mã 892),
+  63 chỉ tiêu tờ khai chính theo TT80/2021.
+* `gdt_tax/form_mappings/tndn_892_03-tndn_v2.9.4.json` — 03/TNDN (mã 892),
+  65 trường; C7 là bộ thu nhập/tên thuế suất/thuế suất động.
 
-Mỗi mapping khai `form_version = null` (áp cho mọi phiên bản của mã mẫu) vì mọi
-XPath đã kiểm chứng resolve trên các phiên bản hiện có. **Hai bản TNCN là hai
+Ba mapping GTGT/TNCN khai `form_version = null` vì XPath đã kiểm chứng resolve
+trên các phiên bản hiện có. Hai mapping TNDN khai đúng version 2.5.1/2.9.4 và
+không tự áp cho version chưa xác minh. **Hai bản TNCN là hai
 mapping tách biệt theo `form_code`** vì mã chỉ tiêu `[21]`… trùng số nhưng khác ý
 nghĩa giữa TT80 và TT92 (spec §45). Chỉ tiêu không có trong mapping (ví dụ `ct21`
 của mẫu 842 — cờ "không phát sinh", `ct15` của 864) vẫn giữ ``NEED_MAPPING``;
@@ -288,6 +294,10 @@ mẫu/phiên bản khác chưa mapping cũng vậy. Khi mapping có XPath, extra
 
 Mẫu **02/KK-TNCN (TT156/2013)** chưa có mapping vì thư mục hiện tại không có XML
 nào của mẫu đó (không đủ dữ liệu để xác minh XPath).
+
+Mẫu **03/TNDN** chỉ lấy `CTieuTKhaiChinh`; báo cáo tài chính và phụ lục trong
+cùng hồ sơ không bị gán thành tờ khai chính. Chi tiết support matrix và nguồn
+đối chiếu nằm trong `gdt_tax/form_mappings/README.md`.
 
 ### Phân loại theo nội dung (stage 03)
 

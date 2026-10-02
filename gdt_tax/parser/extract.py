@@ -31,7 +31,7 @@ from .xml_reader import (
     parse_xml,
 )
 
-PARSER_VERSION = "declaration-parser-v1"
+PARSER_VERSION = "declaration-parser-v2"
 SCHEMA_VERSION = "parsed-declaration-v1"
 
 #: Node chứa chỉ tiêu tổng hợp trên tờ khai chính (không phải bảng kê chi tiết).
@@ -81,6 +81,35 @@ def _ns_path(path: str, has_ns: bool) -> str:
                      for segment in path.split("/"))
 
 
+def _normalize_mapped_value(raw: str, datatype: str) -> tuple[str | None, str | None]:
+    """Chuẩn hóa theo kiểu khai trong mapping, không ép nhãn text thành số."""
+    if datatype == "string":
+        value = raw.strip()
+        return (value or None), None
+    return normalize_number(raw)
+
+
+def _period_parts(raw: str | None, period_type: str | None) -> tuple[int | None, int | None, int | None]:
+    """Tách năm/tháng/quý khi kiểu kỳ và định dạng đủ rõ; giữ ``raw`` nguyên bản."""
+    if not raw or not period_type:
+        return None, None, None
+    value = raw.strip()
+    kind = period_type.upper()
+    if kind == "Y" and re.fullmatch(r"\d{4}", value):
+        return int(value), None, None
+    month_match = re.fullmatch(r"(\d{1,2})/(\d{4})", value)
+    if kind == "M" and month_match:
+        month = int(month_match.group(1))
+        if 1 <= month <= 12:
+            return int(month_match.group(2)), month, None
+    quarter_match = re.fullmatch(r"(?:Q|QUÝ\s*)?(\d)/(\d{4})", value, re.IGNORECASE)
+    if kind == "Q" and quarter_match:
+        quarter = int(quarter_match.group(1))
+        if 1 <= quarter <= 4:
+            return int(quarter_match.group(2)), None, quarter
+    return None, None, None
+
+
 def _collect_indicators(
     root: etree._Element,
     mapping: FormMapping | None,
@@ -114,7 +143,7 @@ def _collect_indicators(
                 )
                 seen.add(code)
                 continue
-            value, warning = normalize_number(raw)
+            value, warning = _normalize_mapped_value(raw, field.datatype)
             indicators.append(
                 Indicator(
                     code=code,
@@ -225,6 +254,7 @@ def extract_declaration(
     period_type, _ = find_first(root, (".//n:kieuKy",), ns)
     period_from, _ = find_first(root, (".//n:kyKKhaiTuNgay",), ns)
     period_to, _ = find_first(root, (".//n:kyKKhaiDenNgay",), ns)
+    period_year, period_month, period_quarter = _period_parts(period_raw, period_type)
 
     mapping = registry.lookup(form_code, form_version) if registry is not None else None
     indicators = _collect_indicators(root, mapping, ns)
@@ -252,6 +282,9 @@ def extract_declaration(
         period=Period(
             raw=period_raw,
             period_type=period_type,
+            year=period_year,
+            month=period_month,
+            quarter=period_quarter,
             period_from=period_from,
             period_to=period_to,
         ),

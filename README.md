@@ -114,8 +114,8 @@ Cập nhật ngày **27/09/2026**:
 | Báo cáo danh sách tờ khai | Excel 11 cột, lấy từ metadata tra cứu; gộp dữ liệu các lần chạy và chống formula injection |
 | Sửa logic tải/resume/dry-run/metadata | Đã sửa các lỗi trong [REVIEW](docs/development/REVIEW.md); stage 01 còn hardening bảo mật, identity, retry và giới hạn dữ liệu |
 | Phân loại | Có rule metadata cấp hồ sơ và `phan_loai_ho_so.json`; chưa phân loại từng member trong ZIP |
-| Parse tờ khai GTGT/TNCN/TNDN | Chưa triển khai parser chỉ tiêu XML; `parsing.py` hiện đọc bảng HTML tra cứu |
-| Kiểm thử | 347 test, lint và mypy qua trên Linux/Python 3.11; CI Linux 3.10/3.12 cần xem pipeline sau push |
+| Parse tờ khai GTGT/TNCN/TNDN | Đã có parser mapping cho 01/GTGT, hai mẫu 05/KK-TNCN và 03/TNDN mã 892 phiên bản 2.5.1/2.9.4; mẫu khác giữ `NEED_MAPPING` |
+| Kiểm thử | 351 test, lint và mypy qua trên Linux/Python 3.11; CI Linux 3.10/3.12 được kiểm tra trên GitLab sau push |
 | Test thật bằng `.env` | 6/6 hồ sơ, ZIP và XML hợp lệ; chạy lại không tải lại ZIP; cả hai lần không gọi DVC |
 
 Test thật chỉ xác nhận một tài khoản và khoảng `01/09/2018`–`25/10/2018`,
@@ -337,12 +337,13 @@ bản, MST, kỳ, loại nộp, lần bổ sung), danh sách chỉ tiêu kèm `v
 trên tờ khai chính; **không** lấy bảng kê chi tiết. Phân biệt rõ NULL (rỗng/không
 có) với `0`.
 
-Đã có 3 mapping: `01/GTGT` (mã 842, 27 chỉ tiêu), `05/KK-TNCN` TT80 (mã 864) và
-`05/KK-TNCN` TT92 (mã 394). Chạy trên `download/` cho **459/1265 tờ khai
-`MAPPED`** (842: 245, 864: 138, 394: 76). Hai bản TNCN được giữ **riêng** vì mã
-chỉ tiêu trùng số nhưng khác ý nghĩa giữa hai thông tư. Thêm mapping cho
-mẫu/phiên bản khác: xem `gdt_tax/form_mappings/README.md`. Chỉ thêm khi đã đối chiếu XML
-thật; parser không hard-code mẫu biểu.
+Đã có mapping cho `01/GTGT` (mã 842, 27 chỉ tiêu), `05/KK-TNCN` TT80 (mã 864),
+`05/KK-TNCN` TT92 (mã 394) và `03/TNDN` (mã 892). TNDN tách mapping 2.5.1 và
+2.9.4 vì cấu trúc C7 khác nhau. Chạy trên `download/` cho **479/1265 tờ khai
+`MAPPED`** (842: 245, 864: 138, 394: 76, 892: 20). Hai bản TNCN được giữ
+**riêng** vì mã chỉ tiêu trùng số nhưng khác ý nghĩa giữa hai thông tư. Thêm
+mapping cho mẫu/phiên bản khác: xem `gdt_tax/form_mappings/README.md`. Chỉ thêm
+khi đã đối chiếu XML thật; parser không hard-code mẫu biểu.
 
 ### Phân loại và xuất báo cáo
 
@@ -792,7 +793,7 @@ GDT_HEADER_PROFILE=minimal python -m gdt_tax --dry-run
 ## Kiểm thử
 
 ```bash
-python -m unittest discover -s tests -t . -v   # 347 test, chạy offline
+python -m unittest discover -s tests -t . -v   # 351 test, chạy offline
 python -m ruff check .                         # lint
 python -m mypy gdt_tax                         # kiểm tra kiểu (43 file)
 ```

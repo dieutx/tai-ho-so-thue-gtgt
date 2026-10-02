@@ -1,0 +1,534 @@
+{
+  "mapping_id": "TNDN_892_03-TNDN_v2.9.4",
+  "mapping_version": "1",
+  "tax_type": "TNDN",
+  "form_code": "892",
+  "form_version": "2.9.4",
+  "note": "Mẫu 03/TNDN theo Thông tư 80/2021/TT-BTC. Tên chỉ tiêu đối chiếu Phụ lục II trong Công báo/VBHN chính thức; XPath kiểm chứng trên toàn bộ XML mã 892 phiên bản 2.9.4 trong tập dữ liệu cục bộ. Chỉ mapping tờ khai chính CTieuTKhaiChinh, không nhận phụ lục/BCTC.",
+  "detect": {
+    "root": "HSoThueDTu",
+    "namespace": "http://kekhaithue.gdt.gov.vn/TKhaiThue"
+  },
+  "fields": {
+    "accounting_profit_before_cit": {
+      "canonical_name": "accounting_profit_before_cit",
+      "indicator_code": "ctA1",
+      "display_name": "Tổng lợi nhuận kế toán trước thuế thu nhập doanh nghiệp",
+      "official_indicator_name": "Tổng lợi nhuận kế toán trước thuế thu nhập doanh nghiệp",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctA1"
+    },
+    "upward_adjustments_total": {
+      "canonical_name": "upward_adjustments_total",
+      "indicator_code": "ctB1",
+      "display_name": "Điều chỉnh tăng tổng lợi nhuận trước thuế thu nhập doanh nghiệp",
+      "official_indicator_name": "Điều chỉnh tăng tổng lợi nhuận trước thuế thu nhập doanh nghiệp",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB1"
+    },
+    "revenue_upward_adjustment": {
+      "canonical_name": "revenue_upward_adjustment",
+      "indicator_code": "ctB2",
+      "display_name": "Các khoản điều chỉnh tăng doanh thu",
+      "official_indicator_name": "Các khoản điều chỉnh tăng doanh thu",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB2"
+    },
+    "costs_for_revenue_downward_adjustment": {
+      "canonical_name": "costs_for_revenue_downward_adjustment",
+      "indicator_code": "ctB3",
+      "display_name": "Chi phí của phần doanh thu điều chỉnh giảm",
+      "official_indicator_name": "Chi phí của phần doanh thu điều chỉnh giảm",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB3"
+    },
+    "non_deductible_expenses": {
+      "canonical_name": "non_deductible_expenses",
+      "indicator_code": "ctB4",
+      "display_name": "Các khoản chi không được trừ khi xác định thu nhập chịu thuế",
+      "official_indicator_name": "Các khoản chi không được trừ khi xác định thu nhập chịu thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB4"
+    },
+    "foreign_income_tax_paid": {
+      "canonical_name": "foreign_income_tax_paid",
+      "indicator_code": "ctB5",
+      "display_name": "Thuế thu nhập đã nộp cho phần thu nhập nhận được ở nước ngoài",
+      "official_indicator_name": "Thuế thu nhập đã nộp cho phần thu nhập nhận được ở nước ngoài",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB5"
+    },
+    "transfer_pricing_profit_increase": {
+      "canonical_name": "transfer_pricing_profit_increase",
+      "indicator_code": "ctB6",
+      "display_name": "Điều chỉnh tăng lợi nhuận do xác định giá thị trường đối với giao dịch liên kết",
+      "official_indicator_name": "Điều chỉnh tăng lợi nhuận do xác định giá thị trường đối với giao dịch liên kết",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB6"
+    },
+    "other_profit_increase_adjustments": {
+      "canonical_name": "other_profit_increase_adjustments",
+      "indicator_code": "ctB7",
+      "display_name": "Các khoản điều chỉnh làm tăng lợi nhuận trước thuế khác",
+      "official_indicator_name": "Các khoản điều chỉnh làm tăng lợi nhuận trước thuế khác",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB7"
+    },
+    "downward_adjustments_total": {
+      "canonical_name": "downward_adjustments_total",
+      "indicator_code": "ctB8",
+      "display_name": "Điều chỉnh giảm tổng lợi nhuận trước thuế thu nhập doanh nghiệp",
+      "official_indicator_name": "Điều chỉnh giảm tổng lợi nhuận trước thuế thu nhập doanh nghiệp",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB8"
+    },
+    "previously_taxed_revenue_deduction": {
+      "canonical_name": "previously_taxed_revenue_deduction",
+      "indicator_code": "ctB9",
+      "display_name": "Giảm trừ các khoản doanh thu đã tính thuế năm trước",
+      "official_indicator_name": "Giảm trừ các khoản doanh thu đã tính thuế năm trước",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB9"
+    },
+    "costs_for_revenue_upward_adjustment": {
+      "canonical_name": "costs_for_revenue_upward_adjustment",
+      "indicator_code": "ctB10",
+      "display_name": "Chi phí của phần doanh thu điều chỉnh tăng",
+      "official_indicator_name": "Chi phí của phần doanh thu điều chỉnh tăng",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB10"
+    },
+    "carried_forward_disallowed_related_party_interest": {
+      "canonical_name": "carried_forward_disallowed_related_party_interest",
+      "indicator_code": "ctB11",
+      "display_name": "Chi phí lãi vay không được trừ kỳ trước được chuyển sang kỳ này của doanh nghiệp có giao dịch liên kết",
+      "official_indicator_name": "Chi phí lãi vay không được trừ kỳ trước được chuyển sang kỳ này của doanh nghiệp có giao dịch liên kết",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB11"
+    },
+    "other_profit_decrease_adjustments": {
+      "canonical_name": "other_profit_decrease_adjustments",
+      "indicator_code": "ctB12",
+      "display_name": "Các khoản điều chỉnh làm giảm lợi nhuận trước thuế khác",
+      "official_indicator_name": "Các khoản điều chỉnh làm giảm lợi nhuận trước thuế khác",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB12"
+    },
+    "total_taxable_income": {
+      "canonical_name": "total_taxable_income",
+      "indicator_code": "ctB13",
+      "display_name": "Tổng thu nhập chịu thuế",
+      "official_indicator_name": "Tổng thu nhập chịu thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB13"
+    },
+    "business_taxable_income": {
+      "canonical_name": "business_taxable_income",
+      "indicator_code": "ctB14",
+      "display_name": "Thu nhập chịu thuế từ hoạt động sản xuất kinh doanh",
+      "official_indicator_name": "Thu nhập chịu thuế từ hoạt động sản xuất kinh doanh",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB14"
+    },
+    "real_estate_taxable_income": {
+      "canonical_name": "real_estate_taxable_income",
+      "indicator_code": "ctB15",
+      "display_name": "Thu nhập chịu thuế từ hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Thu nhập chịu thuế từ hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctB15"
+    },
+    "business_taxable_income_c1": {
+      "canonical_name": "business_taxable_income_c1",
+      "indicator_code": "ctC1",
+      "display_name": "Thu nhập chịu thuế",
+      "official_indicator_name": "Thu nhập chịu thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC1"
+    },
+    "tax_exempt_income": {
+      "canonical_name": "tax_exempt_income",
+      "indicator_code": "ctC2",
+      "display_name": "Thu nhập miễn thuế",
+      "official_indicator_name": "Thu nhập miễn thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC2"
+    },
+    "loss_transfer_and_offset_total": {
+      "canonical_name": "loss_transfer_and_offset_total",
+      "indicator_code": "ctC3",
+      "display_name": "Chuyển lỗ và bù trừ lãi, lỗ",
+      "official_indicator_name": "Chuyển lỗ và bù trừ lãi, lỗ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC3"
+    },
+    "business_losses_carried_forward": {
+      "canonical_name": "business_losses_carried_forward",
+      "indicator_code": "ctC3a",
+      "display_name": "Lỗ từ hoạt động sản xuất kinh doanh được chuyển trong kỳ",
+      "official_indicator_name": "Lỗ từ hoạt động sản xuất kinh doanh được chuyển trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC3a"
+    },
+    "real_estate_losses_offset": {
+      "canonical_name": "real_estate_losses_offset",
+      "indicator_code": "ctC3b",
+      "display_name": "Lỗ từ chuyển nhượng bất động sản được bù trừ với lãi của hoạt động sản xuất kinh doanh",
+      "official_indicator_name": "Lỗ từ chuyển nhượng bất động sản được bù trừ với lãi của hoạt động sản xuất kinh doanh",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC3b"
+    },
+    "assessable_income": {
+      "canonical_name": "assessable_income",
+      "indicator_code": "ctC4",
+      "display_name": "Thu nhập tính thuế",
+      "official_indicator_name": "Thu nhập tính thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC4"
+    },
+    "science_technology_fund_allocation": {
+      "canonical_name": "science_technology_fund_allocation",
+      "indicator_code": "ctC5",
+      "display_name": "Trích lập quỹ khoa học công nghệ (nếu có)",
+      "official_indicator_name": "Trích lập quỹ khoa học công nghệ (nếu có)",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC5"
+    },
+    "assessable_income_after_fund": {
+      "canonical_name": "assessable_income_after_fund",
+      "indicator_code": "ctC6",
+      "display_name": "Thu nhập tính thuế sau khi đã trích lập quỹ khoa học công nghệ",
+      "official_indicator_name": "Thu nhập tính thuế sau khi đã trích lập quỹ khoa học công nghệ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC6"
+    },
+    "primary_tax_rate_name": {
+      "canonical_name": "primary_tax_rate_name",
+      "indicator_code": "ctC7_tenThueSuat",
+      "display_name": "Tên thuế suất áp dụng tại chỉ tiêu C7",
+      "official_indicator_name": "Tên thuế suất áp dụng tại chỉ tiêu C7",
+      "datatype": "string",
+      "xpath": "CTieuTKhaiChinh/ctC7_tenThueSuat"
+    },
+    "primary_tax_rate": {
+      "canonical_name": "primary_tax_rate",
+      "indicator_code": "ctC7_thueSuat",
+      "display_name": "Thuế suất áp dụng tại chỉ tiêu C7 (%)",
+      "official_indicator_name": "Thuế suất áp dụng tại chỉ tiêu C7 (%)",
+      "datatype": "percentage",
+      "xpath": "CTieuTKhaiChinh/ctC7_thueSuat"
+    },
+    "taxable_income_primary_rate": {
+      "canonical_name": "taxable_income_primary_rate",
+      "indicator_code": "ctC7_thuNhap",
+      "display_name": "Thu nhập tính thuế áp dụng thuế suất tại chỉ tiêu C7",
+      "official_indicator_name": "Thu nhập tính thuế áp dụng thuế suất tại chỉ tiêu C7",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC7_thuNhap"
+    },
+    "taxable_income_other_rate": {
+      "canonical_name": "taxable_income_other_rate",
+      "indicator_code": "ctC8",
+      "display_name": "Thu nhập tính thuế tính theo thuế suất không ưu đãi khác",
+      "official_indicator_name": "Thu nhập tính thuế tính theo thuế suất không ưu đãi khác",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC8"
+    },
+    "other_tax_rate": {
+      "canonical_name": "other_tax_rate",
+      "indicator_code": "ctC8a",
+      "display_name": "Thuế suất không ưu đãi khác (%)",
+      "official_indicator_name": "Thuế suất không ưu đãi khác (%)",
+      "datatype": "percentage",
+      "xpath": "CTieuTKhaiChinh/ctC8a"
+    },
+    "non_incentive_cit": {
+      "canonical_name": "non_incentive_cit",
+      "indicator_code": "ctC9",
+      "display_name": "Thuế TNDN từ hoạt động sản xuất kinh doanh tính theo thuế suất không ưu đãi",
+      "official_indicator_name": "Thuế TNDN từ hoạt động sản xuất kinh doanh tính theo thuế suất không ưu đãi",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC9"
+    },
+    "cit_incentives_total": {
+      "canonical_name": "cit_incentives_total",
+      "indicator_code": "ctC10",
+      "display_name": "Thuế TNDN được ưu đãi theo Luật thuế TNDN",
+      "official_indicator_name": "Thuế TNDN được ưu đãi theo Luật thuế TNDN",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC10"
+    },
+    "preferential_rate_cit_difference": {
+      "canonical_name": "preferential_rate_cit_difference",
+      "indicator_code": "ctC11",
+      "display_name": "Thuế TNDN chênh lệch do áp dụng mức thuế suất ưu đãi",
+      "official_indicator_name": "Thuế TNDN chênh lệch do áp dụng mức thuế suất ưu đãi",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC11"
+    },
+    "cit_exempted": {
+      "canonical_name": "cit_exempted",
+      "indicator_code": "ctC12",
+      "display_name": "Thuế TNDN được miễn trong kỳ",
+      "official_indicator_name": "Thuế TNDN được miễn trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC12"
+    },
+    "cit_reduced": {
+      "canonical_name": "cit_reduced",
+      "indicator_code": "ctC13",
+      "display_name": "Thuế TNDN được giảm trong kỳ",
+      "official_indicator_name": "Thuế TNDN được giảm trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC13"
+    },
+    "treaty_cit_exemption_reduction": {
+      "canonical_name": "treaty_cit_exemption_reduction",
+      "indicator_code": "ctC14",
+      "display_name": "Thuế TNDN được miễn, giảm theo Hiệp định thuế",
+      "official_indicator_name": "Thuế TNDN được miễn, giảm theo Hiệp định thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC14"
+    },
+    "period_specific_cit_exemption_reduction": {
+      "canonical_name": "period_specific_cit_exemption_reduction",
+      "indicator_code": "ctC15",
+      "display_name": "Thuế TNDN được miễn, giảm theo từng thời kỳ",
+      "official_indicator_name": "Thuế TNDN được miễn, giảm theo từng thời kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC15"
+    },
+    "foreign_tax_credit": {
+      "canonical_name": "foreign_tax_credit",
+      "indicator_code": "ctC16",
+      "display_name": "Thuế thu nhập đã nộp ở nước ngoài được trừ trong kỳ tính thuế",
+      "official_indicator_name": "Thuế thu nhập đã nộp ở nước ngoài được trừ trong kỳ tính thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC16"
+    },
+    "business_cit_payable": {
+      "canonical_name": "business_cit_payable",
+      "indicator_code": "ctC17",
+      "display_name": "Thuế TNDN phải nộp của hoạt động sản xuất kinh doanh",
+      "official_indicator_name": "Thuế TNDN phải nộp của hoạt động sản xuất kinh doanh",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctC17"
+    },
+    "real_estate_taxable_income_d1": {
+      "canonical_name": "real_estate_taxable_income_d1",
+      "indicator_code": "ctD1",
+      "display_name": "Thu nhập chịu thuế từ hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Thu nhập chịu thuế từ hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctD1"
+    },
+    "real_estate_losses_carried_forward": {
+      "canonical_name": "real_estate_losses_carried_forward",
+      "indicator_code": "ctD2",
+      "display_name": "Lỗ từ hoạt động chuyển nhượng bất động sản được chuyển trong kỳ",
+      "official_indicator_name": "Lỗ từ hoạt động chuyển nhượng bất động sản được chuyển trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctD2"
+    },
+    "real_estate_assessable_income": {
+      "canonical_name": "real_estate_assessable_income",
+      "indicator_code": "ctD3",
+      "display_name": "Thu nhập tính thuế từ hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Thu nhập tính thuế từ hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctD3"
+    },
+    "real_estate_science_technology_fund_allocation": {
+      "canonical_name": "real_estate_science_technology_fund_allocation",
+      "indicator_code": "ctD4",
+      "display_name": "Trích lập quỹ khoa học công nghệ cho hoạt động chuyển nhượng bất động sản (nếu có)",
+      "official_indicator_name": "Trích lập quỹ khoa học công nghệ cho hoạt động chuyển nhượng bất động sản (nếu có)",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctD4"
+    },
+    "real_estate_income_after_fund": {
+      "canonical_name": "real_estate_income_after_fund",
+      "indicator_code": "ctD5",
+      "display_name": "Thu nhập tính thuế sau khi trích lập quỹ khoa học công nghệ của hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Thu nhập tính thuế sau khi trích lập quỹ khoa học công nghệ của hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctD5"
+    },
+    "real_estate_cit_before_incentive": {
+      "canonical_name": "real_estate_cit_before_incentive",
+      "indicator_code": "ctD6",
+      "display_name": "Thuế TNDN phải nộp của hoạt động chuyển nhượng bất động sản trong kỳ",
+      "official_indicator_name": "Thuế TNDN phải nộp của hoạt động chuyển nhượng bất động sản trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctD6"
+    },
+    "social_housing_cit_incentive": {
+      "canonical_name": "social_housing_cit_incentive",
+      "indicator_code": "ctD7",
+      "display_name": "Thuế TNDN chênh lệch do áp dụng thuế suất ưu đãi đối với dự án nhà ở xã hội",
+      "official_indicator_name": "Thuế TNDN chênh lệch do áp dụng thuế suất ưu đãi đối với dự án nhà ở xã hội",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctD7"
+    },
+    "real_estate_cit_payable": {
+      "canonical_name": "real_estate_cit_payable",
+      "indicator_code": "ctD8",
+      "display_name": "Thuế TNDN của hoạt động chuyển nhượng bất động sản còn phải nộp kỳ này",
+      "official_indicator_name": "Thuế TNDN của hoạt động chuyển nhượng bất động sản còn phải nộp kỳ này",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctD8"
+    },
+    "cit_finalized_total": {
+      "canonical_name": "cit_finalized_total",
+      "indicator_code": "ctE",
+      "display_name": "Số thuế TNDN phải nộp quyết toán trong kỳ",
+      "official_indicator_name": "Số thuế TNDN phải nộp quyết toán trong kỳ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctE"
+    },
+    "business_cit_finalized": {
+      "canonical_name": "business_cit_finalized",
+      "indicator_code": "ctE1",
+      "display_name": "Thuế TNDN của hoạt động sản xuất kinh doanh",
+      "official_indicator_name": "Thuế TNDN của hoạt động sản xuất kinh doanh",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctE1"
+    },
+    "real_estate_cit_finalized": {
+      "canonical_name": "real_estate_cit_finalized",
+      "indicator_code": "ctE2",
+      "display_name": "Thuế TNDN từ hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Thuế TNDN từ hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctE2"
+    },
+    "real_estate_transfer_cit": {
+      "canonical_name": "real_estate_transfer_cit",
+      "indicator_code": "ctE3",
+      "display_name": "Thuế TNDN từ hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Thuế TNDN từ hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctE3"
+    },
+    "infrastructure_progress_cit": {
+      "canonical_name": "infrastructure_progress_cit",
+      "indicator_code": "ctE4",
+      "display_name": "Thuế TNDN từ hoạt động chuyển nhượng cơ sở hạ tầng, nhà có thu tiền theo tiến độ",
+      "official_indicator_name": "Thuế TNDN từ hoạt động chuyển nhượng cơ sở hạ tầng, nhà có thu tiền theo tiến độ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctE4"
+    },
+    "other_cit_payable": {
+      "canonical_name": "other_cit_payable",
+      "indicator_code": "ctE5",
+      "display_name": "Thuế TNDN phải nộp khác (nếu có)",
+      "official_indicator_name": "Thuế TNDN phải nộp khác (nếu có)",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctE5"
+    },
+    "science_technology_fund_recovery_cit": {
+      "canonical_name": "science_technology_fund_recovery_cit",
+      "indicator_code": "ctE6",
+      "display_name": "Thuế TNDN từ xử lý Quỹ phát triển khoa học công nghệ",
+      "official_indicator_name": "Thuế TNDN từ xử lý Quỹ phát triển khoa học công nghệ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctE6"
+    },
+    "cit_provisionally_paid_total": {
+      "canonical_name": "cit_provisionally_paid_total",
+      "indicator_code": "ctG",
+      "display_name": "Số thuế TNDN đã tạm nộp",
+      "official_indicator_name": "Số thuế TNDN đã tạm nộp",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctG"
+    },
+    "business_cit_overpayment_brought_forward": {
+      "canonical_name": "business_cit_overpayment_brought_forward",
+      "indicator_code": "ctG1",
+      "display_name": "Thuế TNDN nộp thừa kỳ trước chuyển sang kỳ này",
+      "official_indicator_name": "Thuế TNDN nộp thừa kỳ trước chuyển sang kỳ này",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctG1"
+    },
+    "business_cit_provisionally_paid": {
+      "canonical_name": "business_cit_provisionally_paid",
+      "indicator_code": "ctG2",
+      "display_name": "Thuế TNDN đã tạm nộp trong năm",
+      "official_indicator_name": "Thuế TNDN đã tạm nộp trong năm",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctG2"
+    },
+    "real_estate_overpayment_brought_forward": {
+      "canonical_name": "real_estate_overpayment_brought_forward",
+      "indicator_code": "ctG3",
+      "display_name": "Thuế TNDN nộp thừa kỳ trước chuyển sang kỳ này của hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Thuế TNDN nộp thừa kỳ trước chuyển sang kỳ này của hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctG3"
+    },
+    "real_estate_cit_provisionally_paid": {
+      "canonical_name": "real_estate_cit_provisionally_paid",
+      "indicator_code": "ctG4",
+      "display_name": "Thuế TNDN đã tạm nộp trong năm của hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Thuế TNDN đã tạm nộp trong năm của hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctG4"
+    },
+    "infrastructure_progress_cit_prepaid": {
+      "canonical_name": "infrastructure_progress_cit_prepaid",
+      "indicator_code": "ctG5",
+      "display_name": "Thuế TNDN đã tạm nộp của hoạt động chuyển nhượng cơ sở hạ tầng, nhà có thu tiền theo tiến độ",
+      "official_indicator_name": "Thuế TNDN đã tạm nộp của hoạt động chuyển nhượng cơ sở hạ tầng, nhà có thu tiền theo tiến độ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctG5"
+    },
+    "business_cit_payment_difference": {
+      "canonical_name": "business_cit_payment_difference",
+      "indicator_code": "ctH1",
+      "display_name": "Chênh lệch giữa số thuế phải nộp và số thuế đã tạm nộp trong năm của hoạt động sản xuất kinh doanh",
+      "official_indicator_name": "Chênh lệch giữa số thuế phải nộp và số thuế đã tạm nộp trong năm của hoạt động sản xuất kinh doanh",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctH1"
+    },
+    "real_estate_cit_payment_difference": {
+      "canonical_name": "real_estate_cit_payment_difference",
+      "indicator_code": "ctH2",
+      "display_name": "Chênh lệch giữa số thuế phải nộp và số thuế đã tạm nộp trong năm của hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Chênh lệch giữa số thuế phải nộp và số thuế đã tạm nộp trong năm của hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctH2"
+    },
+    "infrastructure_progress_cit_payment_difference": {
+      "canonical_name": "infrastructure_progress_cit_payment_difference",
+      "indicator_code": "ctH3",
+      "display_name": "Chênh lệch giữa số thuế phải nộp và số thuế đã tạm nộp của hoạt động chuyển nhượng cơ sở hạ tầng, nhà có thu tiền theo tiến độ",
+      "official_indicator_name": "Chênh lệch giữa số thuế phải nộp và số thuế đã tạm nộp của hoạt động chuyển nhượng cơ sở hạ tầng, nhà có thu tiền theo tiến độ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctH3"
+    },
+    "cit_remaining_total": {
+      "canonical_name": "cit_remaining_total",
+      "indicator_code": "ctI",
+      "display_name": "Số thuế TNDN còn phải nộp đến thời hạn nộp hồ sơ khai quyết toán thuế",
+      "official_indicator_name": "Số thuế TNDN còn phải nộp đến thời hạn nộp hồ sơ khai quyết toán thuế",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctI"
+    },
+    "business_cit_remaining": {
+      "canonical_name": "business_cit_remaining",
+      "indicator_code": "ctI1",
+      "display_name": "Thuế TNDN còn phải nộp của hoạt động sản xuất kinh doanh",
+      "official_indicator_name": "Thuế TNDN còn phải nộp của hoạt động sản xuất kinh doanh",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctI1"
+    },
+    "real_estate_cit_remaining": {
+      "canonical_name": "real_estate_cit_remaining",
+      "indicator_code": "ctI2",
+      "display_name": "Thuế TNDN còn phải nộp của hoạt động chuyển nhượng bất động sản",
+      "official_indicator_name": "Thuế TNDN còn phải nộp của hoạt động chuyển nhượng bất động sản",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/ctI2"
+    }
+  }
+}

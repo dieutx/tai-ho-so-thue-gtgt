@@ -95,6 +95,8 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(decl.taxpayer.tax_code, "0000000000")
         self.assertEqual(decl.period.raw, "06/2025")
         self.assertEqual(decl.period.period_type, "M")
+        self.assertEqual(decl.period.year, 2025)
+        self.assertEqual(decl.period.month, 6)
         self.assertIn("MAPPING_NOT_FOUND", decl.warnings)
 
     def test_indicator_values_and_provenance(self) -> None:
@@ -298,6 +300,55 @@ class TncnGoldenTests(unittest.TestCase):
         self.assertEqual(tt80.indicator("ct21").canonical_name, "taxable_income_total")
 
 
+class TndnGoldenTests(unittest.TestCase):
+    """Golden cho 03/TNDN mã 892; hai version có cấu trúc C7 khác nhau."""
+
+    def _check(self, stem: str) -> None:
+        data = (FIXTURES / f"{stem}.xml").read_bytes()
+        golden = json.loads((FIXTURES / f"{stem}.golden.json").read_text("utf-8"))
+        decl = extract_declaration(data, registry=load_registry())
+        self.assertEqual(decl.form_code, golden["form_code"])
+        self.assertEqual(decl.form_version, golden["form_version"])
+        self.assertEqual(decl.status, golden["status"])
+        self.assertEqual(decl.mapping_id, golden["mapping_id"])
+        self.assertEqual(decl.filing_type, golden["filing_type"])
+        self.assertEqual(decl.supplement_number, golden["supplement_number"])
+        self.assertEqual(decl.taxpayer.tax_code, golden["taxpayer_tax_code"])
+        self.assertEqual(decl.period.raw, golden["period_raw"])
+        self.assertEqual(decl.period.period_type, golden["period_type"])
+        self.assertEqual(decl.period.year, golden["period_year"])
+        self.assertEqual(decl.period.period_from, golden["period_from"])
+        self.assertEqual(decl.period.period_to, golden["period_to"])
+        for code, expected in golden["indicators"].items():
+            indicator = decl.indicator(code)
+            self.assertIsNotNone(indicator, f"thiếu chỉ tiêu {code}")
+            self.assertEqual(indicator.value, expected, f"sai giá trị {code}")
+            self.assertEqual(indicator.status, "MAPPED")
+        # BCTC/phụ lục có mã trùng không được ghi đè tờ khai chính.
+        self.assertEqual(decl.indicator("ctA1").value, "-1000")
+        self.assertNotIn("999999999", [item.value for item in decl.indicators])
+
+    def test_v2_5_1_official(self) -> None:
+        self._check("tndn_892_03tndn_v2.5.1")
+
+    def test_v2_9_4_supplemental_and_dynamic_c7(self) -> None:
+        self._check("tndn_892_03tndn_v2.9.4")
+        decl = extract_declaration(
+            (FIXTURES / "tndn_892_03tndn_v2.9.4.xml").read_bytes(),
+            registry=load_registry(),
+        )
+        label = decl.indicator("ctC7_tenThueSuat")
+        self.assertEqual(label.value_type, "string")
+        self.assertEqual(label.value, "Thuế suất phổ thông")
+        self.assertEqual(label.warnings, [])
+
+    def test_unverified_892_version_is_not_mapped(self) -> None:
+        data = (FIXTURES / "tndn_892_03tndn_v2.9.4.xml").read_bytes()
+        decl = extract_declaration(data.replace(b"2.9.4", b"9.9.9"), registry=load_registry())
+        self.assertEqual(decl.status, "NEED_MAPPING")
+        self.assertIn("MAPPING_NOT_FOUND", decl.warnings)
+
+
 class NormalizeNumberTests(unittest.TestCase):
     def test_vietnamese_and_western_formats(self) -> None:
         self.assertEqual(normalize_number("1.234.567")[0], "1234567")
@@ -354,6 +405,19 @@ class RegistryTests(unittest.TestCase):
         self.assertIsNotNone(mapping)
         self.assertEqual(mapping.tax_type, "GTGT")
         self.assertEqual(mapping.field_for_code("ct43").canonical_name, "vat_carried_forward")
+
+    def test_default_registry_contains_tndn_892_verified_versions(self) -> None:
+        registry = load_registry()
+        old = registry.lookup("892", "2.5.1")
+        current = registry.lookup("892", "2.9.4")
+        self.assertIsNotNone(old)
+        self.assertIsNotNone(current)
+        self.assertEqual(old.tax_type, "TNDN")
+        self.assertEqual(old.field_for_code("ctC7").canonical_name, "taxable_income_rate_20")
+        self.assertEqual(
+            current.field_for_code("ctC7_thuNhap").canonical_name,
+            "taxable_income_primary_rate",
+        )
 
 
 if __name__ == "__main__":
