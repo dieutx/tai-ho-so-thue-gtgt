@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HSoThueDTu xmlns="http://kekhaithue.gdt.gov.vn/TKhaiThue" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <HSoKhaiThue id="ID_1">
+    <TTinChung>
+      <TTinDVu><maDVu>HTKK</maDVu><pbanDVu>3.4.0</pbanDVu></TTinDVu>
+      <TTinTKhaiThue>
+        <TKhaiThue>
+          <maTKhai>394</maTKhai>
+          <tenTKhai>Tờ khai khấu trừ thuế TNCN (TT92/2015)</tenTKhai>
+          <pbanTKhaiXML>2.1.6</pbanTKhaiXML>
+          <loaiTKhai>C</loaiTKhai>
+          <soLan>0</soLan>
+          <KyKKhaiThue><kieuKy>M</kieuKy><kyKKhai>06/2021</kyKKhai></KyKKhaiThue>
+        </TKhaiThue>
+        <NNT><mst>0000000000</mst><tenNNT>CÔNG TY TNHH MẪU TỔNG HỢP</tenNNT></NNT>
+      </TTinTKhaiThue>
+    </TTinChung>
+    <CTieuTKhaiChinh>
+      <ct21>20</ct21>
+      <ct22>18</ct22>
+      <ct23>2</ct23>
+      <ct24>2</ct24>
+      <ct25>0</ct25>
+      <ct26>1200000</ct26>
+      <ct27>1100000</ct27>
+      <ct28>0</ct28>
+      <ct29>120000</ct29>
+      <ct30>110000</ct30>
+      <ct31>0</ct31>
+      <ct32>5000</ct32>
+      <ct33>4000</ct33>
+      <ct34>0</ct34>
+      <ct35>0</ct35>
+      <ct36>0</ct36>
+    </CTieuTKhaiChinh>
+  </HSoKhaiThue>
+</HSoThueDTu>

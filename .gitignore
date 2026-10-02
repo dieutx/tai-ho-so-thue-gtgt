@@ -7,6 +7,7 @@ dist/
 .venv/
 .venv-review/
 .cache/
+:memory:.ses
 venv/
 .mypy_cache/
 .ruff_cache/

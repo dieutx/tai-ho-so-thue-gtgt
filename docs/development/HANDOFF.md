@@ -34,10 +34,29 @@ phát triển từng lần, kiểm thử thật và chuyển máy không mất t
   của CLI để test Windows không giữ file mở.
 - Có REVIEW, bản đồ kiến trúc, master prompt và 9 prompt stage.
 
-**Chưa xong:** stage 01 còn hardening; chưa có inventory từng file trong ZIP,
-classifier nội dung hoặc parser chỉ tiêu GTGT/TNCN/TNDN. `parsing.py` đọc bảng
-HTML tra cứu, không phải parser XML thuế. Một nhóm của hồ sơ không chứng minh
-mọi file đính kèm có cùng nhóm. DVC vẫn hoãn, chưa xác minh lại cổng hiện tại.
+**Đã thêm (stage 02, 02/10/2026):** `gdt_tax/inventory.py` — quét đệ quy
+ZIP/member, SHA-256, profile cấu trúc XML, manifest + báo cáo discovery, CLI
+offline (`python -m gdt_tax.inventory <folder> --output <dir>`). Chạy trên
+`download/`: 1262 file, 1268 member, 96 signature/92 skeleton.
+
+**Đã thêm (stage 04–05, 02/10/2026):** `gdt_tax/parser/` — khung parser tách khỏi
+mapping (`gdt_tax/form_mappings`), reader an toàn, trích metadata + chỉ tiêu tổng hợp kèm
+provenance XPath, phân biệt NULL/0, CLI offline
+(`python -m gdt_tax.parser.cli <folder> --output <dir>`). Mapping đầu tiên
+ba mapping (`gtgt_842_01-gtgt`, `tncn_864_05kk-tt80`, `tncn_394_05kk-tt92`) dựng
+từ logic VBA người dùng cung cấp, kèm fixture ẩn danh + golden JSON trong
+`tests/fixtures/`. Chạy trên `download/`: 1265 tờ khai, 0 lỗi, **459 `MAPPED`**
+(842: 245, 864: 138, 394: 76), phần còn lại `NEED_MAPPING` (chưa viết mapping).
+Mẫu 02/KK-TNCN (TT156) chưa làm vì không có XML nào trong thư mục.
+
+**Đã thêm (stage 03 + 08, 02/10/2026):** `gdt_tax/classify.py` (phân loại từng
+artifact theo nội dung) và `gdt_tax/export.py` (Excel 11 sheet + CSV + lọc + audit
+log). Chạy `download/`: 1265 artifact phân loại; workbook 26213 dòng chỉ tiêu.
+
+**Chưa xong:** stage 01 còn hardening; stage 02 còn nối ZIP↔hồ sơ khi tên không
+khớp metadata; chưa có mapping TNDN (892) và quyết toán TNCN (953) — cần logic
+XPath. `parsing.py` đọc bảng HTML tra cứu, không phải parser XML thuế. DVC vẫn
+hoãn, chưa xác minh lại cổng hiện tại.
 
 ## 2. Quá trình và bằng chứng kiểm thử
 
@@ -52,6 +71,8 @@ mọi file đính kèm có cùng nhóm. DVC vẫn hoãn, chưa xác minh lại c
    gọi DVC, metadata không tăng trùng. Cập nhật README và bàn giao trước commit/push.
 6. Ngày 02/10/2026, tích hợp báo cáo Excel trên nền GitLab: 298 test OK (6 skip
    backend tùy chọn), ruff và mypy qua trên Linux/Python 3.11.
+7. Cùng ngày, kiểm chứng inventory/parser/classify/export trên `download/`, sửa
+   vòng lặp tự quét workbook đầu ra; 347 test OK, ruff/mypy qua 43 file.
 
 Chi tiết và giới hạn trong [REVIEW](REVIEW.md). Chưa kiểm tra lại CI Linux
 Python 3.10/3.12; xem pipeline GitLab của commit sau push, không suy ra CI xanh
@@ -166,6 +187,10 @@ DVC cần một nhiệm vụ riêng ở stage 09, không bật chỉ để trán
 | ZIP, metadata merge, Excel, index nhóm | `storage.py`, `tests/test_storage.py` |
 | Phân nhóm từ metadata | `classification.py`, `tests/test_classification.py` |
 | Raw log/dump, HTTP/retry | `traffic.py`, `http.py`, các test tương ứng |
+| Kiểm kê ZIP/member, profile cấu trúc XML, manifest, discovery | `inventory.py`, `tests/test_inventory.py` |
+| Khung parser, reader an toàn, registry mapping, trích chỉ tiêu | `parser/`, `gdt_tax/form_mappings/README.md`, `tests/test_parser.py` |
+| Phân loại nội dung artifact | `classify.py`, `tests/test_classify.py` |
+| Xuất Excel đa sheet/CSV, truy vấn | `export.py`, `tests/test_export.py` |
 | Việc chưa làm và hướng triển khai | `REVIEW.md`, `README.md` trong thư mục này, `prompts/` |
 
 ## 6. Nhịp làm việc mỗi lần
@@ -182,14 +207,17 @@ DVC cần một nhiệm vụ riêng ở stage 09, không bật chỉ để trán
    staged không có secrets/data thật. Commit mô tả hành vi và kiểm chứng;
    push khi được yêu cầu, kiểm tra remote và CI. Không force push.
 
-Tiếp theo ưu tiên phần còn thiếu **stage 01** trong REVIEW: bảo vệ log/dump,
-giới hạn ZIP/XML, identity/resume, auth/retry/config. Sau đó 02 inventory → 03
-classifier → 04 parser core → 05 một mẫu GTGT có fixture → 06 TNCN → 07 TNDN
-→ 08 export. Stage 09 DVC hoãn và không chặn 02–08.
+Đã xong 02 (inventory), 03 (classify), 04–05 (parser + GTGT), 06 (TNCN 864/394),
+08 (export). Tiếp theo: **stage 07 TNDN (892)** và quyết toán TNCN (953) — cần
+logic XPath như các mapping đã có; hoàn tất phần còn thiếu **stage 01** (bảo vệ
+log/dump, identity/resume) và **stage 02** (nối ZIP↔hồ sơ theo danh mục). Stage
+09 DVC hoãn và không chặn các stage còn lại. Chạy `python -m gdt_tax.inventory download --output download`
+để sinh `manifest_artifact.json` và `bao_cao_discovery.md` làm đầu vào cho stage 03;
+dùng phần “Điểm cần xác nhận”/“Câu hỏi mở” trong báo cáo để hỏi người dùng.
 
-Các mẫu thật vừa thấy: `04/GTGT`, `02TH`, `BC26/AC`. Cần inventory và fixture
-ẩn danh trước khi thêm rule/parser; hiện hai mẫu sau còn UNKNOWN. Không lấy
-kết quả 6/6 tải xuống làm bằng chứng parser hay phân loại nội dung đã hoàn thành.
+Inventory đã xác nhận nhiều mẫu nhưng mới có mapping 842/864/394. Trước khi thêm
+TNDN 892 hoặc TNCN 953, phải tạo fixture ẩn danh và đối chiếu XPath/chỉ tiêu;
+không lấy kết quả tải thành công làm bằng chứng parser đã đúng.
 
 Prompt ngắn để mở phiên làm việc trên máy mới (gửi kèm master + stage 01):
 

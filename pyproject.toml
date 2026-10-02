@@ -48,9 +48,16 @@ Issues = "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/issues"
 
 [project.scripts]
 gdt-tax = "gdt_tax.cli:main"
+gdt-inventory = "gdt_tax.inventory:main"
+gdt-parse = "gdt_tax.parser.cli:main"
+gdt-classify = "gdt_tax.classify:main"
+gdt-export = "gdt_tax.export:main"
 
 [tool.setuptools.packages.find]
 include = ["gdt_tax*"]
+
+[tool.setuptools.package-data]
+gdt_tax = ["form_mappings/*.json", "form_mappings/*.md"]
 
 [tool.ruff]
 line-length = 100

@@ -115,7 +115,7 @@ Cập nhật ngày **27/09/2026**:
 | Sửa logic tải/resume/dry-run/metadata | Đã sửa các lỗi trong [REVIEW](docs/development/REVIEW.md); stage 01 còn hardening bảo mật, identity, retry và giới hạn dữ liệu |
 | Phân loại | Có rule metadata cấp hồ sơ và `phan_loai_ho_so.json`; chưa phân loại từng member trong ZIP |
 | Parse tờ khai GTGT/TNCN/TNDN | Chưa triển khai parser chỉ tiêu XML; `parsing.py` hiện đọc bảng HTML tra cứu |
-| Kiểm thử | 298 test, lint và mypy qua trên Linux/Python 3.11; CI Linux 3.10/3.12 cần xem pipeline sau push |
+| Kiểm thử | 347 test, lint và mypy qua trên Linux/Python 3.11; CI Linux 3.10/3.12 cần xem pipeline sau push |
 | Test thật bằng `.env` | 6/6 hồ sơ, ZIP và XML hợp lệ; chạy lại không tải lại ZIP; cả hai lần không gọi DVC |
 
 Test thật chỉ xác nhận một tài khoản và khoảng `01/09/2018`–`25/10/2018`,
@@ -292,6 +292,76 @@ Mã thoát: `0` thành công, `1` thiếu hồ sơ/lỗi tra cứu/có đoạn n
 `2` lỗi cấu hình. Nếu chưa cấu hình ngày, mặc định lấy từ đầu tháng chứa ngày
 trước cutoff đến ngày trước cutoff (`01/06/2025`–`30/06/2025` với cutoff mặc định).
 `.env.example` dùng tháng 06/2025; `.env` có sẵn của bạn không tự được sửa.
+
+### Kiểm kê và discovery (offline, chưa parse chỉ tiêu)
+
+Trước khi viết parser, chạy bước discovery để biết có những mẫu/phiên bản/cấu
+trúc XML nào và cái gì cần xác nhận. Lệnh **chỉ đọc**, không sửa file nguồn,
+không cần tài khoản/CAPTCHA/mạng:
+
+```bash
+# Quét đệ quy thư mục tải về, ghi manifest + báo cáo vào cùng thư mục
+python -m gdt_tax.inventory download --output download
+
+# Bỏ cache, băm lại toàn bộ; hoặc chỉ ghi JSON
+python -m gdt_tax.inventory download --rehash
+python -m gdt_tax.inventory download --json-only
+```
+
+Kết quả (thêm vào thư mục output):
+
+* `manifest_artifact.json` — mỗi file/member: `artifact_id`, container, định
+dạng, kích thước, SHA-256, trạng thái, profile XML (root/namespace, mã mẫu,
+phiên bản, kỳ, MST, mã tham chiếu, `structure_signature`, `structure_skeleton`).
+* `bao_cao_discovery.md` / `.json` — tổng quan, mã mẫu/phiên bản phát hiện, gợi ý
+  nhóm thuế, trạng thái tiếp nhận từ metadata, **điểm cần xác nhận** và câu hỏi mở.
+
+Lưu ý: gợi ý nhóm thuế và mã mẫu ở bước này là *heuristic cho discovery*, **chưa**
+phải mapping chỉ tiêu và **không** được dùng làm kết quả nghiệp vụ cuối. Báo cáo
+không chứa chỉ tiêu thuế, chỉ chứa metadata/đường dẫn nguồn.
+
+### Parse chỉ tiêu tổng hợp (offline)
+
+Sau khi có manifest, parse chỉ tiêu tổng hợp của từng XML. Chỉ tiêu được gán tên
+chuẩn theo mapping trong `gdt_tax/form_mappings/`; **chưa có mapping thì giữ
+`NEED_MAPPING` và `canonical_name = null` — không tự đoán ý nghĩa thẻ**:
+
+```bash
+python -m gdt_tax.parser.cli download --output download
+```
+
+Kết quả `parsed_declarations.json`: mỗi tờ khai có metadata chung (mẫu, phiên
+bản, MST, kỳ, loại nộp, lần bổ sung), danh sách chỉ tiêu kèm `value`/`raw_value`,
+`xpath` (truy vết), `canonical_name` (nếu đã mapping), và `source_zip` /
+`source_inner_file` / `source_sha256` để truy ngược. Chỉ lấy chỉ tiêu **tổng hợp**
+trên tờ khai chính; **không** lấy bảng kê chi tiết. Phân biệt rõ NULL (rỗng/không
+có) với `0`.
+
+Đã có 3 mapping: `01/GTGT` (mã 842, 27 chỉ tiêu), `05/KK-TNCN` TT80 (mã 864) và
+`05/KK-TNCN` TT92 (mã 394). Chạy trên `download/` cho **459/1265 tờ khai
+`MAPPED`** (842: 245, 864: 138, 394: 76). Hai bản TNCN được giữ **riêng** vì mã
+chỉ tiêu trùng số nhưng khác ý nghĩa giữa hai thông tư. Thêm mapping cho
+mẫu/phiên bản khác: xem `gdt_tax/form_mappings/README.md`. Chỉ thêm khi đã đối chiếu XML
+thật; parser không hard-code mẫu biểu.
+
+### Phân loại và xuất báo cáo
+
+```bash
+# Phân loại từng artifact theo nội dung (nhóm thuế, vai trò, bằng chứng)
+python -m gdt_tax.classify download --output download
+
+# Xuất workbook Excel đa sheet + audit log (và CSV nếu muốn)
+python -m gdt_tax.export download --output download
+python -m gdt_tax.export download --tax-group GTGT --csv download/gtgt.csv
+```
+
+`Tax_Return_Summary.xlsx` gồm: `00_README`, `01_RETURN_INDEX` (1 dòng/tờ khai),
+`02_GTGT`/`03_TNCN`/`04_TNDN`, `06_OTHER_RETURNS`, `05_INDICATORS` (chỉ tiêu
+dạng dài, có `xpath` để truy vết), `07_UNMAPPED_FORMS`, `08_PARSE_ERRORS`,
+`09_MAPPING_VERSIONS`, `10_AUDIT_LOG`. Mỗi dòng giữ `record_id`, `source_zip`,
+`source_inner_file`, `source_sha256`. Ô trống = NULL (khác `0`); số tiền âm được
+giữ nguyên dạng số. Báo cáo **không** tự chọn bản bổ sung mới nhất hay cộng dồn
+nhiều lần nộp cùng kỳ — mọi lần nộp đều được giữ, người dùng tự quyết.
 
 ## Kết quả đầu ra
 
@@ -722,9 +792,9 @@ GDT_HEADER_PROFILE=minimal python -m gdt_tax --dry-run
 ## Kiểm thử
 
 ```bash
-python -m unittest discover -s tests -t . -v   # 298 test, chạy offline
+python -m unittest discover -s tests -t . -v   # 347 test, chạy offline
 python -m ruff check .                         # lint
-python -m mypy gdt_tax                         # kiểm tra kiểu (34 file)
+python -m mypy gdt_tax                         # kiểm tra kiểu (43 file)
 ```
 
 Kết quả 27/09/2026: OK trên Windows/Python 3.11.15, 6 skip backend OCR chưa
