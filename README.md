@@ -19,7 +19,7 @@ thống và một nền tảng:
 | Công cụ | Nền tảng | Hệ thống GDT | Dữ liệu tải về |
 |---|---|---|---|
 | [**hddt-downloader-windows**](https://github.com/dieutx/hddt-downloader-windows) | PowerShell — Windows | `hoadondientu.gdt.gov.vn` (Hóa đơn điện tử) | XML hóa đơn mua vào/bán ra → Excel |
-| **tai-ho-so-thue-gtgt** (repo này) | Python 3.10+ — Windows/Linux/macOS | `dichvucong.gdt.gov.vn` (Cổng Dịch vụ công, tự chuyển nguồn ETAX trước 01/07/2025 và trang Thuế điện tử cũ) | ZIP tờ khai + metadata CSV/JSON |
+| **tai-ho-so-thue-gtgt** (repo này) | Python 3.10+ — Windows/Linux/macOS | `dichvucong.gdt.gov.vn` + `thuedientu.gdt.gov.vn` | ZIP tờ khai + báo cáo Excel/CSV/JSON |
 | [**TaiHoaDonDienTu**](https://github.com/dieutx/TaiHoaDonDienTu) | Excel VBA | `hoadondientu.gdt.gov.vn` (Hóa đơn điện tử) | XML hóa đơn → Excel |
 
 Hai công cụ đầu dùng chung cách tiếp cận: tự nhận dạng CAPTCHA, tự đăng nhập,
@@ -59,28 +59,29 @@ hồ sơ. Công cụ này che hết những chi tiết đó:
 
 ```text
 Khoảng ngày bất kỳ ──► tự cắt thành các đoạn ≤ 31 ngày
-                   ──► tự chọn luồng ETAX (trước 01/07/2025) hoặc DVC (từ 01/07/2025)
+                   ──► trước 01/07/2025 dùng Thuế điện tử cũ, từ mốc dùng DVC
                    ──► tự đọc CAPTCHA, tự thử lại khi đọc sai
                    ──► duyệt hết các trang, tải ZIP ngay trên từng trang
-                   ──► lưu ZIP + CSV + JSON, bỏ qua hồ sơ đã tải
+                   ──► lưu ZIP + Excel + CSV + JSON, bỏ qua hồ sơ đã tải
 ```
 
 ## Chức năng
 
 - Tự chia khoảng tra cứu dài thành các đoạn **tối đa 31 ngày** — giới hạn của cổng.
-- Tự chọn nguồn dữ liệu theo ngày nộp hồ sơ: **ETAX** trước `01/07/2025`,
-  **DVC** từ `01/07/2025`. Cả hai đều bị chia nhỏ 31 ngày như nhau.
-- **Nguồn dự phòng trang Thuế điện tử cũ** (`--legacy-etax`): một số tờ khai cũ
-  chỉ còn hiển thị trên `thuedientu.gdt.gov.vn`, không tra cứu được qua cổng.
-  Khi bật, đoạn ngày trước mốc mà cổng không trả hồ sơ nào sẽ được đăng nhập
-  trang cũ (dùng chung tài khoản, tự đọc CAPTCHA) để tải bù dưới dạng XML.
+- Tự chọn nguồn dữ liệu theo ngày nộp hồ sơ: trước `01/07/2025` tra cứu thẳng
+  **Thuế điện tử cũ** (`thuedientu.gdt.gov.vn`), từ mốc trở đi dùng **DVC**.
+  Vì dữ liệu cũ chưa đồng bộ đầy đủ, chương trình không hỏi DVC cho đoạn trước mốc.
+- Có thể đặt `GDT_LEGACY_ETAX=false` hoặc dùng `--no-legacy-etax` để chuyển các
+  đoạn trước mốc về endpoint ETAX trên DVC khi dữ liệu đã được đồng bộ sau này.
 - Xử lý đầy đủ phân trang và **tải ngay trên từng trang** để giữ trạng thái phiên.
 - Nhận dạng CAPTCHA bằng **ddddocr** (mặc định); đổi được sang `easyocr`,
   `paddleocr`, `manual`, dịch vụ HTTP ngoài, hoặc solver tự viết.
 - Đặt tên ZIP gợi nhớ: mã hồ sơ, kỳ tính thuế, **loại tờ khai**, tên tờ khai.
-- Xuất `danh_sach_ho_so.csv` / `.json` kèm loại tờ khai, lần nộp, ngày nộp, trạng thái.
+- Xuất báo cáo `danh_sach_to_khai.xlsx` đúng các cột nghiệp vụ trên TCHS, đồng
+  thời vẫn giữ `danh_sach_ho_so.csv` / `.json` làm metadata kỹ thuật.
 - Bỏ qua ZIP đã tải hợp lệ nên chạy tiếp được khi bị gián đoạn.
-- Tự thử lại khi cổng trả `429 Too Many Requests` (đọc header `Retry-After`).
+- Tự thử lại khi cổng trả `429 Too Many Requests` (đọc header `Retry-After`) hoặc
+  khi proxy/kết nối bị timeout, đứt tạm thời.
 - `--dry-run` chỉ tra cứu, không tải file — dùng để kiểm tra khoảng ngày trước.
 - **Gửi request như trình duyệt** (mặc định `--header-profile browser`): đủ
   `sec-ch-ua*`, `Sec-Fetch-*`, `Upgrade-Insecure-Requests`, `Accept` và thứ tự
@@ -126,7 +127,7 @@ không cần `torch`). Muốn dùng solver khác thì xem
 Test chạy hoàn toàn offline và **không cần** thư viện OCR nào:
 
 ```bash
-pip install beautifulsoup4 lxml requests
+pip install beautifulsoup4 lxml openpyxl requests
 python -m unittest discover -s tests -t . -v
 ```
 
@@ -171,12 +172,13 @@ Bảng biến đầy đủ:
 | `GDT_CAPTCHA_OPTIONS` | Không | `{}` | Tham số solver, dạng JSON |
 | `GDT_CAPTCHA_PLUGINS` | Không | trống | Đăng ký solver riêng: `ten=module:Lop` |
 | `GDT_ETAX_CUTOFF` | Không | `01/07/2025` | Mốc chuyển giữa hai luồng dữ liệu |
+| `GDT_LEGACY_ETAX` | Không | `true` | Trước cutoff dùng Thuế điện tử cũ; đặt `false` khi DVC đã đồng bộ dữ liệu cũ |
 | `GDT_MAX_DAYS_PER_SEARCH` | Không | `31` | Số ngày tối đa mỗi đoạn tra cứu |
 | `GDT_PAGE_SIZE` | Không | `10` | Số hồ sơ mỗi trang |
 | `GDT_LOGIN_ATTEMPTS` | Không | `10` | Số lần thử đăng nhập |
 | `GDT_SEARCH_ATTEMPTS` | Không | `6` | Số lần thử lại một trang tra cứu |
 | `GDT_REQUEST_TIMEOUT` | Không | `30` | Timeout mỗi request (giây) |
-| `GDT_HTTP_RETRIES` | Không | `3` | Số lần thử lại khi gặp HTTP 429 |
+| `GDT_HTTP_RETRIES` | Không | `3` | Số lần thử khi gặp HTTP 429 hoặc lỗi mạng tạm thời |
 | `GDT_PAUSE_BETWEEN_RECORDS` | Không | `1` | Nghỉ giữa 2 hồ sơ (giây) |
 | `GDT_PAUSE_BETWEEN_PAGES` | Không | `3` | Nghỉ giữa 2 trang (giây) |
 | `GDT_PAUSE_JITTER` | Không | `0.3` | Tỉ lệ ngẫu nhiên cộng thêm vào mỗi lần nghỉ (chỉ cộng, không rút ngắn) |
@@ -192,7 +194,7 @@ Bảng biến đầy đủ:
 Chạy từ thư mục gốc repo, hoặc dùng `gdt-tax` sau khi `pip install -e .`.
 
 ```bash
-# Hồ sơ tháng 1/2025 (trước mốc 01/07/2025 → luồng ETAX), lưu riêng một thư mục
+# Hồ sơ tháng 1/2025 (trước cutoff → Thuế điện tử cũ), lưu riêng một thư mục
 python -m gdt_tax --from-date 01/01/2025 --to-date 31/01/2025 --output-dir download/2025-01
 
 # Hồ sơ tháng 1/2026 (từ mốc 01/07/2025 → luồng DVC)
@@ -207,8 +209,8 @@ python -m gdt_tax --case-id 11320250292469209
 # Chỉ tra cứu, không tải file
 python -m gdt_tax --dry-run
 
-# Bật nguồn dự phòng trang Thuế điện tử cũ (tờ khai cũ chỉ còn ở đó)
-python -m gdt_tax --from-date 01/01/2020 --to-date 29/02/2020 --legacy-etax
+# Sau này, khi dữ liệu cũ đã đồng bộ đầy đủ sang DVC, tắt nguồn legacy
+python -m gdt_tax --from-date 01/01/2020 --to-date 29/02/2020 --no-legacy-etax
 
 # Tự nhập CAPTCHA (khi cổng đổi kiểu CAPTCHA)
 python -m gdt_tax --solver manual
@@ -238,7 +240,8 @@ download/2025-01/
 ├── 11320250292469209__12-2024__Chinh-thuc__TO-KHAI-THUE-GIA-TRI-GIA-TANG-TT80-2021.zip
 ├── 11320250292528963__12-2024__Chinh-thuc__To-khai-khau-tru-thue-thu-nhap-ca-nhan-TT80.zip
 ├── danh_sach_ho_so.csv
-└── danh_sach_ho_so.json
+├── danh_sach_ho_so.json
+└── danh_sach_to_khai.xlsx
 ```
 
 Tên ZIP gồm 4 phần, ngăn bằng `__`:
@@ -246,9 +249,12 @@ Tên ZIP gồm 4 phần, ngăn bằng `__`:
 Phần nào cổng không trả về (ví dụ kỳ tính thuế của thông báo hóa đơn lập sai) thì
 thành `khong-ro`.
 
-Mỗi dòng metadata gồm: mã hồ sơ, nguồn (`ETAX`/`DVC`), tên thủ tục hành chính,
-tờ khai, kỳ tính thuế, **loại tờ khai**, lần nộp, lần bổ sung, ngày nộp, nơi nộp,
-trạng thái, tên file ZIP. CSV ghi bằng UTF-8 kèm BOM để mở đúng trong Excel.
+File Excel gồm đúng thứ tự: **STT, Mã hồ sơ, Tên tờ khai, Kỳ tính thuế, Loại tờ
+khai, Lần nộp bổ sung, Lần nộp, Cơ quan thuế tiếp nhận, Ngày nộp, Trạng thái,
+Hồ sơ đính kèm**. Báo cáo có bộ lọc, cố định hàng tiêu đề và tự xuống dòng.
+
+CSV/JSON giữ thêm các trường kỹ thuật như nguồn, tên TTHC và tên file ZIP. CSV
+ghi bằng UTF-8 kèm BOM để mở đúng trong Excel.
 
 ## Kiến trúc
 
@@ -262,7 +268,7 @@ cli ─► config ─► captcha (plugin)
         ├─ 2. chia đoạn tra cứu ≤ 31 ngày   dates.py
         ├─ 3. tra cứu từng trang, đọc bảng  portals/ + parsing.py
         ├─ 4. tải ZIP từng hồ sơ, lưu file  portals/ + storage.py
-        └─ 5. xuất CSV/JSON                 storage.py
+        └─ 5. xuất Excel/CSV/JSON           storage.py
 ```
 
 | Nhóm | Module |
@@ -406,16 +412,16 @@ sau không phải dò lại. Đây cũng là lý do các quyết định thiết
 
 **Tra cứu và dữ liệu**
 
-1. **Giới hạn 31 ngày áp dụng cho cả hai luồng**, kể cả ETAX trước `01/07/2025`.
-   Đoạn tra cứu ETAX còn bị chặn không vượt qua mốc `01/07/2025`.
+1. **Giới hạn 31 ngày áp dụng cho mọi nguồn**. Các đoạn tra cứu luôn bị chặn
+   không vượt qua mốc `01/07/2025`; trước mốc dùng legacy theo mặc định.
 2. **Mốc `01/07/2025` tách hai luồng dữ liệu** với endpoint, tham số và cách đặt
    mã hồ sơ khác nhau: ETAX dùng mã số dạng `1132025…`, DVC dùng dạng
    `G12.18-YYMMDD-…` (kèm tiền tố `000.101.18.` khi tải).
 3. **Phải tải ngay trong lúc phân trang.** Cổng chỉ giữ danh sách hồ sơ của trang
    tra cứu gần nhất trong phiên; gom hết mã hồ sơ rồi mới tải sẽ bị từ chối với
    lỗi `validateIdTkhai`.
-4. **Hai luồng trả bảng kết quả khác số cột** (ETAX 11 cột, DVC 13 cột) và thứ tự
-   cột khác nhau — xem đầu `gdt_tax/parsing.py`.
+4. **Các nguồn trả bảng kết quả khác số cột** (ETAX 11, DVC 13, legacy 12 cột)
+   và thứ tự khác nhau — xem đầu `gdt_tax/parsing.py`.
 5. **Một số hồ sơ không có kỳ tính thuế** (ví dụ thông báo hóa đơn điện tử lập sai
    mẫu `04/SS-HĐĐT`). Xử lý đúng là để trống và ghi `khong-ro`, không phải bỏ hồ sơ.
 
@@ -634,7 +640,7 @@ GDT_HEADER_PROFILE=minimal python -m gdt_tax --dry-run
 ## Kiểm thử
 
 ```bash
-python -m unittest discover -s tests -t . -v   # 257 test, chạy offline
+python -m unittest discover -s tests -t . -v   # chạy offline
 ruff check .                                   # lint
 mypy gdt_tax                                   # kiểm tra kiểu (32 file)
 ```
@@ -649,12 +655,12 @@ nguyên 5 giai đoạn với phản hồi dựng sẵn.
 | `test_parsing.py` | Đọc bảng ETAX/DVC từ fixture HTML thật, bỏ trùng, hàng thiếu cột |
 | `test_naming.py` | Tên file ZIP, có test riêng cho chữ `đ` |
 | `test_config.py` | Ưu tiên cấu hình, kiểm tra kiểu, lỗi thiếu tài khoản |
-| `test_http.py` | Ghép URL, thử lại khi 429, `Retry-After` sai định dạng, log request, header ghi đè, dump |
+| `test_http.py` | Ghép URL, thử lại khi 429/lỗi mạng, `Retry-After` sai định dạng, log request, header ghi đè, dump |
 | `test_headers.py` | Bộ header theo profile và theo loại request, client hint khớp `User-Agent`, `Accept-Encoding` không khai `zstd` |
 | `test_traffic.py` | Che header/body nhạy cảm, định dạng log, ghi file dump và giới hạn dung lượng |
 | `test_logging_setup.py` | Mức log ra màn hình so với file log, che bí mật trong log, `SecretsFilter` che mật khẩu proxy kể cả trong log của urllib3 |
 | `test_proxy.py` | Đọc các dạng chuỗi proxy, che mật khẩu, và request đi qua proxy thật (proxy giả tại chỗ) |
-| `test_storage.py` | ZIP hợp lệ/hỏng, giải mã Base64, bỏ qua file đã có, CSV/JSON |
+| `test_storage.py` | ZIP hợp lệ/hỏng, giải mã Base64, bỏ qua file đã có, Excel/CSV/JSON |
 | `test_captcha.py` | Sổ đăng ký solver, nạp muộn, `normalize_text` |
 | `test_captcha_backends.py` | Smoke test từng backend OCR, tự bỏ qua nếu chưa cài thư viện |
 | `test_pipeline.py` | Chạy đầu cuối với HTTP giả: ETAX, DVC, phân trang, `--dry-run`, `--case-id`, lỗi |

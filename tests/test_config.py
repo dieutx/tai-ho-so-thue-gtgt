@@ -38,6 +38,13 @@ class SettingsFromEnvTests(unittest.TestCase):
         self.assertEqual(settings.captcha_solver, "ddddocr")
         self.assertEqual(settings.page_size, 10)
         self.assertEqual(settings.max_days_per_search, 31)
+        self.assertTrue(settings.legacy_etax)
+
+    def test_co_the_tat_legacy_khi_dvc_da_dong_bo(self):
+        settings = Settings.from_env(
+            {**BASE_ENV, "GDT_LEGACY_ETAX": "false"}, env_file=None
+        )
+        self.assertFalse(settings.legacy_etax)
 
     def test_doc_du_bien_moi_truong(self):
         env = {

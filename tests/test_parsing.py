@@ -58,6 +58,7 @@ class DvcParsingTests(unittest.TestCase):
         self.assertEqual(record.lan_bo_sung, "0")
         self.assertEqual(record.ngay_nop, "20/01/2026 13:51")
         self.assertEqual(record.trang_thai, "Đã chấp nhận")
+        self.assertEqual(record.ho_so_dinh_kem, "1")
 
     def test_ho_so_bo_sung_duoc_nhan_dien(self):
         record = parse_records(self.html, SOURCE_DVC)[1]

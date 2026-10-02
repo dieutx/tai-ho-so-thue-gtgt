@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import tempfile
 import unittest
@@ -72,6 +73,11 @@ class ParserTests(unittest.TestCase):
         self.assertIsNone(args.log_file)
         self.assertIsNone(args.dump_http)
         self.assertIsNone(args.header_profile)
+        self.assertIsNone(args.legacy_etax)
+
+    def test_co_the_tat_legacy_tu_dong_lenh(self):
+        self.assertFalse(build_parser().parse_args(["--no-legacy-etax"]).legacy_etax)
+        self.assertTrue(build_parser().parse_args(["--legacy-etax"]).legacy_etax)
 
     def test_doc_tham_so_day_du(self):
         args = build_parser().parse_args(
@@ -177,6 +183,9 @@ class MainTests(unittest.TestCase):
                 code = main(["--list-solvers", "--log-file", str(path)])
             self.assertEqual(code, 0)
             self.assertTrue(path.is_file())
+            for handler in list(logging.getLogger().handlers):
+                handler.close()
+                logging.getLogger().removeHandler(handler)
 
     def test_file_log_khong_mo_duoc_tra_ve_ma_loi_2(self):
         with tempfile.TemporaryDirectory() as tmp:

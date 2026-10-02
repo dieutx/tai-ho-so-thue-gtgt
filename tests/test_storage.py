@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from openpyxl import load_workbook
+
 from gdt_tax.models import CaseRecord
 from gdt_tax.naming import zip_filename
 from gdt_tax.storage import ZipStore, decode_zip_bytes, valid_zip, write_metadata
@@ -17,6 +19,7 @@ def make_record(case_id: str = "11320250292469209") -> CaseRecord:
         to_khai="TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG",
         ky_tinh_thue="12/2024",
         loai_to_khai="Chính thức",
+        ho_so_dinh_kem="1",
     )
 
 
@@ -120,6 +123,29 @@ class WriteMetadataTests(unittest.TestCase):
         payload = json.loads(json_path.read_text(encoding="utf-8"))
         self.assertEqual([item["ma_ho_so"] for item in payload], ["A-1", "B-2"])
         self.assertIn("ky_tinh_thue", payload[0])
+
+        workbook = load_workbook(self.directory / "danh_sach_to_khai.xlsx")
+        sheet = workbook["Danh sách tờ khai"]
+        self.assertEqual(
+            [cell.value for cell in sheet[1]],
+            [
+                "STT",
+                "Mã hồ sơ",
+                "Tên tờ khai",
+                "Kỳ tính thuế",
+                "Loại tờ khai",
+                "Lần nộp bổ sung",
+                "Lần nộp",
+                "Cơ quan thuế tiếp nhận",
+                "Ngày nộp",
+                "Trạng thái",
+                "Hồ sơ đính kèm",
+            ],
+        )
+        self.assertEqual(sheet["A2"].value, 1)
+        self.assertEqual(sheet["B2"].value, "A-1")
+        self.assertEqual(sheet["K2"].value, "1")
+        self.assertEqual(sheet.freeze_panes, "A2")
 
     def test_khong_co_ho_so_thi_khong_ghi(self):
         self.assertIsNone(write_metadata(self.directory, {}))

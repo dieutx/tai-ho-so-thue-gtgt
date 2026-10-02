@@ -25,6 +25,7 @@ class CaseRecord:
     ngay_nop: str = ""
     noi_nop: str = ""
     trang_thai: str = ""
+    ho_so_dinh_kem: str = ""
     tep_zip: str = ""
 
     def to_dict(self) -> dict[str, str]:

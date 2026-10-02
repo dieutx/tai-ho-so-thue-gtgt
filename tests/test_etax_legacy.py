@@ -107,6 +107,12 @@ def make_legacy_handler(state: dict):
                         SEARCH_START_HTML, url="https://thuedientu.gdt.gov.vn/etaxnnt/Request"
                     )
                 if event == "downTkhai":
+                    state["download_calls"] = state.get("download_calls", 0) + 1
+                    if state.pop("expire_download_once", False):
+                        return FakeResponse(
+                            LOGIN_PAGE_HTML,
+                            headers={"content-type": "text/html"},
+                        )
                     return state.get(
                         "download_response",
                         FakeResponse(
@@ -135,6 +141,8 @@ def make_legacy_handler(state: dict):
                 )
             if event == "query":
                 state["queries"] = state.get("queries", []) + [dict(data)]
+                if state.pop("expire_query_once", False):
+                    return FakeResponse(LOGIN_PAGE_HTML, url=url)
                 return FakeResponse(state.get("query_html", fixture("etax_legacy_results.html")), url=url)
         # Ghi lại request không khớp route để dễ chẩn đoán khi thêm endpoint mới.
         state.setdefault("unmatched", []).append((method, route, str(kwargs)[:200]))
@@ -212,6 +220,16 @@ class LegacyPortalTests(unittest.TestCase):
         self.assertEqual(len(establish_calls), 1)
         self.assertEqual(len(self.state.get("queries", [])), 2)
 
+    def test_search_tu_dang_nhap_lai_khi_phien_het_han(self):
+        state = {"expire_query_once": True}
+        portal = self.make_portal(state)
+
+        result = portal.search(self.period(), page=1)
+
+        self.assertEqual(len(result.records), 2)
+        self.assertEqual(state["login_posts"], 2)
+        self.assertEqual(len(state["queries"]), 2)
+
     def test_login_thu_lai_khi_sai_captcha(self):
         state = {"accept_login": False}
         portal = self.make_portal(state)
@@ -234,6 +252,18 @@ class LegacyPortalTests(unittest.TestCase):
             names = archive.namelist()
         self.assertEqual(names, [f"{record.ma_ho_so}.xml"])
         self.assertIn(b"HSoThueDTu", data)
+
+    def test_tai_tu_dang_nhap_lai_va_khoi_phuc_truy_van_khi_phien_het_han(self):
+        state = {"expire_download_once": True}
+        portal = self.make_portal(state)
+        record = portal.search(self.period(), page=1).records[0]
+
+        response = portal.download(record, "https://x", "")
+
+        self.assertIsNotNone(decode_zip_bytes(response))
+        self.assertEqual(state["download_calls"], 2)
+        self.assertEqual(state["login_posts"], 2)
+        self.assertEqual(len(state["queries"]), 2)
 
     def test_legacy_tra_html_thay_file_thi_khong_luu_nham(self):
         state = {
@@ -290,9 +320,7 @@ class LegacyFallbackTests(unittest.TestCase):
 
 
 class PipelineLegacySwitchTests(unittest.TestCase):
-    """Quy tắc chuyển nguồn: cổng lỗi tải ở một đoạn thì quét legacy từ đầu
-    khoảng, các đoạn cũ hơn chạy thẳng legacy, đoạn 0 bản ghi không tính là lỗi.
-    """
+    """Trước cutoff dùng thẳng legacy; có thể tắt khi DVC đã đồng bộ dữ liệu."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -326,6 +354,7 @@ class PipelineLegacySwitchTests(unittest.TestCase):
         def handler(method, path, kwargs):
             route = path.split("?", 1)[0]
             if method == "POST" and route in ("/tchs/thuedientu", "/ho-so/search"):
+                state.setdefault("dvc_queries", []).append(route)
                 return FakeResponse(results)
             if method == "POST" and route == "/loginLDAP":
                 return FakeResponse(json_payload={"status": "200"})
@@ -364,29 +393,25 @@ class PipelineLegacySwitchTests(unittest.TestCase):
         )
         return pipeline.run(), state, settings
 
-    def test_etax_loi_500_thi_quet_legacy_tu_dau_khoang(self):
-        """Đoạn 1/2020 cổng hiện hồ sơ nhưng 500 → legacy quét 01/01→31/01."""
+    def test_mac_dinh_quet_thang_legacy_cho_moi_doan_truoc_cutoff(self):
         state: dict = {}
         summary, state, settings = self.run_pipeline(state)
         queries = state.get("queries", [])
-        # Đoạn 1 bị lỗi → legacy quét từ đầu khoảng (01/01/2020) đến hết đoạn lỗi.
         self.assertTrue(queries)
         first = queries[0]
         self.assertEqual(first["qryFromDate"], "01/01/2020")
         self.assertEqual(first["qryToDate"], "31/01/2020")
-        # Đoạn 2+ chạy thẳng legacy, không gọi cổng nữa (mỗi đoạn ≤31 ngày).
         self.assertEqual(queries[1]["qryFromDate"], "01/02/2020")
         self.assertEqual(queries[1]["qryToDate"], "02/03/2020")
         self.assertEqual(queries[2]["qryToDate"], "31/03/2020")
-        # File legacy đã lưu.
+        self.assertEqual(summary.periods, 3)
+        self.assertEqual(state.get("dvc_queries", []), [])
         zips = list(self.directory.glob("*.zip"))
         self.assertTrue(zips)
 
-    def test_doan_khong_co_ban_ghi_khong_kich_hoat_legacy(self):
-        """Cổng trả 0 bản ghi thì không chuyển legacy, vẫn thử cổng đoạn sau."""
+    def test_tat_legacy_thi_tra_cuu_etax_tren_dvc(self):
         state: dict = {}
-        settings = self.settings_for()
-        # Bảng kết quả rỗng nhưng vẫn có phần tử phân trang (1 trang).
+        settings = self.settings_for(legacy_etax=False)
         empty_results = (
             "<html><body>"
             "<input id='goToPage_tdt' min='1' max='1' type='number'>"
@@ -402,9 +427,9 @@ class PipelineLegacySwitchTests(unittest.TestCase):
             sleep=lambda _seconds: None,
         )
         pipeline.run()
-        # Không có lần gọi legacy nào (trang legacy không được hỏi).
         legacy_requests = [p for p in http.paths("POST") if "thuedientu.gdt" in p]
         self.assertEqual(legacy_requests, [])
+        self.assertEqual(state["dvc_queries"], ["/tchs/thuedientu"] * 3)
 
 
 if __name__ == "__main__":

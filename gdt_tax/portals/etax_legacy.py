@@ -1,8 +1,8 @@
 """Nguồn Thuế điện tử cũ — ``thuedientu.gdt.gov.vn``.
 
-Một số tờ khai nộp trước mốc chuyển nguồn chỉ còn hiển thị trên trang Thuế điện
-tử cũ, không tra cứu được qua Cổng Dịch vụ công. Trang này dùng chung tài khoản
-với DVC nhưng là một máy chủ khác, với luồng DSE khác hẳn::
+Tờ khai nộp trước mốc chuyển nguồn hiện được tra cứu mặc định trên trang Thuế
+điện tử cũ vì dữ liệu chưa đồng bộ đầy đủ sang Cổng Dịch vụ công. Trang này dùng
+chung tài khoản với DVC nhưng là một máy chủ khác, với luồng DSE khác hẳn::
 
     EstablishSession → corpIndexProc → loginForm + CAPTCHA
       → corporateHomeProc → corpHomePageProc
@@ -13,9 +13,8 @@ Hai lớp trong module này:
 
 * :class:`EtaxLegacyPortal` — portal thật, tự đăng nhập trang cũ và trả hồ sơ
   theo :class:`CaseRecord` như mọi portal khác.
-* :class:`EtaxLegacyFallback` — bọc một portal gốc (DVC/ETAX): tra cứu qua portal
-  gốc như thường, nhưng khi đoạn ngày **trước mốc** ``etax_cutoff`` mà cổng
-  không trả hồ sơ nào thì hỏi thêm trang cũ.
+* :class:`EtaxLegacyFallback` — lớp tương thích để định tuyến bản ghi giữa một
+  portal gốc và legacy; chính sách mặc định mới dùng thẳng ``EtaxLegacyPortal``.
 """
 
 from __future__ import annotations
@@ -145,6 +144,8 @@ class EtaxLegacyPortal(Portal):
         self._search_page_html = ""
         self._search_page_url = ""
         self._logged_in = False
+        self._last_period: SearchPeriod | None = None
+        self._last_page = 1
 
     # --- Đăng nhập trang cũ ---
     def login(self) -> None:
@@ -281,6 +282,19 @@ class EtaxLegacyPortal(Portal):
 
     # --- Giai đoạn 3: tra cứu ---
     def search(self, period: SearchPeriod, page: int) -> PageResult:
+        """Tra cứu một trang và tự tạo phiên mới nếu phiên DSE đã hết hạn."""
+        self._last_period = period
+        self._last_page = page
+        for attempt in range(2):
+            result = self._search_once(period, page)
+            if result is not None:
+                return result
+            if attempt == 0:
+                self._renew_session("phiên hết hạn khi tra cứu")
+        raise LegacyEtaxError("Không khôi phục được phiên legacy để tra cứu")
+
+    def _search_once(self, period: SearchPeriod, page: int) -> PageResult | None:
+        """Tra cứu đúng một lần; trả ``None`` khi máy chủ đưa về trang đăng nhập."""
         from ..dates import format_date
 
         self.login()
@@ -303,11 +317,23 @@ class EtaxLegacyPortal(Portal):
         )
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
+        if _LOGIN_FORM_ID in response.text or _SEARCH_FORM_ID not in response.text:
+            return None
         self._search_page_html = response.text
         self._search_page_url = response.url
         records = parse_records(response.text, self.source)
         return PageResult(records=records, total_pages=_total_pages(response.text) or None,
                           http_status=response.status_code)
+
+    def _renew_session(self, reason: str) -> None:
+        """Xoá trạng thái DSE cũ rồi đăng nhập lại vào legacy."""
+        self.logger.warning("Legacy: %s; đang tự đăng nhập lại", reason)
+        self.dse_session_id = ""
+        self.home_page_id = ""
+        self._search_page_html = ""
+        self._search_page_url = ""
+        self._logged_in = False
+        self.login()
 
     def _open_search_page(self) -> None:
         """Mở trang tra cứu tờ khai (nơi có form ``traCuuKhaiForm``)."""
@@ -342,8 +368,37 @@ class EtaxLegacyPortal(Portal):
         (dạng JSON base64 giống cổng DVC) nên ``ZipStore`` và metadata dùng
         chung với hai nguồn còn lại.
         """
+        for attempt in range(2):
+            response = self._download_once(record)
+            if response.status_code != 200:
+                return response
+            content_type = response.headers.get("content-type", "").lower()
+            if "text/html" not in content_type:
+                return _XmlZipResponse(record, response.content)
+            if attempt == 0 and self._last_period is not None:
+                self._renew_session(f"phiên hết hạn khi tải {record.ma_ho_so}")
+                # Sau khi đăng nhập lại phải chạy lại đúng truy vấn/trang: các
+                # tham số dse_processorId dùng để tải nằm trong form kết quả.
+                restored = self._search_once(self._last_period, self._last_page)
+                if restored is not None:
+                    continue
+            self.logger.error(
+                "Legacy trả HTML thay vì XML cho %s sau khi đã thử làm mới phiên",
+                record.ma_ho_so,
+            )
+            return _HtmlInsteadOfFile(response)
+        raise AssertionError("vòng thử tải legacy luôn kết thúc trong hai lần")
+
+    def _download_once(self, record: CaseRecord):
+        """Gửi một request tải XML bằng trạng thái của trang kết quả hiện tại."""
         _, fields = _form_fields(self._search_page_html, _SEARCH_FORM_ID)
-        keep = ("dse_sessionId", "dse_applicationId", "dse_pageId", "dse_processorState", "dse_processorId")
+        keep = (
+            "dse_sessionId",
+            "dse_applicationId",
+            "dse_pageId",
+            "dse_processorState",
+            "dse_processorId",
+        )
         params = {key: fields[key] for key in keep if fields.get(key)}
         params.update(
             {
@@ -352,7 +407,7 @@ class EtaxLegacyPortal(Portal):
                 "messageId": record.ma_ho_so,
             }
         )
-        response = self.http.get(
+        return self.http.get(
             f"{LEGACY_ETAX_BASE}/Request",
             params=params,
             headers=build_xhr_headers(
@@ -361,16 +416,6 @@ class EtaxLegacyPortal(Portal):
                 headers={"Referer": self._search_page_url or LEGACY_ETAX_BASE},
             ),
         )
-        if response.status_code != 200:
-            return response
-        content_type = response.headers.get("content-type", "").lower()
-        if "text/html" in content_type:
-            self.logger.error(
-                "Legacy trả HTML thay vì XML cho %s (hết phiên hoặc tờ khai không tải được)",
-                record.ma_ho_so,
-            )
-            return _HtmlInsteadOfFile(response)
-        return _XmlZipResponse(record, response.content)
 
 
 class _HtmlInsteadOfFile:
@@ -412,15 +457,7 @@ class _XmlZipResponse:
 
 
 class EtaxLegacyFallback(Portal):
-    """Bọc một portal gốc (DVC/ETAX) và định tuyến hồ sơ theo nguồn của nó.
-
-    Pipeline tự quyết định khi nào cần hỏi trang cũ (đoạn ngày trước mốc mà
-    portal gốc không tải được hồ sơ nào — cổng có lúc còn hiện hồ sơ cũ trong
-    kết quả tra cứu nhưng máy chủ tải ZIP trả "Không tìm thấy hồ sơ tương ứng",
-    đã gặp thật với tờ khai 2020) rồi gọi trực tiếp ``portal.legacy``.
-    Lớp này chỉ đảm bảo mọi hồ sơ — bất kể nguồn — đều tải đúng chỗ khi đi qua
-    một portal duy nhất trong ``pipeline._download``.
-    """
+    """Lớp tương thích: tra cứu qua portal gốc, tải theo nguồn của từng hồ sơ."""
 
     source = SOURCE_ETAX_LEGACY
     detail_loai = SOURCE_ETAX_LEGACY

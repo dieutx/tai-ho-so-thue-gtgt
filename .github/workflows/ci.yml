@@ -23,7 +23,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Cài thư viện cần cho test (không gồm easyocr)
-        run: python -m pip install --upgrade pip beautifulsoup4 lxml requests
+        run: python -m pip install --upgrade pip beautifulsoup4 lxml openpyxl requests
 
       - name: Chạy unit test
         run: python -m unittest discover -s tests -t . -v
@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Cài công cụ kiểm tra
-        run: python -m pip install ruff mypy beautifulsoup4 lxml requests
+        run: python -m pip install ruff mypy beautifulsoup4 lxml openpyxl requests
       - name: Lint
         run: ruff check .
       - name: Kiểm tra kiểu
