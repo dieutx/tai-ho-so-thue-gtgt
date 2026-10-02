@@ -19,6 +19,7 @@ classifiers = [
 dependencies = [
     "beautifulsoup4>=4.12,<5",
     "lxml>=5,<7",
+    "openpyxl>=3.1,<4",
     "requests>=2.32,<3",
 ]
 

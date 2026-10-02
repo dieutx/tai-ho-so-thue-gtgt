@@ -32,7 +32,7 @@ tự đăng nhập phiên DSE riêng ở lần tra cứu đầu. `EtaxLegacyFall
 | `parsing.py` | Đọc bảng kết quả thành `CaseRecord` | Gọi mạng |
 | `naming.py` | Tạo tên file ZIP | Đọc/ghi file |
 | `classification.py` | Phân nhóm hồ sơ từ tên tờ khai/TTHC, ghi lý do và phiên bản rule | Gọi mạng, parse chỉ tiêu XML |
-| `storage.py` | Kiểm tra ZIP, chống tải trùng, ghi ZIP, CSV/JSON | Gọi mạng |
+| `storage.py` | Kiểm tra ZIP, chống tải trùng, ghi ZIP, Excel/CSV/JSON | Gọi mạng |
 | `captcha/` | Nhận dạng CAPTCHA (nhiều backend) | Gọi endpoint nghiệp vụ |
 | `portals/` | Tra cứu và tải theo từng nguồn | Đọc/ghi file |
 | `portals/etax_legacy.py` | Nguồn chính trước cutoff: login DSE, kiểm tra XML rồi gói ZIP; adapter fallback cũ được giữ | Đọc/ghi file |
@@ -73,7 +73,7 @@ Pipeline.run()  (gdt_tax/pipeline.py)
   ├─ Giai đoạn 4  với mỗi hồ sơ: portal.fetch_detail_csrf() → portal.download()
   │                  → storage.decode_zip_bytes() → ZipStore.save()
   │
-  └─ Giai đoạn 5  classify_record() + write_metadata() → CSV/JSON + danh mục nhóm
+  └─ Giai đoạn 5  classify_record() + write_metadata() → Excel/CSV/JSON + danh mục nhóm
 ```
 
 **Vì sao tải ngay trong lúc phân trang?** Cổng chỉ giữ danh sách hồ sơ của trang

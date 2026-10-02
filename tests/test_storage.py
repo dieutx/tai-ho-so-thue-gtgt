@@ -5,6 +5,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from openpyxl import load_workbook
+
+from gdt_tax.constants import METADATA_XLSX
 from gdt_tax.errors import StorageError
 from gdt_tax.models import CaseRecord
 from gdt_tax.naming import zip_filename
@@ -119,6 +122,20 @@ class ZipStoreTests(unittest.TestCase):
 
 
 class WriteMetadataTests(unittest.TestCase):
+    EXCEL_HEADERS = [
+        "STT",
+        "Mã hồ sơ",
+        "Tên tờ khai",
+        "Kỳ tính thuế",
+        "Loại tờ khai",
+        "Lần nộp bổ sung",
+        "Lần nộp",
+        "Cơ quan thuế tiếp nhận",
+        "Ngày nộp",
+        "Trạng thái",
+        "Hồ sơ đính kèm",
+    ]
+
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.directory = Path(self._tmp.name)
@@ -139,6 +156,15 @@ class WriteMetadataTests(unittest.TestCase):
         self.assertEqual([item["ma_ho_so"] for item in payload], ["A-1", "B-2"])
         self.assertIn("ky_tinh_thue", payload[0])
 
+        workbook = load_workbook(self.directory / METADATA_XLSX, read_only=False)
+        sheet = workbook["Danh sách tờ khai"]
+        self.assertEqual([cell.value for cell in sheet[1]], self.EXCEL_HEADERS)
+        self.assertEqual(sheet.max_row, 3)
+        self.assertEqual([sheet.cell(row, 2).value for row in (2, 3)], ["A-1", "B-2"])
+        self.assertEqual(sheet.freeze_panes, "A2")
+        self.assertIn("DanhSachToKhai", sheet.tables)
+        workbook.close()
+
     def test_khong_co_ho_so_thi_khong_ghi(self):
         self.assertIsNone(write_metadata(self.directory, {}))
         self.assertEqual(list(self.directory.iterdir()), [])
@@ -148,6 +174,18 @@ class WriteMetadataTests(unittest.TestCase):
         write_metadata(self.directory, [make_record("B")])
         rows = json.loads((self.directory / "danh_sach_ho_so.json").read_text(encoding="utf-8"))
         self.assertEqual([row["ma_ho_so"] for row in rows], ["A", "B"])
+        workbook = load_workbook(self.directory / METADATA_XLSX, read_only=True)
+        sheet = workbook["Danh sách tờ khai"]
+        self.assertEqual([sheet.cell(row, 2).value for row in (2, 3)], ["A", "B"])
+        workbook.close()
+
+    def test_excel_chan_cong_thuc_tu_du_lieu_cong(self):
+        record = make_record("=HYPERLINK(\"https://invalid\")")
+        write_metadata(self.directory, [record])
+        workbook = load_workbook(self.directory / METADATA_XLSX, read_only=True)
+        value = workbook["Danh sách tờ khai"].cell(2, 2).value
+        workbook.close()
+        self.assertEqual(value, "'=HYPERLINK(\"https://invalid\")")
 
     def test_dry_run_khong_xoa_tham_chieu_file_da_tai(self):
         record = make_record("A")

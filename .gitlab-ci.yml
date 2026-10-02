@@ -22,7 +22,7 @@ test:
       - PYTHON_VERSION: ["3.10", "3.12"]
   script:
     - python -m pip install --upgrade pip
-    - python -m pip install beautifulsoup4 lxml requests
+    - python -m pip install beautifulsoup4 lxml openpyxl requests
     - python -m unittest discover -s tests -t . -v
 
 lint:
@@ -30,6 +30,6 @@ lint:
   image: python:3.12
   script:
     - python -m pip install --upgrade pip
-    - python -m pip install ruff mypy beautifulsoup4 lxml requests
+    - python -m pip install ruff mypy beautifulsoup4 lxml openpyxl requests
     - ruff check .
     - mypy gdt_tax
