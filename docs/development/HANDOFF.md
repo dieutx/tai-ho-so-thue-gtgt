@@ -75,7 +75,7 @@ hoãn, chưa xác minh lại cổng hiện tại.
    backend tùy chọn), ruff và mypy qua trên Linux/Python 3.11.
 7. Cùng ngày, kiểm chứng inventory/parser/classify/export trên `download/`, sửa
    vòng lặp tự quét workbook đầu ra; 347 test OK, ruff/mypy qua 43 file.
-8. Thêm 03/TNDN 892 v2.5.1/v2.9.4: 351 test offline, parser thật tăng từ 459
+8. Thêm 03/TNDN 892 v2.5.1/v2.9.4: 352 test offline, parser thật tăng từ 459
    lên 479 `MAPPED`; workbook 26282 dòng chỉ tiêu. Xem pipeline GitLab của MR.
 
 Chi tiết và giới hạn trong [REVIEW](REVIEW.md). Chưa kiểm tra lại CI Linux

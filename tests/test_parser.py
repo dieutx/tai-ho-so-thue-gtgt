@@ -112,6 +112,17 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(decl.indicator("ct43").status, "NEED_MAPPING")
         self.assertIsNone(decl.indicator("ct43").canonical_name)
 
+    def test_quarter_period_is_normalized_only_when_explicit(self) -> None:
+        quarterly = RETURN_XML.replace(
+            b"<kieuKy>M</kieuKy><kyKKhai>06/2025</kyKKhai>",
+            b"<kieuKy>Q</kieuKy><kyKKhai>Q2/2025</kyKKhai>",
+        )
+        decl = extract_declaration(quarterly)
+        self.assertEqual(decl.period.raw, "Q2/2025")
+        self.assertEqual(decl.period.year, 2025)
+        self.assertEqual(decl.period.quarter, 2)
+        self.assertIsNone(decl.period.month)
+
     def test_does_not_extract_detail_table(self) -> None:
         decl = extract_declaration(RETURN_XML)
         # ct21 trong PLuc/BangKeTenHHDV là bảng kê chi tiết → không lấy.

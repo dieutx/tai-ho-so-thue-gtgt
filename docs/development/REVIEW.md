@@ -162,7 +162,7 @@ mypy gdt_tax
 
 Kết quả nền tảng trước đây: 297 test OK trên Windows. Sau inventory/parser/
 classify/export và sửa vòng lặp tự quét workbook đầu ra, kiểm tra ngày 02/10/2026
-có 347 test OK, 6 skip backend OCR tùy chọn; sau 03/TNDN có 351 test OK. Ruff và
+có 347 test OK, 6 skip backend OCR tùy chọn; sau 03/TNDN có 352 test OK. Ruff và
 mypy (43 file) qua trên Linux/Python 3.11. Ma trận Python 3.10/3.12 được kiểm tra
 trên pipeline GitLab của MR.
 
