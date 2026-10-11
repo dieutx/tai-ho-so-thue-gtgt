@@ -108,7 +108,9 @@ Xem dòng đầu của XML:
 ```
 
 ⇒ `detect.root = "HSoThueDTu"`,
-`detect.namespace = "http://kekhaithue.gdt.gov.vn/TKhaiThue"`.Có XML không namespace (ví dụ `TBao`); khi đó để `namespace` là `null` — parser tự bỏ
+`detect.namespace = "http://kekhaithue.gdt.gov.vn/TKhaiThue"`.
+
+Có XML không namespace (ví dụ `TBao`); khi đó để `namespace` là `null` — parser tự bỏ
 tiền tố `n:` khi khớp. Lưu ý: `detect` chỉ mang tính mô tả/kiểm chứng; khóa tra
 mapping là cặp `(form_code, form_version)`.
 
