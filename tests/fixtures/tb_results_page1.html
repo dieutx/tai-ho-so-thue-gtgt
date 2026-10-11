@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Tra cứu thông báo của cơ quan thuế</title></head>
+<body>
+<script>
+function gotoPage(tp, pnObj) {}
+function layFileTBao(idTBao, ma_tbao) {}
+function gui_vb_gtbs(tbaoID) {}
+function gui_ph_kq_rs(tbaoID) {}
+var aGotoURL = '/etaxnnt/Request?dse_sessionId=SESS01&dse_applicationId=-1&dse_operationName=tracuuTBThueKhacProc&dse_pageId=6&dse_processorState=queryTCTBTKhac&dse_processorId=PROCID01&dse_errorPage=error_page.jsp&dse_nextEventName=query&';
+</script>
+
+<form name="" method="post" action="/etaxnnt/Request" id='tKhaiForm'>
+<input type="hidden" name="dse_sessionId" value="SESS01">
+<input type="hidden" name="dse_applicationId" value="-1">
+<input type="hidden" name="dse_operationName" value="tracuuTBThueKhacProc">
+<input type="hidden" name="dse_pageId" value="6">
+<input type="hidden" name="dse_processorState" value="queryTCTBTKhac">
+<input type="hidden" name="dse_processorId" value="PROCID01">
+<input type="hidden" name="dse_errorPage" value="/TCuuTBThueKhac/TCuuTBThueKhac.jsp">
+<input type="hidden" name="dse_nextEventName" value="">
+<input type="hidden" name="messageId" id="messageId" value="">
+<input type="hidden" name="ma_tbao" id="ma_tbao" value="">
+<input type="hidden" name="pageNumber" value="1">
+<select name="loaiTB" id="loaiTB"><option value="">--Tất cả--</option></select>
+<input type="text" name="so_tbao" id="so_tbao" value="">
+<input type="text" name="tuNgayNop" id="tuNgayNop" value="">
+<input type="text" name="denNgayNop" id="denNgayNop" value="">
+<input type="button" value="Tra Cứu">
+</form>
+
+<div id="currAcc">
+<span>Trang 1/ 2</span>
+</div>
+
+<table id="tbl_tracuu" border="1" cellspacing="0" cellpadding="3">
+<thead>
+<tr>
+<th style="width: 3%;">STT</th>
+<th style="width: 6%;">Mã thông báo</th>
+<th style="width: 30%;">Tên thông báo</th>
+<th style="width: 19%;">Số thông báo</th>
+<th style="width: 15%;">Ngày gửi thông báo</th>
+<th style="width: 10%;">Cơ quan gửi</th>
+<th style="width: 8%;">Trạng thái</th>
+<th style="width:20%;">Văn bản giải trình điện tử</th>
+<th style="width:20%;">Phản hồi kết quả rà soát</th>
+<th style="width: 10%;">Tải thông báo</th>
+</tr>
+</thead>
+<tbody>
+<tr class="result" style="height: 35px;">
+<td class="align-c">1</td>
+<td class="align-c">01/TTN</td>
+<td class="align-l">01/TTN-Thông báo tiền thuế nợ (chậm nộp)</td>
+<td class="align-l">25799/TB-TCS1-KDT</td>
+<td class="align-c">10/08/2026 05:40:49</td>
+<td class="align-c">Thuế cơ sở 1 tỉnh Demo</td>
+<td class="align-c"><label id="updateStatus@90000000000000001">Chưa xem</label></td>
+<td class="align-c" style="vertical-align:middle"></td>
+<td class="align-c" style="vertical-align:middle"></td>
+<td class="align-c"><a href="#" onclick="layFileTBao('90000000000000001','608'); return false;">Tải thông báo</a></td>
+</tr>
+<tr class="result" style="height: 35px;">
+<td class="align-c">2</td>
+<td class="align-c">01/CC</td>
+<td class="align-l">01/CC-Quyết định cưỡng chế bằng biện pháp trích tiền</td>
+<td class="align-l">17884/QD-TCS25-KDT</td>
+<td class="align-c">21/08/2026 16:33:12</td>
+<td class="align-c">Thuế cơ sở 25 Thành phố Demo</td>
+<td class="align-c"><label id="updateStatus@90000000000000002">Đã xem</label></td>
+<td class="align-c" style="vertical-align:middle"><a href="javascript: gui_vb_gtbs('90000000000000002');">Gửi</a></td>
+<td class="align-c" style="vertical-align:middle"><a href="javascript: gui_ph_kq_rs('90000000000000002');">Gửi</a></td>
+<td class="align-c"><a href="#" onclick="layFileTBao('90000000000000002','604'); return false;">Tải thông báo</a></td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

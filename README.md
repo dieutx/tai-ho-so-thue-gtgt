@@ -22,6 +22,8 @@ Hỗ trợ Windows, Linux và macOS với Python 3.10 trở lên.
 - Trước cutoff dùng trực tiếp `thuedientu.gdt.gov.vn`.
 - DVC có thể bật lại bằng cấu hình, nhưng mặc định không được gọi.
 - Xuất danh sách tờ khai Excel 11 cột từ kết quả tra cứu.
+- Tra cứu giấy nộp tiền và tải XML về, kèm Excel tổng hợp (lệnh `gdt-gnt`).
+- Tra cứu thông báo của cơ quan thuế và tải PDF về, kèm Excel tổng hợp (lệnh `gdt-tb`).
 - Kiểm kê, phân loại và đọc chỉ tiêu XML hoàn toàn offline.
 - Xuất workbook phân tích nhiều sheet, giữ mọi lần nộp và thông tin nguồn.
 
@@ -143,6 +145,55 @@ Xem toàn bộ tham số:
 python -m gdt_tax --help
 ```
 
+## Tra cứu giấy nộp tiền (GNT)
+
+Giấy nộp tiền nằm trên trang Thuế điện tử cũ, dùng chung phiên đăng nhập với tờ
+khai nhưng là một lệnh riêng (`corpQueryTaxProc`). Lệnh này chỉ **tải XML** của GNT
+về và xuất Excel tổng hợp; **không** parse chỉ tiêu bên trong XML.
+
+```bash
+python -m gdt_tax.gnt --from-date 01/09/2026 --to-date 30/09/2026
+gdt-gnt --from-date 01/09/2026 --to-date 30/09/2026 --output-dir download/gnt-2026-09
+python -m gdt_tax.gnt --dry-run          # chỉ tra cứu, không tải
+```
+
+Khoảng dài hơn 31 ngày tự chia nhỏ theo ngày lập GNT. Đầu ra trong `--output-dir`:
+
+| File | Nội dung |
+|---|---|
+| `<số GNT>__<ctuId>.xml` | XML gốc của từng giấy nộp tiền |
+| `danh_sach_giay_nop_tien.xlsx` | Bảng tổng hợp 20 cột: số GNT, số tiền, loại tiền, trạng thái, số chứng từ, ngày lập/gửi/nộp, hình thức nộp, ngân hàng, tài khoản, file XML… |
+| `danh_sach_giay_nop_tien.csv` / `.json` | Metadata đầy đủ để tích hợp |
+
+File XML đã tải hợp lệ được bỏ qua ở lần chạy sau nên chạy tiếp được khi gián
+đoạn. Các cờ và biến môi trường (solver, proxy, log, header, `GDT_FROM_DATE`…)
+dùng chung với `gdt-tax`; xem `python -m gdt_tax.gnt --help`.
+
+## Tra cứu thông báo của cơ quan thuế
+
+Thông báo của cơ quan thuế (thông báo tiền thuế nợ, quyết định cưỡng chế…) nằm
+cùng trang Thuế điện tử cũ, dùng chung phiên đăng nhập nhưng là một lệnh riêng
+(`tracuuTBThueKhacProc`). Lệnh này tải **PDF** của từng thông báo và xuất Excel
+tổng hợp; không parse nội dung PDF.
+
+```bash
+python -m gdt_tax.tb --from-date 01/08/2026 --to-date 30/09/2026
+gdt-tb --from-date 01/08/2026 --to-date 30/09/2026 --output-dir download/tb-2026-08-09
+python -m gdt_tax.tb --dry-run          # chỉ tra cứu, không tải
+```
+
+Khoảng ngày lọc theo **ngày gửi/nộp thông báo**; khoảng dài hơn 31 ngày tự chia
+nhỏ. Đầu ra trong `--output-dir`:
+
+| File | Nội dung |
+|---|---|
+| `<số thông báo>__<messageId>.pdf` | PDF gốc của từng thông báo |
+| `danh_sach_thong_bao.xlsx` | Bảng tổng hợp: mã/tên/số thông báo, ngày gửi, cơ quan gửi, trạng thái (đã xem/chưa xem), có văn bản giải trình/phản hồi, file PDF |
+| `danh_sach_thong_bao.csv` / `.json` | Metadata đầy đủ để tích hợp |
+
+File PDF đã tải hợp lệ được bỏ qua ở lần chạy sau. Các cờ và biến môi trường
+dùng chung với `gdt-tax`; xem `python -m gdt_tax.tb --help`.
+
 ## Báo cáo đầu ra
 
 Thư mục `download/` chứa ZIP hồ sơ và các báo cáo sau:
@@ -242,6 +293,7 @@ hoặc PaddleOCR. GitLab CI chạy test trên Python 3.10 và 3.12, cùng lint/m
 - [Roadmap phát triển](docs/development/README.md)
 - [Bàn giao môi trường](docs/development/HANDOFF.md)
 - [Quy ước form mapping](gdt_tax/form_mappings/README.md)
+- [Hướng dẫn thêm mẫu biểu (form mapping) mới](docs/HUONGDAN_THEM_MAPPING.md)
 - [Hướng dẫn đóng góp](CONTRIBUTING.md)
 
 ## Giấy phép

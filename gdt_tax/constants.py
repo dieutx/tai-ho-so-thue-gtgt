@@ -32,6 +32,21 @@ DVC_VALIDATE = "/tchs/validateIdTkhai"
 DVC_DOWNLOAD = "/tchs/downloadhoso"
 DVC_DOWNLOAD_FORM = "/downloadhoso"
 
+# --- Giấy nộp tiền (GNT) trên trang Thuế điện tử cũ ---
+# Cùng máy chủ thuedientu nhưng là một operation DSE khác hẳn tờ khai:
+# ``corpQueryTaxProc`` với form ``reportForm``, lọc theo ngày lập GNT.
+GNT_OPERATION = "corpQueryTaxProc"
+GNT_FORM_ID = "reportForm"
+GNT_RESULT_TABLE_ID = "data_content_onday"
+#: ``type_tax=01`` là giấy nộp tiền nộp trực tiếp tại Cổng eTax của TCT.
+GNT_TYPE_TAX = "01"
+
+# --- Thông báo của cơ quan thuế trên trang Thuế điện tử cũ ---
+# Operation DSE ``tracuuTBThueKhacProc``, form ``tKhaiForm``, lọc theo ngày nộp.
+TB_OPERATION = "tracuuTBThueKhacProc"
+TB_FORM_ID = "tKhaiForm"
+TB_RESULT_TABLE_ID = "tbl_tracuu"
+
 # --- Dùng chung ---
 CASE_DETAIL = "/tchs/files/detail/{case_id}"
 
@@ -47,6 +62,10 @@ SOURCE_ETAX = "ETAX"
 SOURCE_DVC = "DVC"
 #: Trang Thuế điện tử cũ — nguồn chính mặc định trước cutoff.
 SOURCE_ETAX_LEGACY = "ETAX_LEGACY"
+#: Giấy nộp tiền trên trang Thuế điện tử cũ (luồng riêng, không phải tờ khai).
+SOURCE_GNT = "GNT"
+#: Thông báo của cơ quan thuế trên trang Thuế điện tử cũ.
+SOURCE_TB = "TB"
 SOURCES = (SOURCE_DVC, SOURCE_ETAX)
 #: Mọi nguồn có thể xuất hiện trong metadata.
 ALL_SOURCES = (SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY)
@@ -54,3 +73,11 @@ ALL_SOURCES = (SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY)
 METADATA_CSV = "danh_sach_ho_so.csv"
 METADATA_JSON = "danh_sach_ho_so.json"
 METADATA_XLSX = "danh_sach_to_khai.xlsx"
+
+GNT_METADATA_CSV = "danh_sach_giay_nop_tien.csv"
+GNT_METADATA_JSON = "danh_sach_giay_nop_tien.json"
+GNT_METADATA_XLSX = "danh_sach_giay_nop_tien.xlsx"
+
+TB_METADATA_CSV = "danh_sach_thong_bao.csv"
+TB_METADATA_JSON = "danh_sach_thong_bao.json"
+TB_METADATA_XLSX = "danh_sach_thong_bao.xlsx"

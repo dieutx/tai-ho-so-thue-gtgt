@@ -32,6 +32,7 @@ clean_captcha*.png
 
 # --- File thử nghiệm và ghi chú cá nhân ---
 legacy/
+repo-tam/
 .freebuff/
 search_page*.html
 prmpt*.txt

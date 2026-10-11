@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Tra cứu giấy nộp tiền</title></head>
+<body>
+<script>
+function chiTietCT(idCtu) { document.getElementById("ctuId").value = idCtu; }
+function downloadGNT(idCtu) { document.getElementById("ctuId").value = idCtu; }
+function uploadBke(idCtu, soCtu, mstNnop, ngayNt) {}
+function uploadBkeTMDT(idCtu, soCtu, mstNnop, ngayNt) {}
+</script>
+
+<form name="reportForm" method="post" action="/etaxnnt/Request" id='reportForm'>
+<input type="hidden" name="dse_sessionId" value="SESS01" />
+<input type="hidden" name="dse_applicationId" value="-1" />
+<input type="hidden" name="dse_operationName" value="corpQueryTaxProc" />
+<input type="hidden" name="dse_pageId" value="12" />
+<input type="hidden" name="dse_processorState" value="viewQueryPage" />
+<input type="hidden" name="dse_processorId" value="PROCID01" />
+<input type="hidden" name="dse_errorPage" value="/etax/query_tax_information.jsp" />
+<input type="hidden" name="dse_nextEventName" value="" />
+<input type="hidden" name="pn" value="1" />
+<input type="hidden" name="sct" id="sct" />
+<input type="hidden" name="ctuId" id="ctuId" />
+<input type="hidden" name="soGnt" id="soGnt" />
+<input type="hidden" name="idBke" id="idBke" />
+<input type="checkbox" value="01" name="type_tax" checked='checked' />
+<input type="text" name="ma_giao_dich" value="" />
+<input type="text" name="so_ctu_nh" value="" />
+<input type="text" name="so_gnt" value="" />
+<input type="text" name="ngay_lap_tu_ngay" value="01/09/2026" />
+<input type="text" name="ngay_lap_den_ngay" value="30/09/2026" />
+<input type="hidden" name="isReport" id="isReport" value="N" />
+</form>
+
+<div>Trang 1/ 2 . Có 3 bản ghi</div>
+
+<table id="data_content_onday" width="230%" class="result_table table_format">
+<thead>
+<tr class="result_head">
+<td>STT</td>
+<td>Số tham chiếu/ Mã giao dịch</td>
+<td>Mã giao dịch DS chi tiết</td>
+<td>Lần nộp</td>
+<td>Số giấy nộp tiền</td>
+<td>Số tiền</td>
+<td>Loại tiền</td>
+<td>Trạng thái</td>
+<td>Số chứng từ</td>
+<td>Ngày lập GNT</td>
+<td>Ngày gửi GNT</td>
+<td>Ngày nộp thuế</td>
+<td>Nộp DS chi tiết TNCN</td>
+<td>Nộp DS chi tiết TMĐT</td>
+<td>Ngày nộp DS chi tiết</td>
+<td>Hình thức nộp</td>
+<td>Ngân hàng</td>
+<td>Tài khoản ngân hàng</td>
+<td>#</td>
+<td>Thông báo</td>
+</tr>
+</thead>
+<tbody id="allResultTableBody">
+<tr class="" style="height: 35px">
+<td align="center">1&nbsp;</td>
+<td style="text-align: center;">11220260417191212</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"><a href="javascript: chiTietCT(900000001);" title="Xem chi tiết">000000101234567-01309202600000001</a></td>
+<td style="text-align: right;">17,500</td>
+<td style="text-align: center;">VND</td>
+<td style="text-align: center;">Nộp thuế thành công</td>
+<td style="text-align: center;">7559356</td>
+<td style="text-align: center;">19/09/2026 14:52:44</td>
+<td style="text-align: center;">19/09/2026 14:53:56</td>
+<td style="text-align: center;">19/09/2026 14:54:02</td>
+<td style="text-align: center;"><a href="javascript: uploadBke('900000001','7559356','0101234567-013','19/09/2026');"><img src="/etaxnnt/static/images/upload.bmp"/></a></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;">Nộp tại cổng eTax của TCT</td>
+<td style="text-align: left;">Ngân hàng TMCP Đầu tư và Phát triển Việt Nam</td>
+<td style="text-align: center;">26810001228888</td>
+<td style="text-align: center;"><a href="javascript: downloadGNT(900000001);">Tải về</a></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr class="" style="height: 35px">
+<td align="center">2&nbsp;</td>
+<td style="text-align: center;">11220260417069079</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"><a href="javascript: chiTietCT(900000002);" title="Xem chi tiết">000000101234567-01609202600000002</a></td>
+<td style="text-align: right;">13,163,653</td>
+<td style="text-align: center;">VND</td>
+<td style="text-align: center;">Nộp thuế thành công</td>
+<td style="text-align: center;">7551708</td>
+<td style="text-align: center;">18/09/2026 18:42:03</td>
+<td style="text-align: center;">18/09/2026 18:42:46</td>
+<td style="text-align: center;">18/09/2026 18:43:01</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"><a href="javascript: uploadBkeTMDT('900000002','7551708','0101234567-013','18/09/2026');"><img src="/etaxnnt/static/images/upload.bmp"/></a></td>
+<td style="text-align: center;">18/09/2026</td>
+<td style="text-align: left;">Nộp tại cổng eTax của TCT</td>
+<td style="text-align: left;">Ngân hàng TMCP Công thương Việt Nam</td>
+<td style="text-align: center;">102010001234567</td>
+<td style="text-align: center;"><a href="javascript: downloadGNT(900000002);">Tải về</a></td>
+<td style="text-align: center;"></td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

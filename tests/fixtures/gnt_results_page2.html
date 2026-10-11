@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Tra cứu giấy nộp tiền</title></head>
+<body>
+<script>
+function chiTietCT(idCtu) {}
+function downloadGNT(idCtu) {}
+function uploadBke(a,b,c,d) {}
+function uploadBkeTMDT(a,b,c,d) {}
+</script>
+
+<form name="reportForm" method="post" action="/etaxnnt/Request" id='reportForm'>
+<input type="hidden" name="dse_sessionId" value="SESS01" />
+<input type="hidden" name="dse_applicationId" value="-1" />
+<input type="hidden" name="dse_operationName" value="corpQueryTaxProc" />
+<input type="hidden" name="dse_pageId" value="13" />
+<input type="hidden" name="dse_processorState" value="viewQueryPage" />
+<input type="hidden" name="dse_processorId" value="PROCID01" />
+<input type="hidden" name="dse_errorPage" value="/etax/query_tax_information.jsp" />
+<input type="hidden" name="dse_nextEventName" value="" />
+<input type="hidden" name="pn" value="1" />
+<input type="hidden" name="ctuId" id="ctuId" />
+<input type="checkbox" value="01" name="type_tax" checked='checked' />
+<input type="hidden" name="isReport" id="isReport" value="N" />
+</form>
+
+<div>Trang 2/ 2 . Có 3 bản ghi</div>
+
+<table id="data_content_onday" width="230%" class="result_table table_format">
+<tbody id="allResultTableBody">
+<tr class="" style="height: 35px">
+<td align="center">3&nbsp;</td>
+<td style="text-align: center;">11220260416100001</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"><a href="javascript: chiTietCT(900000003);" title="Xem chi tiết">000000101234567-01709202600000003</a></td>
+<td style="text-align: right;">1,000,000</td>
+<td style="text-align: center;">VND</td>
+<td style="text-align: center;">Nộp thuế thành công</td>
+<td style="text-align: center;">7550000</td>
+<td style="text-align: center;">17/09/2026 09:00:00</td>
+<td style="text-align: center;">17/09/2026 09:01:00</td>
+<td style="text-align: center;">17/09/2026 09:02:00</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;">Nộp tại cổng eTax của TCT</td>
+<td style="text-align: left;">Ngân hàng TMCP Ngoại thương Việt Nam</td>
+<td style="text-align: center;">0011000012345</td>
+<td style="text-align: center;"><a href="javascript: downloadGNT(900000003);">Tải về</a></td>
+<td style="text-align: center;"></td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>
