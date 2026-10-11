@@ -55,7 +55,7 @@ def configure_logging(
     có sẵn một file đầy đủ để gửi kèm khi cổng đổi giao diện, không phải chạy lại
     ở chế độ verbose.
     """
-    _reconfigure_streams()
+    configure_streams()
     close_logging()
 
     console = logging.StreamHandler(sys.stdout)
@@ -93,7 +93,8 @@ def close_logging() -> None:
             _OWNED_HANDLERS.discard(handler)
 
 
-def _reconfigure_streams() -> None:
+def configure_streams() -> None:
+    """Bật UTF-8 trước khi argparse/logging ghi tiếng Việt ra console hoặc pipe."""
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
@@ -110,4 +111,7 @@ def _file_handler(log_file: str | Path) -> logging.FileHandler:
     return handler
 
 
-__all__ = ["DATE_FORMAT", "LOG_FORMAT", "SecretsFilter", "close_logging", "configure_logging"]
+__all__ = [
+    "DATE_FORMAT", "LOG_FORMAT", "SecretsFilter", "close_logging", "configure_logging",
+    "configure_streams",
+]

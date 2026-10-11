@@ -1,5 +1,5 @@
-# CI cho GitLab: chạy đúng hai lệnh mà README/CONTRIBUTING yêu cầu người đóng
-# góp chạy trước khi mở merge request. Test offline, không cần thư viện OCR và
+# CI cho GitLab: chạy test, lint và mypy như README/CONTRIBUTING.
+# Test offline, không cần thư viện OCR và
 # không cần tài khoản.
 
 stages:
@@ -22,7 +22,7 @@ test:
       - PYTHON_VERSION: ["3.10", "3.12"]
   script:
     - python -m pip install --upgrade pip
-    - python -m pip install beautifulsoup4 lxml openpyxl requests
+    - python -m pip install .
     - python -m unittest discover -s tests -t . -v
 
 lint:
@@ -30,6 +30,6 @@ lint:
   image: python:3.12
   script:
     - python -m pip install --upgrade pip
-    - python -m pip install ruff mypy beautifulsoup4 lxml openpyxl requests
+    - python -m pip install ".[dev]"
     - ruff check .
     - mypy gdt_tax

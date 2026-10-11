@@ -8,40 +8,35 @@ Công cụ Python để tra cứu, tải và tổng hợp hồ sơ thuế điệ
 Chương trình lưu hồ sơ gốc, metadata và báo cáo Excel; lần chạy sau tự dùng lại
 ZIP hợp lệ đã có.
 
+Khoảng ngày được tự chia thành các đoạn tối đa 31 ngày. Chương trình duyệt
+phân trang, hỗ trợ CAPTCHA tự động hoặc nhập tay và giữ mọi lần nộp khi phân
+tích XML offline.
+
 > Trạng thái nguồn dữ liệu: trước ngày cutoff dùng Thuế điện tử (legacy). Từ
 > cutoff trở đi thuộc Dịch vụ công (DVC), nhưng DVC đang mặc định tắt cho đến khi
 > dữ liệu và endpoint được xác minh ổn định.
 
 Hỗ trợ Windows, Linux và macOS với Python 3.10 trở lên.
 
-## Chức năng chính
-
-- Tự chia khoảng tra cứu thành các đoạn tối đa 31 ngày.
-- Tự đăng nhập và nhận dạng CAPTCHA bằng `ddddocr`.
-- Duyệt đủ phân trang, tải hồ sơ và tiếp tục được sau khi gián đoạn.
-- Trước cutoff dùng trực tiếp `thuedientu.gdt.gov.vn`.
-- DVC có thể bật lại bằng cấu hình, nhưng mặc định không được gọi.
-- Xuất danh sách tờ khai Excel 11 cột từ kết quả tra cứu.
-- Tra cứu giấy nộp tiền và tải XML về, kèm Excel tổng hợp (lệnh `gdt-gnt`).
-- Tra cứu thông báo của cơ quan thuế và tải PDF về, kèm Excel tổng hợp (lệnh `gdt-tb`).
-- Kiểm kê, phân loại và đọc chỉ tiêu XML hoàn toàn offline.
-- Xuất workbook phân tích nhiều sheet, giữ mọi lần nộp và thông tin nguồn.
-
-## Chính sách nguồn theo ngày
-
-| Khoảng ngày | Nguồn | Mặc định |
+| Nhu cầu | Lệnh | Kết quả chính |
 |---|---|---|
-| Trước `01/07/2025` | Thuế điện tử legacy | Bật |
-| Từ `01/07/2025` | Cổng Dịch vụ công | Tắt |
+| Tải hồ sơ/tờ khai | `gdt-tax` | ZIP gốc và danh sách tờ khai Excel |
+| Tải giấy nộp tiền | `gdt-gnt` | XML gốc và danh sách GNT Excel |
+| Tải thông báo của cơ quan thuế | `gdt-tb` | PDF gốc và danh sách thông báo Excel |
+| Kiểm kê, đọc và phân loại XML offline | `gdt-inventory`, `gdt-parse`, `gdt-classify` | Manifest, chỉ tiêu và phân loại artifact |
+| Xuất workbook phân tích | `gdt-export` | `Tax_Return_Summary.xlsx` |
 
-Nếu khoảng tra cứu đi qua cutoff, phần legacy vẫn chạy. Phần DVC bị bỏ qua được
-báo rõ và chương trình trả mã thoát `1` để tránh hiểu nhầm kết quả là đầy đủ.
+## Mục lục
 
-Có thể đổi cutoff bằng `GDT_ETAX_CUTOFF`. Chỉ bật DVC khi chủ động kiểm thử:
-
-```bash
-python -m gdt_tax --enable-dvc
-```
+- [Cài đặt nhanh](#cài-đặt-nhanh)
+- [Cấu hình](#cấu-hình-bằng-env)
+- [Chính sách nguồn theo ngày](#chính-sách-nguồn-theo-ngày)
+- [Tờ khai](#sử-dụng), [giấy nộp tiền](#tra-cứu-giấy-nộp-tiền-gnt), [thông báo](#tra-cứu-thông-báo-của-cơ-quan-thuế)
+- [Báo cáo đầu ra](#báo-cáo-đầu-ra)
+- [Phân tích XML offline](#phân-tích-xml-offline)
+- [Kiểm thử](#kiểm-thử)
+- [Chẩn đoán và khắc phục](#chẩn-đoán-và-khắc-phục)
+- [Tài liệu kỹ thuật](#tài-liệu-kỹ-thuật)
 
 ## Cài đặt nhanh
 
@@ -55,8 +50,9 @@ cd tai-ho-so-thue-gtgt
 Windows PowerShell:
 
 ```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[ocr-ddddocr]"
 ```
 
 Linux hoặc macOS:
@@ -64,8 +60,24 @@ Linux hoặc macOS:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
+python -m pip install -e ".[ocr-ddddocr]"
 ```
+
+Cách cài trên tạo đầy đủ lệnh `gdt-*` và cài backend CAPTCHA mặc định `ddddocr`.
+Nếu chỉ cần nhập CAPTCHA bằng tay hoặc phân tích offline, cài
+`python -m pip install -e .` rồi dùng `--solver manual` khi tra cứu.
+
+Nếu PowerShell không cho kích hoạt venv, dùng trực tiếp Python của môi trường:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[ocr-ddddocr]"
+.\.venv\Scripts\python.exe -m gdt_tax --help
+```
+
+Khi chưa kích hoạt venv, thay `python` trong các ví dụ bằng
+`.\.venv\Scripts\python.exe`; lệnh `gdt-*` nằm trong `.\.venv\Scripts\`.
+Cài bằng `requirements.txt` vẫn chạy được qua `python -m` từ repo nhưng không
+tạo các lệnh `gdt-*`.
 
 Repo private sẽ yêu cầu credential GitLab. Không đưa token vào URL, `.env`,
 issue, log hoặc commit.
@@ -101,8 +113,32 @@ GDT_ETAX_CUTOFF=01/07/2025
 Tham số dòng lệnh ưu tiên hơn biến môi trường; biến môi trường ưu tiên hơn
 `.env`. File `.env` đã nằm trong `.gitignore`.
 
+Nếu bỏ ngày, mặc định là tháng ngay trước cutoff (tháng 06/2025 với cutoff
+trên). `GDT_MAX_DAYS_PER_SEARCH` nhận giá trị từ 1 đến 31; khoảng tổng thể có
+thể dài hơn và được tự chia nhỏ. Nên dùng thư mục đầu ra riêng cho mỗi tài khoản.
+
 Các cấu hình CAPTCHA, retry, log, proxy và header mẫu có trong
 [.env.example](.env.example).
+
+## Chính sách nguồn theo ngày
+
+Chính sách này áp dụng cho **tờ khai (`gdt-tax`)**. GNT và thông báo dùng Thuế
+điện tử legacy cho toàn bộ khoảng ngày, không chuyển nguồn theo cutoff.
+
+| Khoảng ngày | Nguồn | Mặc định |
+|---|---|---|
+| Trước `01/07/2025` | Thuế điện tử legacy | Bật |
+| Từ `01/07/2025` | Cổng Dịch vụ công | Tắt |
+
+Nếu khoảng tra cứu đi qua cutoff, phần legacy vẫn chạy. Phần DVC bị bỏ qua được
+báo rõ và chương trình trả mã thoát `1`, kể cả dry-run, để tránh hiểu nhầm kết
+quả là đầy đủ. Có thể đổi cutoff bằng `GDT_ETAX_CUTOFF`.
+
+Chỉ bật DVC khi chủ động kiểm thử:
+
+```bash
+python -m gdt_tax --from-date 01/07/2025 --to-date 31/07/2025 --enable-dvc
+```
 
 ## Sử dụng
 
@@ -124,11 +160,16 @@ Chỉ tra cứu, không tải:
 python -m gdt_tax --dry-run
 ```
 
+`--dry-run` vẫn đăng nhập, tra cứu và cập nhật danh sách metadata; tham chiếu
+file đã tải ở lần trước được giữ lại.
+
 Chỉ tải một hồ sơ:
 
 ```bash
-python -m gdt_tax --case-id <ma-ho-so>
+python -m gdt_tax --case-id MA_HO_SO
 ```
+
+`--case-id` tìm hồ sơ trong khoảng ngày đang cấu hình.
 
 Một số lệnh hữu ích:
 
@@ -144,6 +185,12 @@ Xem toàn bộ tham số:
 ```bash
 python -m gdt_tax --help
 ```
+
+| Mã thoát của lệnh tải | Ý nghĩa |
+|---:|---|
+| `0` | Thành công; với dry-run là tra cứu thành công |
+| `1` | Chưa đầy đủ, có phần bị bỏ qua hoặc lỗi trong quá trình chạy |
+| `2` | Lỗi cấu hình hoặc khởi tạo CAPTCHA |
 
 ## Tra cứu giấy nộp tiền (GNT)
 
@@ -196,29 +243,45 @@ dùng chung với `gdt-tax`; xem `python -m gdt_tax.tb --help`.
 
 ## Báo cáo đầu ra
 
-Thư mục `download/` chứa ZIP hồ sơ và các báo cáo sau:
+### Báo cáo tạo khi tra cứu/tải
+
+Thư mục `GDT_DOWNLOAD_DIR` (mặc định `download/`) hoặc `--output-dir` chứa ZIP
+hồ sơ và các báo cáo sau. Đầu ra GNT/thông báo được mô tả ở từng mục bên trên.
 
 | File | Nội dung |
 |---|---|
 | `danh_sach_to_khai.xlsx` | Danh sách tờ khai nghiệp vụ |
 | `danh_sach_ho_so.csv` / `.json` | Metadata đầy đủ để tích hợp |
 | `phan_loai_ho_so.json` | Nhóm hồ sơ theo metadata |
-| `manifest_artifact.json` | Inventory file/member, hash và cấu trúc XML |
-| `parsed_declarations.json` | Metadata và chỉ tiêu đã parse |
-| `phan_loai_artifact.json` | Phân loại từng artifact theo nội dung |
-| `Tax_Return_Summary.xlsx` | Workbook phân tích nhiều sheet |
 
 `danh_sach_to_khai.xlsx` có đúng 11 cột:
 
-| STT | Mã hồ sơ | Tên tờ khai | Kỳ tính thuế | Loại tờ khai | Lần nộp bổ sung | Lần nộp | Cơ quan thuế tiếp nhận | Ngày nộp | Trạng thái | Hồ sơ đính kèm |
-|---:|---|---|---|---|---:|---:|---|---|---|---|
+STT, mã hồ sơ, tên tờ khai, kỳ tính thuế, loại tờ khai, lần nộp bổ sung, lần nộp,
+cơ quan thuế tiếp nhận, ngày nộp, trạng thái và hồ sơ đính kèm.
 
 Dữ liệu cũ được gộp theo nguồn và mã hồ sơ. Ô có khả năng bị Excel hiểu là
 công thức được escape; `null`, `0` và số âm vẫn được phân biệt.
 
+ZIP được kiểm tra CRC và giới hạn trước khi giải nén: tối đa 256 MiB dữ liệu
+ZIP, 200 member, 64 MiB/member, tổng 256 MiB sau giải nén và tỉ lệ nén 200:1.
+ZIP mã hóa hoặc vượt giới hạn bị từ chối và không được tính là tải thành công.
+
+### Báo cáo tạo bằng lệnh offline
+
+Các file này chỉ được tạo sau khi chạy các lệnh ở mục tiếp theo:
+
+| File | Nội dung |
+|---|---|
+| `manifest_artifact.json` | Inventory file/member, hash và cấu trúc XML |
+| `bao_cao_discovery.json` / `.md` | Thống kê cấu trúc, mẫu và phiên bản |
+| `parsed_declarations.json` | Metadata và chỉ tiêu đã parse |
+| `phan_loai_artifact.json` | Phân loại từng artifact theo nội dung |
+| `Tax_Return_Summary.xlsx` | Workbook phân tích nhiều sheet |
+
 ## Phân tích XML offline
 
-Các lệnh này không đăng nhập và không gọi cổng thuế:
+Chạy lần lượt sau khi có dữ liệu tải về. Các lệnh này không đăng nhập và không
+gọi cổng thuế:
 
 ```bash
 python -m gdt_tax.inventory download --output download
@@ -226,6 +289,10 @@ python -m gdt_tax.parser.cli download --output download
 python -m gdt_tax.classify download --output download
 python -m gdt_tax.export download --output download
 ```
+
+Inventory tạo manifest cho parser và classifier; exporter ghép kết quả thành
+workbook. Báo cáo do chương trình tạo ra được bỏ qua khi kiểm kê lại.
+Nếu dùng thư mục tải khác, thay `download` trong các lệnh trên.
 
 Workbook `Tax_Return_Summary.xlsx` gồm index tờ khai, các sheet GTGT/TNCN/TNDN,
 chỉ tiêu dạng dài, mẫu chưa mapping, lỗi parse, phiên bản mapping và audit log.
@@ -244,9 +311,8 @@ Mapping 03/TNDN chỉ đọc tờ khai chính, không gán báo cáo tài chính
 thành tờ khai. Version chưa được xác minh giữ trạng thái `NEED_MAPPING`; parser
 không suy đoán ý nghĩa chỉ tiêu.
 
-Kết quả kiểm chứng trên bộ dữ liệu cục bộ hiện tại: 1.265 XML, 0 lỗi parse,
-479 tờ khai `MAPPED`; riêng 03/TNDN là 20/20 hồ sơ, không warning. Dữ liệu thật
-không được đưa vào Git.
+Số liệu kiểm chứng theo từng lần rà soát nằm trong
+[REVIEW.md](docs/development/REVIEW.md). Dữ liệu thật không được đưa vào Git.
 
 ## Nguyên tắc dữ liệu
 
@@ -258,10 +324,10 @@ không được đưa vào Git.
 
 ## Kiểm thử
 
-Cài dependency phát triển:
+Cài công cụ phát triển trong venv; test offline không cần tài khoản hoặc OCR:
 
 ```bash
-python -m pip install -r requirements-dev.txt
+python -m pip install -e ".[dev]"
 ```
 
 Chạy cùng các kiểm tra CI:
@@ -272,17 +338,22 @@ python -m ruff check .
 python -m mypy gdt_tax
 ```
 
-Hiện có 352 test; 6 test backend OCR tùy chọn được skip nếu chưa cài EasyOCR
-hoặc PaddleOCR. GitLab CI chạy test trên Python 3.10 và 3.12, cùng lint/mypy.
+Các test backend OCR tùy chọn có thể được skip nếu thiếu thư viện tương ứng.
+GitLab CI chạy test trên Python 3.10 và 3.12, cùng lint/mypy. Test offline không
+xác nhận cổng thuế hiện đang hoạt động hoặc mọi mẫu XML đều được hỗ trợ.
 
-## Khắc phục nhanh
+## Chẩn đoán và khắc phục
 
+- Không tìm thấy `gdt-*`: kích hoạt venv và cài package bằng `pip install -e .`,
+  hoặc dùng `python -m`.
 - CAPTCHA sai nhiều lần: dùng `--solver manual`.
 - Chạy trên máy chủ ngoài Việt Nam: cấu hình proxy Việt Nam bằng
   `GDT_PROXY_URL` hoặc `--proxy`.
 - Khoảng sau cutoff không có dữ liệu: đây là hành vi dự kiến khi DVC đang tắt.
 - Cổng đổi HTML/endpoint: chạy với `--log-file`; chỉ dùng `--dump-http` trong
   môi trường riêng tư.
+- Excel đang mở gây lỗi ghi báo cáo: đóng workbook rồi chạy lại; file gốc hợp
+  lệ được dùng lại.
 - Muốn chạy lại từ đầu: dùng thư mục output mới. Không xóa dữ liệu cũ nếu chưa
   sao lưu.
 

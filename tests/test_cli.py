@@ -1,5 +1,7 @@
 import io
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -60,6 +62,23 @@ class ParseHeadersTests(unittest.TestCase):
 
 
 class ParserTests(unittest.TestCase):
+    def test_help_utf8_khi_console_mac_dinh_cp1252(self):
+        for module in (
+            "gdt_tax", "gdt_tax.gnt", "gdt_tax.tb", "gdt_tax.inventory",
+            "gdt_tax.parser.cli", "gdt_tax.classify", "gdt_tax.export",
+        ):
+            with self.subTest(module=module):
+                result = subprocess.run(
+                    [sys.executable, "-m", module, "--help"],
+                    env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+                    cwd=Path(__file__).resolve().parents[1],
+                    capture_output=True, timeout=30, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace"))
+                output = result.stdout.decode("utf-8")
+                self.assertIn("usage:", output)
+                self.assertTrue(any(ord(char) > 127 for char in output))
+
     def test_co_bat_tat_dvc_va_mac_dinh_khong_ghi_de_env(self):
         parser = build_parser()
         self.assertIsNone(parser.parse_args([]).dvc_enabled)

@@ -101,12 +101,12 @@ class TbPipeline:
                 raise SearchError(f"Trang {page}/{total_pages} thông báo trống")
             seen_ids.update(page_ids)
             for index, found in enumerate(result.records, start=1):
-                records.setdefault(found.message_id, found)
+                record = records.setdefault(found.message_id, found)
                 self.logger.info(
                     "TẢI trang=%s mục=%s/%s: %s",
                     page, index, len(result.records), found.so_thong_bao or found.message_id,
                 )
-                self._download(portal, found, downloaded)
+                self._download(portal, record, downloaded)
                 write_tb_metadata(self.settings.download_dir, records)
                 self._pause(self.settings.pause_between_records)
             if total_pages is None and not new_ids:

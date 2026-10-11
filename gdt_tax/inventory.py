@@ -37,7 +37,14 @@ from pathlib import Path
 
 from lxml import etree
 
+from .archive_limits import (
+    MAX_COMPRESSION_RATIO,
+    MAX_MEMBER_BYTES,
+    MAX_MEMBERS,
+    MAX_TOTAL_UNCOMPRESSED,
+)
 from .errors import GdtError
+from .logging_setup import configure_streams
 
 LOGGER_NAME = "gdt_tax.inventory"
 
@@ -58,6 +65,12 @@ _DERIVED_NAMES = frozenset(
         "danh_sach_ho_so.json",
         "danh_sach_ho_so.csv",
         "danh_sach_to_khai.xlsx",
+        "danh_sach_giay_nop_tien.json",
+        "danh_sach_giay_nop_tien.csv",
+        "danh_sach_giay_nop_tien.xlsx",
+        "danh_sach_thong_bao.json",
+        "danh_sach_thong_bao.csv",
+        "danh_sach_thong_bao.xlsx",
         "phan_loai_ho_so.json",
         "parsed_declarations.json",
         "phan_loai_artifact.json",
@@ -66,10 +79,6 @@ _DERIVED_NAMES = frozenset(
 )
 
 # --- Giới hạn tài nguyên (chống bomb/Zip Slip/XML quá lớn) ---
-MAX_MEMBERS = 200
-MAX_MEMBER_BYTES = 64 * 1024 * 1024
-MAX_TOTAL_UNCOMPRESSED = 256 * 1024 * 1024
-MAX_COMPRESSION_RATIO = 200.0
 MAX_XML_BYTES = 32 * 1024 * 1024
 MAX_XML_DEPTH = 100
 MAX_XML_NODES = 200_000
@@ -980,6 +989,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_streams()
     args = build_parser().parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,

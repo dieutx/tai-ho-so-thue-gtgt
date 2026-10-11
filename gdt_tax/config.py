@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import math
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -45,7 +45,7 @@ def load_env_file(path: str | Path = DEFAULT_ENV_FILE) -> dict[str, str]:
     path = Path(path)
     if not path.is_file():
         return values
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -184,8 +184,8 @@ class Settings:
             )
         if self.from_date > self.to_date:
             raise ConfigError("GDT_FROM_DATE phải nhỏ hơn hoặc bằng GDT_TO_DATE")
-        if self.max_days_per_search < 1:
-            raise ConfigError("GDT_MAX_DAYS_PER_SEARCH phải lớn hơn 0")
+        if not 1 <= self.max_days_per_search <= MAX_DAYS_PER_SEARCH_DEFAULT:
+            raise ConfigError("GDT_MAX_DAYS_PER_SEARCH phải từ 1 đến 31")
         if self.page_size < 1:
             raise ConfigError("GDT_PAGE_SIZE phải lớn hơn 0")
         parse_proxy(self.proxy_url)  # lỗi cấu hình phải hiện ra ngay lúc khởi động
@@ -227,44 +227,55 @@ class Settings:
         values.update(dict(os.environ if environ is None else environ))
         env = _Env(values)
 
-        def pick(key: str, fallback: Any) -> Any:
+        def pick(key: str, reader: Callable[..., Any], *args: Any) -> Any:
             value = overrides.get(key)
-            return fallback if value is None else value
+            return reader(*args) if value is None else value
 
         try:
-            cutoff_raw = pick("etax_cutoff", env.text("ETAX_CUTOFF", ""))
+            cutoff_raw = pick("etax_cutoff", env.text, "ETAX_CUTOFF", "")
             cutoff = parse_date(cutoff_raw) if cutoff_raw else ETAX_CUTOFF_DEFAULT
             default_end = cutoff - timedelta(days=1)
-            from_raw = pick("from_date", env.text("FROM_DATE", f"{default_end.replace(day=1):%d/%m/%Y}"))
-            to_raw = pick("to_date", env.text("TO_DATE", f"{default_end:%d/%m/%Y}"))
+            from_raw = pick(
+                "from_date", env.text, "FROM_DATE", f"{default_end.replace(day=1):%d/%m/%Y}"
+            )
+            to_raw = pick("to_date", env.text, "TO_DATE", f"{default_end:%d/%m/%Y}")
             settings = cls(
-                username=pick("username", env.text("USERNAME")),
-                password=pick("password", env.text("PASSWORD")),
+                username=pick("username", env.text, "USERNAME"),
+                password=pick("password", env.text, "PASSWORD"),
                 from_date=parse_date(from_raw),
                 to_date=parse_date(to_raw),
-                download_dir=Path(pick("download_dir", env.text("DOWNLOAD_DIR", "download"))),
-                case_id=pick("case_id", env.text("CASE_ID")),
-                captcha_solver=pick("captcha_solver", env.text("CAPTCHA_SOLVER", DEFAULT_CAPTCHA_SOLVER)),
-                captcha_options=pick("captcha_options", env.json("CAPTCHA_OPTIONS")) or {},
-                captcha_plugins=env.text("CAPTCHA_PLUGINS"),
+                download_dir=Path(pick("download_dir", env.text, "DOWNLOAD_DIR", "download")),
+                case_id=pick("case_id", env.text, "CASE_ID"),
+                captcha_solver=pick(
+                    "captcha_solver", env.text, "CAPTCHA_SOLVER", DEFAULT_CAPTCHA_SOLVER
+                ),
+                captcha_options=pick("captcha_options", env.json, "CAPTCHA_OPTIONS") or {},
+                captcha_plugins=pick("captcha_plugins", env.text, "CAPTCHA_PLUGINS"),
                 etax_cutoff=cutoff,
-                max_days_per_search=env.integer("MAX_DAYS_PER_SEARCH", MAX_DAYS_PER_SEARCH_DEFAULT),
-                page_size=env.integer("PAGE_SIZE", 10),
-                login_attempts=env.integer("LOGIN_ATTEMPTS", 10),
-                search_attempts=env.integer("SEARCH_ATTEMPTS", 6),
-                request_timeout=env.integer("REQUEST_TIMEOUT", 30),
-                http_retries=env.integer("HTTP_RETRIES", 3),
-                pause_between_records=env.number("PAUSE_BETWEEN_RECORDS", 1.0),
-                pause_between_pages=env.number("PAUSE_BETWEEN_PAGES", 3.0),
-                pause_jitter=env.number("PAUSE_JITTER", 0.3),
-                dry_run=bool(pick("dry_run", env.boolean("DRY_RUN", False))),
-                extra_headers=pick("extra_headers", env.text_map("EXTRA_HEADERS")) or {},
-                log_file=pick("log_file", env.text("LOG_FILE")),
-                http_dump_dir=pick("http_dump_dir", env.text("HTTP_DUMP_DIR")),
-                header_profile=pick("header_profile", env.text("HEADER_PROFILE", DEFAULT_PROFILE)),
-                proxy_url=pick("proxy_url", env.text("PROXY_URL")),
-                legacy_etax=bool(pick("legacy_etax", env.boolean("LEGACY_ETAX", True))),
-                dvc_enabled=bool(pick("dvc_enabled", env.boolean("DVC_ENABLED", False))),
+                max_days_per_search=pick(
+                    "max_days_per_search", env.integer, "MAX_DAYS_PER_SEARCH",
+                    MAX_DAYS_PER_SEARCH_DEFAULT,
+                ),
+                page_size=pick("page_size", env.integer, "PAGE_SIZE", 10),
+                login_attempts=pick("login_attempts", env.integer, "LOGIN_ATTEMPTS", 10),
+                search_attempts=pick("search_attempts", env.integer, "SEARCH_ATTEMPTS", 6),
+                request_timeout=pick("request_timeout", env.integer, "REQUEST_TIMEOUT", 30),
+                http_retries=pick("http_retries", env.integer, "HTTP_RETRIES", 3),
+                pause_between_records=pick(
+                    "pause_between_records", env.number, "PAUSE_BETWEEN_RECORDS", 1.0
+                ),
+                pause_between_pages=pick(
+                    "pause_between_pages", env.number, "PAUSE_BETWEEN_PAGES", 3.0
+                ),
+                pause_jitter=pick("pause_jitter", env.number, "PAUSE_JITTER", 0.3),
+                dry_run=bool(pick("dry_run", env.boolean, "DRY_RUN", False)),
+                extra_headers=pick("extra_headers", env.text_map, "EXTRA_HEADERS") or {},
+                log_file=pick("log_file", env.text, "LOG_FILE"),
+                http_dump_dir=pick("http_dump_dir", env.text, "HTTP_DUMP_DIR"),
+                header_profile=pick("header_profile", env.text, "HEADER_PROFILE", DEFAULT_PROFILE),
+                proxy_url=pick("proxy_url", env.text, "PROXY_URL"),
+                legacy_etax=bool(pick("legacy_etax", env.boolean, "LEGACY_ETAX", True)),
+                dvc_enabled=bool(pick("dvc_enabled", env.boolean, "DVC_ENABLED", False)),
             )
         except ValueError as error:  # parse_date
             raise ConfigError(str(error)) from error

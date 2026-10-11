@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 from urllib.parse import parse_qs
 
 from openpyxl import load_workbook
@@ -171,6 +172,18 @@ class GntParsingTests(unittest.TestCase):
             "000000101234567-01309202600000001__900000001.xml",
         )
 
+    def test_ma_gnt_khong_tao_duong_dan_ngoai_output(self):
+        record = parse_gnt_records(fixture("gnt_results_page1.html"))[0]
+        record.so_gnt = ""
+        for value in ("../../outside", r"..\..\outside", "C:/outside", "nested/name"):
+            with self.subTest(value=value):
+                record.ctu_id = value
+                name = gnt_xml_filename(record)
+                self.assertEqual(Path(name).name, name)
+                self.assertNotIn("/", name)
+                self.assertNotIn("\\", name)
+                self.assertNotIn(":", name)
+
 
 class GntPeriodsTests(unittest.TestCase):
     def test_chia_doan_31_ngay(self):
@@ -309,6 +322,14 @@ class GntPipelineTests(unittest.TestCase):
         summary, _, state = self.run_pipeline()
         self.assertEqual(summary.downloaded, 3)
         self.assertFalse(state.get("downloads"))
+
+    def test_tai_lai_thanh_cong_o_doan_sau_giu_ten_file_trong_metadata(self):
+        with mock.patch.object(GntPortal, "download_gnt", side_effect=[None, GNT_XML, GNT_XML, GNT_XML]):
+            summary, _, _ = self.run_pipeline(to_date=date(2026, 10, 31))
+        self.assertTrue(summary.complete)
+        rows = json.loads((self.directory / "danh_sach_giay_nop_tien.json").read_text("utf-8"))
+        self.assertEqual(len(rows), 3)
+        self.assertTrue(all(row["tep_xml"] and (self.directory / row["tep_xml"]).is_file() for row in rows))
 
     def test_dry_run_khong_tai(self):
         summary, _, state = self.run_pipeline(dry_run=True)

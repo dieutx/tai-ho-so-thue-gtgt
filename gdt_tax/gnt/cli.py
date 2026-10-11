@@ -32,7 +32,7 @@ from ..config import DEFAULT_ENV_FILE, Settings
 from ..errors import CaptchaError, ConfigError, GdtError
 from ..headers import PROFILE_BROWSER, PROFILE_MINIMAL, PROFILES, header_names
 from ..http import HttpClient
-from ..logging_setup import close_logging, configure_logging
+from ..logging_setup import close_logging, configure_logging, configure_streams
 from ..proxy import parse_proxy
 from .pipeline import GntPipeline
 
@@ -118,6 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_streams()
     try:
         return _main(argv)
     finally:

@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 from urllib.parse import parse_qs
 
 from openpyxl import load_workbook
@@ -312,6 +313,26 @@ class TbPipelineTests(unittest.TestCase):
         summary, _, state = self.run_pipeline()
         self.assertEqual(summary.downloaded, 3)
         self.assertFalse(state.get("downloads"))
+
+    def test_ma_thong_bao_khong_tao_duong_dan_ngoai_output(self):
+        record = parse_tb_records(fixture("tb_results_page1.html"))[0]
+        record.so_thong_bao = ""
+        for value in ("../../outside", r"..\..\outside", "C:/outside", "nested/name"):
+            with self.subTest(value=value):
+                record.message_id = value
+                name = tb_pdf_filename(record)
+                self.assertEqual(Path(name).name, name)
+                self.assertNotIn("/", name)
+                self.assertNotIn("\\", name)
+                self.assertNotIn(":", name)
+
+    def test_tai_lai_thanh_cong_o_doan_sau_giu_ten_file_trong_metadata(self):
+        with mock.patch.object(TbPortal, "download_tb", side_effect=[None, TB_PDF, TB_PDF, TB_PDF]):
+            summary, _, _ = self.run_pipeline()
+        self.assertTrue(summary.complete)
+        rows = json.loads((self.directory / "danh_sach_thong_bao.json").read_text("utf-8"))
+        self.assertEqual(len(rows), 3)
+        self.assertTrue(all(row["tep_pdf"] and (self.directory / row["tep_pdf"]).is_file() for row in rows))
 
     def test_dry_run_khong_tai(self):
         summary, _, state = self.run_pipeline(dry_run=True)

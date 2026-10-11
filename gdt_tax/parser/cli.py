@@ -20,6 +20,7 @@ from pathlib import Path
 
 from ..errors import GdtError
 from ..inventory import MANIFEST_NAME
+from ..logging_setup import configure_streams
 from .extract import PARSER_VERSION, SCHEMA_VERSION, extract_declaration
 from .registry import load_registry
 
@@ -136,6 +137,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_streams()
     args = build_parser().parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,

@@ -246,6 +246,12 @@ class ScanDirectoryTests(unittest.TestCase):
                 "parsed_declarations.json",
                 "phan_loai_artifact.json",
                 "Tax_Return_Summary.xlsx",
+                "danh_sach_giay_nop_tien.json",
+                "danh_sach_giay_nop_tien.csv",
+                "danh_sach_giay_nop_tien.xlsx",
+                "danh_sach_thong_bao.json",
+                "danh_sach_thong_bao.csv",
+                "danh_sach_thong_bao.xlsx",
             ):
                 (root / name).write_bytes(b"derived")
 

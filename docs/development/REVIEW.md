@@ -1,5 +1,40 @@
 # Rà soát logic và hướng mở rộng
 
+## Cập nhật rà soát ngày 11/10/2026
+
+Lần này chỉ kiểm tra offline trên Windows/Python 3.11; không đăng nhập hoặc
+gọi cổng thuế và không thay đổi `.env` hay hồ sơ thật. Baseline: 382 test OK,
+6 skip backend OCR tùy chọn.
+
+| Lỗi phát hiện | Điều chỉnh |
+|---|---|
+| `pick()` parse env trước khi xét override, env sai kiểu chặn CLI hợp lệ | Chỉ đọc/parse env nếu override là `None`; giữ cả override `False`, `0` và dict rỗng |
+| UTF-8 BOM biến tên khóa đầu tiên trong `.env` thành khóa khác | Đọc bằng `utf-8-sig`, hỗ trợ cả UTF-8 có/không BOM |
+| Nhận cấu hình đoạn tra cứu dài hơn giới hạn 31 ngày | Validate `GDT_MAX_DAYS_PER_SEARCH` trong khoảng 1–31 |
+| GNT/thông báo tải thành công ở đoạn sau nhưng sửa object khác object trong danh mục | Tải trên record được giữ trong `records`, metadata giữ tên file sau retry |
+| Mã `ctuId`/`messageId` được ghép trực tiếp vào tên file | Làm sạch phần mã như các phần tên khác, chặn ký tự đường dẫn |
+| Inventory quét lại báo cáo GNT/thông báo như artifact nguồn | Bỏ qua sáu file CSV/JSON/XLSX đầu ra của hai luồng |
+| `valid_zip()` giải nén để kiểm CRC mà không giới hạn tài nguyên | Dùng chung giới hạn với inventory; thêm trần ZIP đầu vào 256 MiB, từ chối mã hóa/quá lớn/tỉ lệ nén bất thường trước giải nén |
+| Hướng dẫn chỉ cài requirements nhưng ví dụ dùng entry point `gdt-*` | Cài editable package và extra OCR; hướng dẫn riêng trường hợp PowerShell không kích hoạt được venv |
+| `--help` ghi tiếng Việt trước khi cấu hình UTF-8, lỗi trên Windows/pipe CP1252 | Cấu hình stream trước argparse ở cả bảy CLI, test subprocess buộc CP1252 |
+
+README có bảng chọn lệnh, mục lục, mã thoát, thứ tự phân tích offline và tách
+báo cáo khi tải khỏi báo cáo offline; bỏ bộ đếm test/số liệu cục bộ dễ lỗi thời.
+CONTRIBUTING sửa hướng dẫn thiếu `openpyxl` và tham chiếu mục README đã bỏ.
+GitLab/GitHub CI cài package từ `pyproject.toml` để kiểm tra cả đóng gói và dùng
+đúng dependency được khai báo.
+
+Kết quả sau sửa: **397 test OK, 6 skip OCR tùy chọn**; Ruff và mypy (62 source
+file) qua, `git diff --check` sạch. Đã build/cài editable package và kiểm tra
+`--help` của cả bảy entry point `gdt-*`. Chưa chạy ma trận CI Python 3.10/3.12
+trên máy cục bộ hoặc kiểm thử trực tiếp với cổng thuế trong lần này.
+
+Giới hạn còn lại: HTTP vẫn đọc toàn bộ response trước khi kiểm tra ZIP; XML
+legacy chưa có trần bytes riêng ở luồng tải. Các hạn chế về lazy auth, định
+danh theo nguồn/tài khoản và log/dump trong phần lịch sử dưới đây vẫn cần xử lý.
+
+## Lịch sử rà soát
+
 Ngày rà soát: 27/09/2026. Ban đầu kiểm tra mã nguồn, fixture và test offline.
 Sau đó đã chạy test thật qua legacy bằng cấu hình `.env` theo yêu cầu người
 dùng, rồi chạy lại để kiểm tra resume. Không kiểm chứng lại endpoint DVC.
@@ -134,12 +169,12 @@ cũ. Một nhóm ở cấp hồ sơ chưa chứng minh mọi file trong ZIP thu�
 | Ưu tiên | Điểm còn lại | Hướng xử lý / stage |
 |---|---|---|
 | P1 | Raw response/body dump và URL/Referer có thể chứa dữ liệu phiên, thông tin thuế; che dict không đủ | Redact có cấu trúc + tài liệu phân biệt dump thô/dump chia sẻ, stage 01; hiện coi dump là dữ liệu riêng tư |
-| P1 | `valid_zip()` đọc/decompress không có giới hạn; XML legacy cũng chưa giới hạn bytes | Giới hạn dung lượng, số member, tỉ lệ nén, XML bytes/depth; stage 01–02 |
+| P1 | XML legacy chưa giới hạn bytes; HTTP vẫn đọc toàn bộ response trước kiểm tra ZIP | ZIP đã có giới hạn ở cập nhật 11/10/2026; còn giới hạn XML bytes/depth và streaming HTTP, stage 01–02 |
 | P1 | Lỗi mạng/hết phiên có thể dừng cả run; DVC bật trở lại vẫn login trước phần legacy | Lazy auth từng nguồn, retry có giới hạn, checkpoint/trạng thái lỗi; stage 01 và 09 |
 | P1 | Resume dựa trên tên/ZIP nguyên vẹn, chưa có hash/provenance theo tài khoản và source | `CaseIdentity` + artifact hash, manifest versioned; stage 01–02; hiện dùng thư mục riêng mỗi tài khoản |
 | P1 | Tên cũ dạng `<id>-ten.zip` có thể mơ hồ với mã cũng chứa `-`; records/succeeded trong run chỉ dùng mã | Dò manifest theo identity trước tên file; migration không tự gán file mơ hồ, stage 01–02 |
 | P1 | Chưa có mẫu XML đại diện để biết mã mẫu, phiên bản, chỉ tiêu | Fixture ẩn danh, inventory và schema matrix trước viết parser, stage 02–07 |
-| P2 | Config `pick()` đánh giá env trước override; env sai kiểu có thể chặn CLI override hợp lệ | Đọc lazy theo đúng ưu tiên, kiểm tra `max_days<=31`, capability page size legacy; stage 01 |
+| P2 | Chưa kiểm capability page size legacy | Ưu tiên override và `max_days<=31` đã sửa ngày 11/10/2026; còn kiểm page size theo nguồn, stage 01 |
 | P2 | HTTP chỉ retry 429, Retry-After mới đọc dạng số, không có trần chờ | Chính sách theo loại request, đọc HTTP-date, backoff trần/cancellation; stage 01 |
 | P2 | Ghi toàn bộ metadata sau từng hồ sơ; bốn file không có transaction chung | JSON là danh mục chính hiện tại; snapshot theo trang hoặc SQLite/manifest journal sau benchmark, stage 01/08 |
 | P2 | Parse HTML theo chỉ số cột, marker/form đơn giản; chưa phát hiện mọi biến thể layout | Validate headers/schema HTML, fixture layout thay đổi, stage 01/09 |

@@ -28,6 +28,12 @@ class LoadEnvFileTests(unittest.TestCase):
     def test_thieu_file_thi_tra_rong(self):
         self.assertEqual(load_env_file("file-khong-ton-tai.env"), {})
 
+    def test_utf8_bom_khong_lam_mat_bien_dau_tien(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / ".env"
+            path.write_text("GDT_USERNAME=tai-khoan\n", encoding="utf-8-sig")
+            self.assertEqual(load_env_file(path), {"GDT_USERNAME": "tai-khoan"})
+
 
 class SettingsFromEnvTests(unittest.TestCase):
     def test_gia_tri_mac_dinh(self):
@@ -87,6 +93,42 @@ class SettingsFromEnvTests(unittest.TestCase):
         settings = Settings.from_env(env, env_file=None)
         self.assertEqual(settings.captcha_options["url"], "https://example.com/solve")
         self.assertEqual(settings.captcha_options["timeout"], 10)
+
+    def test_override_hop_le_bo_qua_env_sai_kieu(self):
+        for key, env_name, value in (
+            ("dry_run", "DRY_RUN", False),
+            ("legacy_etax", "LEGACY_ETAX", False),
+            ("dvc_enabled", "DVC_ENABLED", False),
+            ("captcha_options", "CAPTCHA_OPTIONS", {}),
+            ("extra_headers", "EXTRA_HEADERS", {}),
+            ("page_size", "PAGE_SIZE", 10),
+            ("pause_jitter", "PAUSE_JITTER", 0.0),
+        ):
+            with self.subTest(key=key):
+                settings = Settings.from_env(
+                    {**BASE_ENV, f"GDT_{env_name}": "invalid"},
+                    env_file=None, **{key: value},
+                )
+                self.assertEqual(getattr(settings, key), value)
+
+    def test_override_none_van_kiem_tra_env(self):
+        with self.assertRaises(ConfigError):
+            Settings.from_env(
+                {**BASE_ENV, "GDT_DRY_RUN": "invalid"}, env_file=None, dry_run=None,
+            )
+
+    def test_so_ngay_moi_doan_chi_nhan_1_den_31(self):
+        for days in (0, 32):
+            with self.subTest(days=days), self.assertRaises(ConfigError):
+                Settings.from_env(
+                    {**BASE_ENV, "GDT_MAX_DAYS_PER_SEARCH": str(days)}, env_file=None,
+                )
+        for days in (1, 31):
+            with self.subTest(days=days):
+                settings = Settings.from_env(
+                    {**BASE_ENV, "GDT_MAX_DAYS_PER_SEARCH": str(days)}, env_file=None,
+                )
+                self.assertEqual(settings.max_days_per_search, days)
 
     def test_json_sai_thi_bao_loi(self):
         env = {**BASE_ENV, "GDT_CAPTCHA_OPTIONS": "{khong-phai-json}"}

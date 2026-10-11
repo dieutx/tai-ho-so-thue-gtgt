@@ -20,7 +20,7 @@ def gnt_xml_filename(record: GiayNopTien) -> str:
     parts = []
     if record.so_gnt:
         parts.append(safe_filename_part(record.so_gnt, 60))
-    parts.append(record.ctu_id or safe_filename_part(record.so_chung_tu, 60))
+    parts.append(safe_filename_part(record.ctu_id or record.so_chung_tu, 60))
     return "__".join(parts) + ".xml"
 
 

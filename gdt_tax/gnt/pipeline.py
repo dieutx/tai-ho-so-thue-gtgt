@@ -104,12 +104,12 @@ class GntPipeline:
                 raise SearchError(f"GNT trang {page}/{total_pages} không có giấy nộp tiền")
             seen_ids.update(page_ids)
             for index, found in enumerate(result.records, start=1):
-                records.setdefault(found.ctu_id, found)
+                record = records.setdefault(found.ctu_id, found)
                 self.logger.info(
                     "TẢI trang=%s mục=%s/%s: %s",
                     page, index, len(result.records), found.so_gnt or found.ctu_id,
                 )
-                self._download(portal, found, downloaded)
+                self._download(portal, record, downloaded)
                 write_gnt_metadata(self.settings.download_dir, records)
                 self._pause(self.settings.pause_between_records)
             if total_pages is None and not new_ids:

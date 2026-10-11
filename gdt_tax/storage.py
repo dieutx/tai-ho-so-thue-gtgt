@@ -20,6 +20,7 @@ import logging
 import os
 import tempfile
 import zipfile
+import zlib
 from collections.abc import Iterable, Mapping
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -28,6 +29,13 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
+from .archive_limits import (
+    MAX_ARCHIVE_BYTES,
+    MAX_COMPRESSION_RATIO,
+    MAX_MEMBER_BYTES,
+    MAX_MEMBERS,
+    MAX_TOTAL_UNCOMPRESSED,
+)
 from .classification import TAX_GROUPS
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX
 from .errors import StorageError
@@ -52,13 +60,26 @@ EXCEL_COLUMNS = (
 
 
 def valid_zip(data: bytes) -> bool:
-    """Kiểm tra dữ liệu có phải ZIP nguyên vẹn (không chỉ có chữ ký ``PK``)."""
-    if not data.startswith(b"PK"):
+    """Kiểm tra giới hạn tài nguyên trước khi giải nén để xác minh CRC của ZIP."""
+    if len(data) > MAX_ARCHIVE_BYTES or not data.startswith(b"PK"):
         return False
     try:
         with zipfile.ZipFile(BytesIO(data)) as archive:
+            members = archive.infolist()
+            if len(members) > MAX_MEMBERS:
+                return False
+            total = 0
+            for member in members:
+                total += member.file_size
+                if (
+                    member.flag_bits & 1
+                    or member.file_size > MAX_MEMBER_BYTES
+                    or total > MAX_TOTAL_UNCOMPRESSED
+                    or member.file_size / max(1, member.compress_size) > MAX_COMPRESSION_RATIO
+                ):
+                    return False
             return archive.testzip() is None
-    except (zipfile.BadZipFile, OSError, RuntimeError, NotImplementedError, EOFError):
+    except (zipfile.BadZipFile, OSError, RuntimeError, NotImplementedError, EOFError, zlib.error):
         return False
 
 
@@ -109,6 +130,8 @@ class ZipStore:
                 continue
             checked.add(candidate)
             try:
+                if candidate.stat().st_size > MAX_ARCHIVE_BYTES:
+                    continue
                 if not valid_zip(candidate.read_bytes()):
                     continue
                 if candidate != preferred and not preferred.exists():

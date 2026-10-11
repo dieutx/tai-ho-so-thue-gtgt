@@ -17,7 +17,7 @@ def tb_pdf_filename(record: ThongBao) -> str:
     parts = []
     if record.so_thong_bao:
         parts.append(safe_filename_part(record.so_thong_bao, 60))
-    parts.append(record.message_id or safe_filename_part(record.ma_thong_bao, 40))
+    parts.append(safe_filename_part(record.message_id or record.ma_thong_bao, 60))
     return "__".join(parts) + ".pdf"
 
 

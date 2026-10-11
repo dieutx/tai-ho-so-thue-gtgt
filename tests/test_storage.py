@@ -1,7 +1,10 @@
 import csv
+import io
 import json
 import tempfile
 import unittest
+import zipfile
+import zlib
 from pathlib import Path
 from unittest import mock
 
@@ -34,6 +37,51 @@ class ValidZipTests(unittest.TestCase):
 
     def test_zip_hong(self):
         self.assertFalse(valid_zip(b"PK\x03\x04du-lieu-hong"))
+
+    def test_zip_vuot_gioi_han_bi_tu_choi_truoc_giai_nen(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
+            archive.writestr("a.xml", b"a" * 20)
+            archive.writestr("b.xml", b"b" * 20)
+        data = buffer.getvalue()
+        for name, limit in (
+            ("MAX_ARCHIVE_BYTES", len(data) - 1),
+            ("MAX_MEMBERS", 1),
+            ("MAX_MEMBER_BYTES", 19),
+            ("MAX_TOTAL_UNCOMPRESSED", 39),
+        ):
+            with self.subTest(name=name), mock.patch(f"gdt_tax.storage.{name}", limit):
+                with mock.patch.object(zipfile.ZipFile, "testzip") as decompress:
+                    self.assertFalse(valid_zip(data))
+                    decompress.assert_not_called()
+        self.assertTrue(valid_zip(data))
+
+    def test_zip_co_ty_le_nen_bat_thuong_bi_tu_choi(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("bomb.xml", b"0" * 100_000)
+        with mock.patch.object(zipfile.ZipFile, "testzip") as decompress:
+            self.assertFalse(valid_zip(buffer.getvalue()))
+            decompress.assert_not_called()
+
+    def test_zip_hong_crc_bi_tu_choi(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
+            archive.writestr("a.xml", b"unique-payload")
+        self.assertFalse(valid_zip(buffer.getvalue().replace(b"unique-payload", b"broken-payload")))
+
+    def test_zip_ma_hoa_bi_tu_choi_truoc_giai_nen(self):
+        raw = bytearray(sample_zip())
+        raw[6] |= 1
+        central = raw.find(b"PK\x01\x02")
+        raw[central + 8] |= 1
+        with mock.patch.object(zipfile.ZipFile, "testzip") as decompress:
+            self.assertFalse(valid_zip(bytes(raw)))
+            decompress.assert_not_called()
+
+    def test_loi_giai_nen_khong_lam_dung_chuong_trinh(self):
+        with mock.patch.object(zipfile.ZipFile, "testzip", side_effect=zlib.error("bad data")):
+            self.assertFalse(valid_zip(sample_zip()))
 
 
 class DecodeZipTests(unittest.TestCase):
@@ -83,6 +131,14 @@ class ZipStoreTests(unittest.TestCase):
 
     def test_chua_co_file_thi_tra_none(self):
         self.assertIsNone(self.store.find_existing(make_record()))
+
+    def test_resume_khong_doc_file_vuot_gioi_han(self):
+        record = make_record()
+        self.store.path_for(record).write_bytes(sample_zip())
+        with mock.patch("gdt_tax.storage.MAX_ARCHIVE_BYTES", 1):
+            with mock.patch.object(Path, "read_bytes") as read:
+                self.assertIsNone(self.store.find_existing(record))
+                read.assert_not_called()
 
     def test_khong_nham_file_cua_ho_so_khac_khi_ma_co_ky_tu_glob(self):
         # "[" và "]" là ký tự đặc biệt của glob: không escape thì

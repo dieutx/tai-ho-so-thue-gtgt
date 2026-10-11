@@ -34,6 +34,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from .classify import CLASSIFICATION_NAME
 from .errors import GdtError
 from .inventory import MANIFEST_NAME
+from .logging_setup import configure_streams
 from .parser.cli import PARSED_NAME
 
 LOGGER_NAME = "gdt_tax.export"
@@ -390,6 +391,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_streams()
     args = build_parser().parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,

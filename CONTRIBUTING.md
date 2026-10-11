@@ -19,21 +19,22 @@ Kích hoạt môi trường (Windows: `.\.venv\Scripts\Activate.ps1`, Linux:
 `source .venv/bin/activate`) rồi cài:
 
 ```bash
-pip install -r requirements-dev.txt   # requirements.txt (gồm ddddocr) + ruff + mypy
+python -m pip install -e ".[dev]"
 ```
 
-Nếu chỉ muốn sửa logic và chạy test, cài tối thiểu là đủ vì test **không** cần `easyocr`:
+Lệnh trên cài package, thư viện chính, Ruff và mypy. Test offline không cần tài
+khoản hoặc thư viện OCR. Chỉ cài thêm OCR khi cần kiểm tra backend tương ứng:
 
 ```bash
-pip install beautifulsoup4 lxml requests
+python -m pip install -e ".[dev,ocr-ddddocr]"
 ```
 
 ## Chạy test
 
 ```bash
 python -m unittest discover -s tests -t . -v
-ruff check .
-mypy gdt_tax
+python -m ruff check .
+python -m mypy gdt_tax
 ```
 
 Test phải xanh trước khi mở merge request — CI trên GitLab chạy đúng các lệnh ở
@@ -42,9 +43,9 @@ Windows trước khi mở MR.
 
 ## Chuẩn cho một bộ nhận dạng CAPTCHA mới
 
-Trước khi đề xuất đổi mặc định, hãy đo và ghi lại số liệu theo đúng quy trình ở
-mục **Benchmark** trong README (đăng nhập một lần, sau đó N lần "lấy CAPTCHA mới
-→ đọc → gửi lên cổng", đếm số lần cổng trả `status = 200`). Cỡ mẫu nên từ 20 lần
+Trước khi đề xuất đổi mặc định, hãy đo và ghi lại số liệu: đăng nhập một lần,
+sau đó N lần "lấy CAPTCHA mới → đọc → gửi lên cổng", đếm số lần cổng trả
+`status = 200`. Cỡ mẫu nên từ 20 lần
 trở lên nếu muốn kết luận chắc chắn; mọi kết quả đều phải kèm ngày đo, hệ điều
 hành, phiên bản Python và phiên bản thư viện.
 
@@ -116,7 +117,7 @@ trước khi được duyệt.
   header/trường có cấu trúc không bảo đảm che bí mật trong URL, Referer và
   HTML/XML response. Không gửi nguyên file; chỉ gửi bản đã kiểm tra và ẩn danh
   tài khoản, mật khẩu, cookie/token/phiên, mã hồ sơ và dữ liệu thuế.
-  Xem mục **Ghi log và lưu lại traffic** trong README.
+  Xem mục [Chẩn đoán và khắc phục](README.md#chẩn-đoán-và-khắc-phục).
 - File `*.response.txt` liên quan trong `http-dump/` — HTML thật của cổng. Nhớ
   **che mã số thuế và mã hồ sơ** của bạn (log không tự che phần này).
 - Tên solver CAPTCHA đang dùng (`GDT_CAPTCHA_SOLVER`).
