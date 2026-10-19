@@ -1,0 +1,4 @@
+# Keep these in a separate tooling venv; none are application dependencies.
+ruff==0.17.1
+mypy==2.4.0
+psutil==7.2.2

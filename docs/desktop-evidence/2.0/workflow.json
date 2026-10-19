@@ -1,0 +1,53 @@
+{
+  "before": {
+    "seconds": [
+      19.150171000001137,
+      15.736937199995737,
+      15.612856699997792
+    ],
+    "median_seconds": 15.736937199995737,
+    "reports": [
+      {
+        "state": "PARTIAL",
+        "declarations": 15,
+        "mapped": 5
+      },
+      {
+        "state": "PARTIAL",
+        "declarations": 15,
+        "mapped": 5
+      },
+      {
+        "state": "PARTIAL",
+        "declarations": 15,
+        "mapped": 5
+      }
+    ]
+  },
+  "after": {
+    "seconds": [
+      15.637624599999981,
+      15.895605099998647,
+      16.036878400002024
+    ],
+    "median_seconds": 15.895605099998647,
+    "reports": [
+      {
+        "state": "PARTIAL",
+        "declarations": 15,
+        "mapped": 5
+      },
+      {
+        "state": "PARTIAL",
+        "declarations": 15,
+        "mapped": 5
+      },
+      {
+        "state": "PARTIAL",
+        "declarations": 15,
+        "mapped": 5
+      }
+    ]
+  },
+  "method": "3 fresh processes each; frozen offline all stages + OCR; includes onefile extraction/startup; same fixtures, no network; OS caches not flushed"
+}

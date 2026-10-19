@@ -1,0 +1,23 @@
+{
+  "method": "3 fresh-process launches; stopwatch to native main window; working set parent+child after 1s idle; OS caches not flushed",
+  "windows": true,
+  "logical_cpus": 12,
+  "ram_bytes": 34267271168,
+  "exe_bytes": 88256580,
+  "samples": [
+    {
+      "startup_s": 4.494201900000917,
+      "idle_working_set_bytes": 168222720
+    },
+    {
+      "startup_s": 3.931878700001107,
+      "idle_working_set_bytes": 167997440
+    },
+    {
+      "startup_s": 4.071929199999431,
+      "idle_working_set_bytes": 168087552
+    }
+  ],
+  "median_startup_s": 4.071929199999431,
+  "median_idle_working_set_bytes": 168087552
+}

@@ -27,6 +27,7 @@ from .headers import (
     reconcile_client_hints,
 )
 from .proxy import Proxy
+from .run_hooks import RunHooks
 from .traffic import (
     BODY_LOG_LIMIT,
     TrafficDumper,
@@ -72,7 +73,9 @@ class HttpClient:
         dump_dir: str | Path | None = None,
         header_profile: str = DEFAULT_PROFILE,
         proxy: Proxy | None = None,
+        hooks: RunHooks | None = None,
     ) -> None:
+        self.hooks = hooks or RunHooks()
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.retries = max(1, retries)
@@ -124,6 +127,7 @@ class HttpClient:
 
         response: requests.Response | None = None
         for attempt in range(1, self.retries + 1):
+            self.hooks.check()
             self._log_request(method, url, sent_headers, params, payload, attempt)
             started = time.monotonic()
             try:
@@ -161,7 +165,7 @@ class HttpClient:
                 attempt + 1,
                 self.retries,
             )
-            time.sleep(delay)
+            self.hooks.pause(delay)
         assert response is not None  # vòng lặp luôn chạy ít nhất một lần
         return response
 

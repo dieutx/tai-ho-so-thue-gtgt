@@ -21,11 +21,9 @@ from ..constants import (
     GNT_OPERATION,
     GNT_RESULT_TABLE_ID,
     GNT_TYPE_TAX,
-    LEGACY_ETAX_BASE,
 )
 from ..dates import format_date
 from ..errors import LegacyEtaxError
-from ..headers import build_page_headers
 from ..models import SearchPeriod
 from ..portals.etax_legacy import EtaxLegacyPortal
 from .models import GiayNopTien, GntPageResult
@@ -52,23 +50,15 @@ class GntPortal(EtaxLegacyPortal):
     """Portal giấy nộp tiền: dùng lại đăng nhập legacy, thêm tra cứu/tải GNT."""
 
     def _open_gnt_page(self) -> None:
-        """Mở trang tra cứu GNT (form ``reportForm``)."""
-        if not self.dse_session_id or not self.home_page_id:
-            raise LegacyEtaxError("Chưa đăng nhập legacy")
-        response = self.http.get(
-            f"{LEGACY_ETAX_BASE}/Request",
-            params={
-                "dse_sessionId": self.dse_session_id,
-                "dse_applicationId": "-1",
-                "dse_pageId": self.home_page_id,
-                "dse_operationName": GNT_OPERATION,
-                "dse_processorState": "initial",
-                "dse_nextEventName": "start",
-            },
-            headers=build_page_headers(profile=self.profile),
+        """Mở trang tra cứu GNT (form ``reportForm``).
+
+        Cổng có lúc trả trang chuyển tiếp hoặc form với id khác, nên dùng helper
+        chung của portal legacy thay vì chỉ so chuỗi ``reportForm``.
+        """
+        response, form_id = self._open_operation_page(
+            GNT_OPERATION, GNT_FORM_ID, "giấy nộp tiền"
         )
-        if response.status_code != 200 or GNT_FORM_ID not in response.text:
-            raise LegacyEtaxError("Không mở được trang tra cứu giấy nộp tiền legacy")
+        self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
 
@@ -79,7 +69,7 @@ class GntPortal(EtaxLegacyPortal):
             self._open_gnt_page()
         response = self._post_form(
             self._search_page_html,
-            GNT_FORM_ID,
+            self._search_form_id,
             self._search_page_url,
             {
                 "dse_operationName": GNT_OPERATION,
@@ -93,14 +83,19 @@ class GntPortal(EtaxLegacyPortal):
         if response.status_code != 200:
             return GntPageResult(http_status=response.status_code)
         empty = any(marker in response.text for marker in _EMPTY_MARKERS)
-        if GNT_FORM_ID not in response.text or (
-            GNT_RESULT_TABLE_ID not in response.text and not empty
-        ):
+        form_id = self._form_id_for_operation(response.text, GNT_OPERATION, self._search_form_id)
+        if not form_id or (GNT_RESULT_TABLE_ID not in response.text and not empty):
+            if self.session_state is not None:
+                raise LegacyEtaxError(
+                    "Cổng trả HTTP 200 nhưng thiếu bảng/form giấy nộp tiền. "
+                    "Hãy thử lại; nếu vẫn lỗi, đăng xuất rồi đăng nhập hoặc xem nhật ký."
+                )
             self.logger.warning(
                 "Legacy không trả bảng GNT/form tra cứu; có thể đã hết phiên"
             )
             return GntPageResult(http_status=response.status_code)
         # Chỉ thay form đang có khi trang thực sự là kết quả GNT (giữ được phiên).
+        self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
         return GntPageResult(
@@ -111,11 +106,12 @@ class GntPortal(EtaxLegacyPortal):
 
     def download_gnt(self, record: GiayNopTien) -> bytes | None:
         """Tải XML giấy nộp tiền; trả ``None`` khi cổng trả HTML (lỗi/hết phiên)."""
+        self.last_download_error = ""
         if not self._search_page_html:
             raise LegacyEtaxError("Chưa có trang kết quả GNT để tải theo")
         response = self._post_form(
             self._search_page_html,
-            GNT_FORM_ID,
+            self._search_form_id,
             self._search_page_url,
             {
                 "dse_operationName": GNT_OPERATION,
@@ -128,9 +124,11 @@ class GntPortal(EtaxLegacyPortal):
             },
         )
         if response.status_code != 200:
+            self.last_download_error = f"Cổng trả HTTP {response.status_code} khi tải XML; kiểm tra kết nối hoặc phiên đăng nhập."
             return None
         content_type = response.headers.get("content-type", "").lower()
         if "text/html" in content_type or not is_gnt_xml(response.content):
+            self.last_download_error = "Cổng trả HTML hoặc dữ liệu không phải XML hoàn chỉnh; có thể phiên hết hạn hoặc cổng đổi định dạng."
             self.logger.error(
                 "GNT %s không tải được XML (hết phiên hoặc cổng đổi định dạng)",
                 record.ctu_id,

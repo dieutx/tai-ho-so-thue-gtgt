@@ -36,6 +36,7 @@ from .archive_limits import (
     MAX_MEMBERS,
     MAX_TOTAL_UNCOMPRESSED,
 )
+from .atomic import replace_with_retry
 from .classification import TAX_GROUPS
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX
 from .errors import StorageError
@@ -296,7 +297,7 @@ def _atomic_write(path: Path, data: bytes) -> None:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        replace_with_retry(temporary, path)
     except OSError as error:
         raise StorageError(f"Không ghi được {path}: {error}") from error
     finally:

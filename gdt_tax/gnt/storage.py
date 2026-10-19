@@ -26,6 +26,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
+from ..atomic import replace_with_retry
 from ..constants import GNT_METADATA_CSV, GNT_METADATA_JSON, GNT_METADATA_XLSX
 from ..errors import StorageError
 from .models import GiayNopTien
@@ -217,7 +218,7 @@ def _atomic_write(path: Path, data: bytes) -> None:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        replace_with_retry(temporary, path)
     except OSError as error:
         raise StorageError(f"Không ghi được {path}: {error}") from error
     finally:

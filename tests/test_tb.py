@@ -100,7 +100,11 @@ def make_tb_handler(state: dict):
                 if operation == "corpHomePageProc":
                     return FakeResponse("<html></html>", url=REQUEST_URL)
                 if operation == "tracuuTBThueKhacProc" and event == "start":
-                    return FakeResponse(TB_START_HTML, url=REQUEST_URL)
+                    if str(params.get("dse_pageId", "")) == "98":
+                        return FakeResponse(state.get("redirected_html") or TB_START_HTML, url=REQUEST_URL)
+                    if state.get("start_redirect"):
+                        return FakeResponse(state["start_redirect"], url=REQUEST_URL)
+                    return FakeResponse(state.get("start_html") or TB_START_HTML, url=REQUEST_URL)
                 if operation == "tracuuTBThueKhacProc" and event == "query":
                     state.setdefault("paged", []).append(str(params.get("pn")))
                     page_html = state.get("paged_html", fixture("tb_results_page2.html"))
@@ -254,8 +258,37 @@ class TbPortalTests(unittest.TestCase):
         portal = TbPortal(http, StubCaptcha(), self.settings, login_attempts=1)
         portal.dse_session_id = "SESS01"
         portal.home_page_id = "4"
-        with self.assertRaises(LegacyEtaxError):
+        with self.assertRaises(LegacyEtaxError) as caught:
             portal._open_tb_page()
+        self.assertIn("thông báo", str(caught.exception))
+        self.assertIn("HTTP 200", str(caught.exception))
+
+    def test_open_tb_page_chap_nhan_form_id_khac(self):
+        portal = self.make_portal({
+            "start_html": (
+                "<html><form id='tbLookupForm' action='/etaxnnt/Request'>"
+                "<input name='dse_sessionId' value='SESS01'>"
+                "<input name='dse_operationName' value='tracuuTBThueKhacProc'>"
+                "<input name='dse_pageId' value='4'></form></html>"
+            ),
+        })
+        portal.dse_session_id = "SESS01"
+        portal.home_page_id = "4"
+        portal._open_tb_page()
+        self.assertEqual(portal._search_form_id, "tbLookupForm")
+        result = portal.search_tb(self.period(), 1)
+        self.assertEqual(len(result.records), 2)
+
+    def test_open_tb_page_di_theo_chuyen_huong_js(self):
+        redirect = (
+            "<html><script>window.location.href='/etaxnnt/Request?dse_sessionId=SESS01"
+            "&dse_pageId=98&dse_operationName=tracuuTBThueKhacProc"
+            "&dse_processorState=initial&dse_nextEventName=start';</script></html>"
+        )
+        portal = self.make_portal({"start_redirect": redirect})
+        result = portal.search_tb(self.period(), 1)
+        self.assertEqual(len(result.records), 2)
+        self.assertEqual(portal._search_form_id, "tKhaiForm")
 
 
 class TbPipelineTests(unittest.TestCase):

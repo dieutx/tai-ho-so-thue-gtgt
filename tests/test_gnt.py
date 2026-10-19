@@ -96,7 +96,11 @@ def make_gnt_handler(state: dict):
                 if operation == "corpHomePageProc":
                     return FakeResponse("<html></html>", url=REQUEST_URL)
                 if operation == "corpQueryTaxProc" and event == "start":
-                    return FakeResponse(GNT_START_HTML, url=REQUEST_URL)
+                    if str(params.get("dse_pageId", "")) == "99":
+                        return FakeResponse(state.get("redirected_html") or GNT_START_HTML, url=REQUEST_URL)
+                    if state.get("start_redirect"):
+                        return FakeResponse(state["start_redirect"], url=REQUEST_URL)
+                    return FakeResponse(state.get("start_html") or GNT_START_HTML, url=REQUEST_URL)
                 if event == "login":
                     return FakeResponse(LOGIN_PAGE_HTML, url=REQUEST_URL)
                 if operation == "corpIndexProc":
@@ -264,8 +268,37 @@ class GntPortalTests(unittest.TestCase):
         portal = GntPortal(http, StubCaptcha(), self.settings, login_attempts=1)
         portal.dse_session_id = "SESS01"
         portal.home_page_id = "7"
-        with self.assertRaises(LegacyEtaxError):
+        with self.assertRaises(LegacyEtaxError) as caught:
             portal._open_gnt_page()
+        self.assertIn("giấy nộp tiền", str(caught.exception))
+        self.assertIn("HTTP 200", str(caught.exception))
+
+    def test_open_gnt_page_chap_nhan_form_id_khac(self):
+        portal = self.make_portal({
+            "start_html": (
+                "<html><form id='gntLookupForm' action='/etaxnnt/Request'>"
+                "<input name='dse_sessionId' value='SESS01'>"
+                "<input name='dse_operationName' value='corpQueryTaxProc'>"
+                "<input name='dse_pageId' value='7'></form></html>"
+            ),
+        })
+        portal.dse_session_id = "SESS01"
+        portal.home_page_id = "7"
+        portal._open_gnt_page()
+        self.assertEqual(portal._search_form_id, "gntLookupForm")
+        result = portal.search_gnt(self.period(), 1)
+        self.assertEqual(len(result.records), 2)
+
+    def test_open_gnt_page_di_theo_chuyen_huong_js(self):
+        redirect = (
+            "<html><script>window.location.href='/etaxnnt/Request?dse_sessionId=SESS01"
+            "&dse_pageId=99&dse_operationName=corpQueryTaxProc"
+            "&dse_processorState=initial&dse_nextEventName=start';</script></html>"
+        )
+        portal = self.make_portal({"start_redirect": redirect})
+        result = portal.search_gnt(self.period(), 1)
+        self.assertEqual(len(result.records), 2)
+        self.assertEqual(portal._search_form_id, "reportForm")
 
 
 class GntPipelineTests(unittest.TestCase):

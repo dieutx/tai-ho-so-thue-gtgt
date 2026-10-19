@@ -46,3 +46,11 @@ class StorageError(GdtError):
 
 class LegacyEtaxError(GdtError):
     """Không đăng nhập hoặc không tra cứu được trang Thuế điện tử cũ."""
+
+
+class LegacyPageError(LegacyEtaxError):
+    """Trang nghiệp vụ legacy không trả đúng form/màn hình sau khi đã đăng nhập.
+
+    Desktop dùng lỗi này để đóng phiên, đăng nhập lại **một lần** rồi thử lại;
+    nếu vẫn lỗi thì báo nguyên văn trang cổng trả về thay vì đoán là hết phiên.
+    """

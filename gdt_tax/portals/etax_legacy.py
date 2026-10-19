@@ -35,9 +35,10 @@ from bs4 import BeautifulSoup
 from lxml import etree
 
 from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
-from ..errors import LegacyEtaxError
+from ..errors import LegacyEtaxError, LegacyPageError
 from ..headers import build_image_headers, build_page_headers, build_xhr_headers
 from ..http import HttpClient
+from ..legacy_session import LegacySessionState
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..naming import safe_filename_part
 from ..parsing import parse_records
@@ -63,11 +64,17 @@ def _alerts(html: str) -> list[str]:
     return messages
 
 
-def _form_fields(html: str, form_id: str) -> tuple[str, dict[str, str]]:
-    """Action URL và toàn bộ ô input có tên của một form trong trang legacy."""
-    form = BeautifulSoup(html, "html.parser").find("form", id=form_id)
-    if form is None:
-        raise LegacyEtaxError(f"Không tìm thấy form id={form_id!r} trên trang legacy")
+def _form_node(html: str, form_id: str):
+    """Tìm form theo ``id`` rồi tới ``name`` (một số màn hình legacy chỉ có name)."""
+    soup = BeautifulSoup(html, "html.parser")
+    form = soup.find("form", id=form_id) if form_id else None
+    if form is None and form_id:
+        form = soup.find("form", attrs={"name": form_id})
+    return form
+
+
+def _form_data(form) -> tuple[str, dict[str, str]]:
+    """Action URL và toàn bộ ô input có tên của một form đã tìm thấy."""
     action = str(form.get("action") or "/etaxnnt/Request")
     data: dict[str, str] = {}
     for field in form.find_all("input"):
@@ -75,6 +82,41 @@ def _form_fields(html: str, form_id: str) -> tuple[str, dict[str, str]]:
         if name:
             data[str(name)] = str(field.get("value") or "")
     return urljoin(f"{LEGACY_ETAX_BASE}/", action), data
+
+
+def _form_fields(html: str, form_id: str) -> tuple[str, dict[str, str]]:
+    """Action URL và toàn bộ ô input có tên của một form trong trang legacy."""
+    form = _form_node(html, form_id)
+    if form is None:
+        raise LegacyEtaxError(f"Không tìm thấy form id={form_id!r} trên trang legacy")
+    return _form_data(form)
+
+
+def _operation_url(html: str, operation: str) -> str:
+    """URL ``/etaxnnt/Request`` có ``dse_operationName=<operation>`` nếu trang chủ có link."""
+    if not html or operation not in html:
+        return ""
+    decoded = unescape(html)
+    pattern = r"(?:https?://[^\s'\"<>]+|/etaxnnt/Request\?[^\s'\"<>]+)"
+    for match in re.finditer(pattern, decoded):
+        value = match.group(0)
+        if f"dse_operationName={operation}" in value and "dse_sessionId=" in value:
+            return urljoin(f"{LEGACY_ETAX_BASE}/", value)
+    return ""
+
+
+def _page_detail(response) -> str:
+    """Câu ngắn cổng trả về (title/alert/chữ hiển thị) để lỗi có ngữ cảnh."""
+    text = getattr(response, "text", "") or ""
+    if not text:
+        return ""
+    soup = BeautifulSoup(text, "html.parser")
+    for node in soup(["script", "style"]):
+        node.decompose()
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    visible = " ".join(soup.stripped_strings)
+    detail = title or next(iter(_alerts(text)), "") or visible
+    return re.sub(r"\s+", " ", detail).strip()[:180]
 
 
 def _js_redirect(html: str, required_text: str) -> str:
@@ -137,6 +179,7 @@ class EtaxLegacyPortal(Portal):
         logger: logging.Logger | None = None,
         *,
         login_attempts: int | None = None,
+        session_state: LegacySessionState | None = None,
     ) -> None:
         super().__init__(http, captcha, settings, logger)
         self.login_attempts = (
@@ -144,14 +187,24 @@ class EtaxLegacyPortal(Portal):
         )
         self.dse_session_id = ""
         self.home_page_id = ""
+        self.home_page_html = ""
         self._search_page_html = ""
         self._search_page_url = ""
+        #: Form thực tế của trang nghiệp vụ; cổng có lúc đổi id/name của form.
+        self._search_form_id = _SEARCH_FORM_ID
         self._logged_in = False
+        self.session_state = session_state
 
     # --- Đăng nhập trang cũ ---
     def login(self) -> None:
         """Đăng nhập trang Thuế điện tử cũ; thành công thì mới tra cứu được."""
-        if self._logged_in:
+        if self.session_state is not None and self.session_state.authenticated:
+            self.dse_session_id = self.session_state.dse_session_id
+            self.home_page_id = self.session_state.home_page_id
+            self.home_page_html = self.session_state.home_page_html
+            self._logged_in = True
+            return
+        if self._logged_in and self.session_state is None:
             return
 
         establish = f"{LEGACY_ETAX_BASE}/EstablishSession"
@@ -201,6 +254,11 @@ class EtaxLegacyPortal(Portal):
         ok_response = self._submit_login(response)
         self._open_home_page(ok_response)
         self._logged_in = True
+        if self.session_state is not None:
+            self.session_state.dse_session_id = self.dse_session_id
+            self.session_state.home_page_id = self.home_page_id
+            self.session_state.home_page_html = self.home_page_html
+            self.session_state.authenticated = True
         self.logger.info("ĐĂNG NHẬP legacy THÀNH CÔNG (dse_sessionId=%s...)", self.dse_session_id[:6])
 
     def _submit_login(self, login_page):
@@ -229,7 +287,13 @@ class EtaxLegacyPortal(Portal):
             for message in _alerts(response.text):
                 self.logger.info("Legacy: %s", message)
             if _LOGIN_OK_MARKER in response.text and _LOGIN_FORM_ID not in response.text:
+                accepted = getattr(self.captcha, "accepted", None)
+                if callable(accepted):
+                    accepted()
                 return response
+            rejected = getattr(self.captcha, "rejected", None)
+            if callable(rejected):
+                rejected()
             last_message = "tên đăng nhập/mật khẩu/CAPTCHA không được chấp nhận"
             self.logger.warning("Legacy: đăng nhập chưa được (lần %s/%s)", attempt, self.login_attempts)
         raise LegacyEtaxError(f"Không đăng nhập được trang legacy: {last_message}")
@@ -245,7 +309,8 @@ class EtaxLegacyPortal(Portal):
             },
         )
         home_url = _find_operation_url(response.text, "corpHomePageProc")
-        self.http.get(home_url, headers=build_page_headers(profile=self.profile))
+        home = self.http.get(home_url, headers=build_page_headers(profile=self.profile))
+        self.home_page_html = home.text
         self.home_page_id = _query_parameter(home_url, "dse_pageId")
         if not self.home_page_id:
             raise LegacyEtaxError("Không lấy được dse_pageId của trang chủ legacy")
@@ -267,9 +332,13 @@ class EtaxLegacyPortal(Portal):
     def _post_form(self, html: str, form_id: str, referer: str, overrides: Mapping[str, Any]):
         action, fields = _form_fields(html, form_id)
         fields.update({key: str(value) for key, value in overrides.items()})
+        return self._post_fields(action, fields, referer)
+
+    def _post_fields(self, action: str, fields: Mapping[str, Any], referer: str):
+        """POST đúng hình dạng request của trang legacy (XHR, form-urlencoded)."""
         return self.http.post(
             action,
-            data=fields,
+            data={key: str(value) for key, value in fields.items()},
             headers=build_xhr_headers(
                 profile=self.profile,
                 accept="text/html,application/xhtml+xml,*/*;q=0.8",
@@ -281,6 +350,131 @@ class EtaxLegacyPortal(Portal):
             ),
         )
 
+    # --- Mở trang nghiệp vụ (dùng chung cho tờ khai/GNT/thông báo) ---
+    def _form_id_for_operation(self, html: str, operation: str, expected: str) -> str:
+        """Trả form id/name thực tế của trang, chấp nhận cả khi cổng đổi id."""
+        if not html:
+            return ""
+        if expected and expected in html:
+            return expected
+        soup = BeautifulSoup(html, "html.parser")
+        for form in soup.find_all("form"):
+            fields = {
+                str(field.get("name")): str(field.get("value") or "")
+                for field in form.find_all("input")
+                if field.get("name")
+            }
+            if fields.get("dse_operationName") != operation:
+                continue
+            identifier = form.get("id") or form.get("name")
+            if identifier:
+                return str(identifier)
+        return ""
+
+    def _transition_urls(self, html: str) -> list[str]:
+        """URL chuyển tiếp mà trang legacy tự mở (JS hoặc meta refresh)."""
+        candidates: list[str] = []
+        for pattern in (
+            r"(?:window|document|top|parent)\.location(?:\.href)?\s*=\s*['\"]([^'\"]+)['\"]",
+            r"location\.replace\(\s*['\"]([^'\"]+)['\"]\s*\)",
+            r"<meta[^>]+http-equiv=['\"]refresh['\"][^>]+url=([^'\";\"]+)",
+        ):
+            candidates.extend(unescape(match.group(1)) for match in re.finditer(pattern, html, re.I))
+        return [
+            urljoin(f"{LEGACY_ETAX_BASE}/", value)
+            for value in candidates
+            if "dse_sessionId=" in value
+        ]
+
+    def _auto_submit_operation_form(self, response, operation: str):
+        """Bấm nút mặc định của form ``dse_operationName=<operation>`` nếu cổng trả về."""
+        soup = BeautifulSoup(response.text, "html.parser")
+        for form in soup.find_all("form"):
+            action, fields = _form_data(form)
+            if fields.get("dse_operationName") != operation:
+                continue
+            if fields.get("dse_nextEventName") not in {"", "start"}:
+                continue
+            if "dse_sessionId" not in fields:
+                continue
+            return self._post_fields(action, fields, getattr(response, "url", "") or LEGACY_ETAX_BASE)
+        return None
+
+    def _settle_operation_page(self, response, operation: str, expected_form: str):
+        """Đi qua tối đa hai bước chuyển tiếp cho tới khi thấy form nghiệp vụ."""
+        for _ in range(3):
+            if response.status_code == 200 and self._form_id_for_operation(response.text, operation, expected_form):
+                return response
+            targets = self._transition_urls(response.text)
+            target = next((url for url in targets if operation in url), targets[0] if targets else "")
+            if target:
+                response = self.http.get(
+                    target,
+                    headers=build_page_headers(
+                        profile=self.profile,
+                        headers={"Referer": getattr(response, "url", "") or LEGACY_ETAX_BASE},
+                    ),
+                )
+                continue
+            submitted = self._auto_submit_operation_form(response, operation)
+            if submitted is not None:
+                response = submitted
+                continue
+            break
+        return response
+
+    def _open_operation_page(self, operation: str, expected_form: str, label: str):
+        """Mở trang nghiệp vụ legacy và trả ``(response, form_id)`` thực tế.
+
+        Ưu tiên liên kết mà trang chủ đã phát cho phiên hiện tại (mang đúng
+        ``dse_pageId``/``dse_processorState``), sau đó mới tự dựng URL như cũ.
+        Cổng có lúc trả trang chuyển tiếp hoặc đổi id form, nên cả hai trường hợp
+        đều được xử lý trước khi báo lỗi.
+        """
+        if not self.dse_session_id or not self.home_page_id:
+            raise LegacyPageError("Chưa đăng nhập legacy")
+        candidates: list[str] = []
+        menu_url = _operation_url(self.home_page_html, operation)
+        if menu_url:
+            candidates.append(menu_url)
+        candidates.append("")
+        last = None
+        for candidate in candidates:
+            if candidate:
+                response = self.http.get(
+                    candidate,
+                    headers=build_page_headers(profile=self.profile),
+                )
+            else:
+                response = self.http.get(
+                    f"{LEGACY_ETAX_BASE}/Request",
+                    params={
+                        "dse_sessionId": self.dse_session_id,
+                        "dse_applicationId": "-1",
+                        "dse_pageId": self.home_page_id,
+                        "dse_operationName": operation,
+                        "dse_processorState": "initial",
+                        "dse_nextEventName": "start",
+                    },
+                    headers=build_page_headers(profile=self.profile),
+                )
+            response = self._settle_operation_page(response, operation, expected_form)
+            last = response
+            if response.status_code == 200:
+                form_id = self._form_id_for_operation(response.text, operation, expected_form)
+                if form_id:
+                    return response, form_id
+        status = getattr(last, "status_code", "?")
+        detail = _page_detail(last) if last is not None else ""
+        suffix = f": {detail}" if detail else ""
+        self.logger.error("Không mở được trang %s legacy: HTTP=%s%s", label, status, suffix)
+        raise LegacyPageError(
+            f"Không mở được trang tra cứu {label} legacy (HTTP {status}){suffix}. "
+            "Đã thử liên kết trên trang chủ và tự dựng lại URL theo phiên hiện tại; "
+            "nếu vẫn lỗi, kiểm tra tài khoản có chức năng này trên trang Thuế điện tử "
+            "hoặc xem nhật ký kỹ thuật."
+        )
+
     # --- Giai đoạn 3: tra cứu ---
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         from ..dates import format_date
@@ -290,7 +484,7 @@ class EtaxLegacyPortal(Portal):
             self._open_search_page()
 
         response = self._post_form(
-            self._search_page_html, _SEARCH_FORM_ID, self._search_page_url,
+            self._search_page_html, self._search_form_id, self._search_page_url,
             {
                 "dse_operationName": "traCuuToKhaiProc",
                 "dse_nextEventName": "query",
@@ -310,6 +504,11 @@ class EtaxLegacyPortal(Portal):
         if _SEARCH_FORM_ID not in response.text or (
             _RESULT_TABLE_ID not in response.text and not empty_result
         ):
+            if self.session_state is not None:
+                raise LegacyEtaxError(
+                    "Cổng trả HTTP 200 nhưng thiếu bảng/form tờ khai. "
+                    "Hãy thử lại; nếu vẫn lỗi, đăng xuất rồi đăng nhập hoặc xem nhật ký."
+                )
             self.logger.warning("Legacy không trả bảng kết quả/form tra cứu; có thể đã hết phiên")
             return PageResult(http_status=response.status_code)
         self._search_page_html = response.text
@@ -320,22 +519,10 @@ class EtaxLegacyPortal(Portal):
 
     def _open_search_page(self) -> None:
         """Mở trang tra cứu tờ khai (nơi có form ``traCuuKhaiForm``)."""
-        if not self.dse_session_id or not self.home_page_id:
-            raise LegacyEtaxError("Chưa đăng nhập legacy")
-        response = self.http.get(
-            f"{LEGACY_ETAX_BASE}/Request",
-            params={
-                "dse_sessionId": self.dse_session_id,
-                "dse_applicationId": "-1",
-                "dse_pageId": self.home_page_id,
-                "dse_operationName": "traCuuToKhaiProc",
-                "dse_processorState": "initial",
-                "dse_nextEventName": "start",
-            },
-            headers=build_page_headers(profile=self.profile),
+        response, form_id = self._open_operation_page(
+            "traCuuToKhaiProc", _SEARCH_FORM_ID, "tờ khai"
         )
-        if response.status_code != 200 or _SEARCH_FORM_ID not in response.text:
-            raise LegacyEtaxError("Không mở được trang tra cứu tờ khai legacy")
+        self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
 
@@ -351,7 +538,7 @@ class EtaxLegacyPortal(Portal):
         (dạng JSON base64 giống cổng DVC) nên ``ZipStore`` và metadata dùng
         chung với hai nguồn còn lại.
         """
-        _, fields = _form_fields(self._search_page_html, _SEARCH_FORM_ID)
+        _, fields = _form_fields(self._search_page_html, self._search_form_id)
         keep = ("dse_sessionId", "dse_applicationId", "dse_pageId", "dse_processorState", "dse_processorId")
         params = {key: fields[key] for key in keep if fields.get(key)}
         params.update(

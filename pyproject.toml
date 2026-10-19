@@ -56,10 +56,11 @@ gdt-classify = "gdt_tax.classify:main"
 gdt-export = "gdt_tax.export:main"
 
 [tool.setuptools.packages.find]
-include = ["gdt_tax*"]
+include = ["gdt_tax*", "desktop*"]
 
 [tool.setuptools.package-data]
 gdt_tax = ["form_mappings/*.json", "form_mappings/*.md"]
+desktop = ["resources/*.svg", "resources/*.ico", "resources/*.json"]
 
 [tool.ruff]
 line-length = 100

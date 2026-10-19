@@ -1,0 +1,663 @@
+{
+  "exe_bytes": 88321431,
+  "entry_count": 160,
+  "archive_uncompressed_bytes": 223395445,
+  "top30_archive": [
+    {
+      "path": "cv2\\cv2.pyd",
+      "compressed_bytes": 26177586,
+      "bytes": 74938880,
+      "type": "b"
+    },
+    {
+      "path": "numpy.libs\\libscipy_openblas64_-63c857e738469261263c764a36be9436.dll",
+      "compressed_bytes": 6428148,
+      "bytes": 20415488,
+      "type": "b"
+    },
+    {
+      "path": "onnxruntime\\capi\\onnxruntime_pybind11_state.pyd",
+      "compressed_bytes": 5509084,
+      "bytes": 15845408,
+      "type": "b"
+    },
+    {
+      "path": "ddddocr\\common_old.onnx",
+      "compressed_bytes": 6773170,
+      "bytes": 13606051,
+      "type": "b"
+    },
+    {
+      "path": "onnxruntime\\capi\\onnxruntime.dll",
+      "compressed_bytes": 4922898,
+      "bytes": 13557800,
+      "type": "b"
+    },
+    {
+      "path": "PySide6\\Qt6Gui.dll",
+      "compressed_bytes": 4071856,
+      "bytes": 9285768,
+      "type": "b"
+    },
+    {
+      "path": "PYZ.pyz",
+      "compressed_bytes": 8448635,
+      "bytes": 8448635,
+      "type": "z"
+    },
+    {
+      "path": "libcrypto-3-x64.dll",
+      "compressed_bytes": 2047368,
+      "bytes": 7983104,
+      "type": "b"
+    },
+    {
+      "path": "PySide6\\Qt6Widgets.dll",
+      "compressed_bytes": 2975608,
+      "bytes": 6500488,
+      "type": "b"
+    },
+    {
+      "path": "PySide6\\Qt6Core.dll",
+      "compressed_bytes": 2524665,
+      "bytes": 6159496,
+      "type": "b"
+    },
+    {
+      "path": "python311.dll",
+      "compressed_bytes": 2304780,
+      "bytes": 5846016,
+      "type": "b"
+    },
+    {
+      "path": "PySide6\\QtWidgets.pyd",
+      "compressed_bytes": 1853344,
+      "bytes": 5824648,
+      "type": "b"
+    },
+    {
+      "path": "lxml\\etree.cp311-win_amd64.pyd",
+      "compressed_bytes": 2028492,
+      "bytes": 4049920,
+      "type": "b"
+    },
+    {
+      "path": "PySide6\\QtGui.pyd",
+      "compressed_bytes": 1422508,
+      "bytes": 3992200,
+      "type": "b"
+    },
+    {
+      "path": "numpy\\_core\\_multiarray_umath.cp311-win_amd64.pyd",
+      "compressed_bytes": 1215204,
+      "bytes": 3703296,
+      "type": "b"
+    },
+    {
+      "path": "PySide6\\QtCore.pyd",
+      "compressed_bytes": 1248895,
+      "bytes": 3442824,
+      "type": "b"
+    },
+    {
+      "path": "PIL\\_imaging.cp311-win_amd64.pyd",
+      "compressed_bytes": 1021047,
+      "bytes": 2632704,
+      "type": "b"
+    },
+    {
+      "path": "lxml\\objectify.cp311-win_amd64.pyd",
+      "compressed_bytes": 1038730,
+      "bytes": 1744896,
+      "type": "b"
+    },
+    {
+      "path": "libssl-3-x64.dll",
+      "compressed_bytes": 449788,
+      "bytes": 1579520,
+      "type": "b"
+    },
+    {
+      "path": "base_library.zip",
+      "compressed_bytes": 413043,
+      "bytes": 1443233,
+      "type": "b"
+    },
+    {
+      "path": "unicodedata.pyd",
+      "compressed_bytes": 408839,
+      "bytes": 1128960,
+      "type": "b"
+    },
+    {
+      "path": "PySide6\\plugins\\platforms\\qwindows.dll",
+      "compressed_bytes": 403180,
+      "bytes": 907912,
+      "type": "b"
+    },
+    {
+      "path": "numpy\\random\\_generator.cp311-win_amd64.pyd",
+      "compressed_bytes": 268583,
+      "bytes": 608768,
+      "type": "b"
+    },
+    {
+      "path": "PySide6\\plugins\\imageformats\\qjpeg.dll",
+      "compressed_bytes": 195052,
+      "bytes": 575624,
+      "type": "b"
+    },
+    {
+      "path": "numpy.libs\\msvcp140-a4c2229bdc2a2a630acdc095b4d86008.dll",
+      "compressed_bytes": 184649,
+      "bytes": 575056,
+      "type": "b"
+    },
+    {
+      "path": "PySide6\\MSVCP140.dll",
+      "compressed_bytes": 182662,
+      "bytes": 565384,
+      "type": "b"
+    },
+    {
+      "path": "shiboken6\\MSVCP140.dll",
+      "compressed_bytes": 182657,
+      "bytes": 565384,
+      "type": "b"
+    },
+    {
+      "path": "numpy\\random\\mtrand.cp311-win_amd64.pyd",
+      "compressed_bytes": 215334,
+      "bytes": 512512,
+      "type": "b"
+    },
+    {
+      "path": "shiboken6\\shiboken6.abi3.dll",
+      "compressed_bytes": 180726,
+      "bytes": 371848,
+      "type": "b"
+    },
+    {
+      "path": "lxml\\html\\_difflib.cp311-win_amd64.pyd",
+      "compressed_bytes": 150681,
+      "bytes": 346624,
+      "type": "b"
+    }
+  ],
+  "groups": [
+    [
+      "cv2",
+      74964766
+    ],
+    [
+      "PySide6",
+      38195328
+    ],
+    [
+      "onnxruntime",
+      29425264
+    ],
+    [
+      "numpy.libs",
+      20990544
+    ],
+    [
+      "ddddocr",
+      13606051
+    ],
+    [
+      "PYZ.pyz",
+      8448635
+    ],
+    [
+      "libcrypto-3-x64.dll",
+      7983104
+    ],
+    [
+      "lxml",
+      6901432
+    ],
+    [
+      "numpy",
+      6154752
+    ],
+    [
+      "python311.dll",
+      5846016
+    ],
+    [
+      "PIL",
+      2942464
+    ],
+    [
+      "libssl-3-x64.dll",
+      1579520
+    ],
+    [
+      "base_library.zip",
+      1443233
+    ],
+    [
+      "shiboken6",
+      1150256
+    ],
+    [
+      "unicodedata.pyd",
+      1128960
+    ],
+    [
+      "charset_normalizer",
+      332288
+    ],
+    [
+      "_decimal.pyd",
+      243200
+    ],
+    [
+      "certifi",
+      234072
+    ],
+    [
+      "pyexpat.pyd",
+      203264
+    ],
+    [
+      "numpy-2.4.6.dist-info",
+      198353
+    ],
+    [
+      "_ssl.pyd",
+      166912
+    ],
+    [
+      "_lzma.pyd",
+      152576
+    ],
+    [
+      "VCRUNTIME140.dll",
+      124544
+    ],
+    [
+      "_ctypes.pyd",
+      119296
+    ],
+    [
+      "_elementtree.pyd",
+      116736
+    ],
+    [
+      "licenses",
+      82232
+    ],
+    [
+      "gdt_tax",
+      80269
+    ],
+    [
+      "_bz2.pyd",
+      72704
+    ],
+    [
+      "_socket.pyd",
+      67584
+    ],
+    [
+      "python3.dll",
+      55296
+    ],
+    [
+      "_hashlib.pyd",
+      53760
+    ],
+    [
+      "_asyncio.pyd",
+      53248
+    ],
+    [
+      "VCRUNTIME140_1.dll",
+      49792
+    ],
+    [
+      "_overlapped.pyd",
+      39424
+    ],
+    [
+      "pyimod02_importers",
+      34003
+    ],
+    [
+      "libffi-8.dll",
+      28160
+    ],
+    [
+      "_multiprocessing.pyd",
+      22528
+    ],
+    [
+      "_queue.pyd",
+      20480
+    ],
+    [
+      "select.pyd",
+      18944
+    ],
+    [
+      "_uuid.pyd",
+      13824
+    ],
+    [
+      "pyreadline3-3.5.6.dist-info",
+      12078
+    ],
+    [
+      "desktop",
+      10612
+    ],
+    [
+      "pyimod03_ctypes",
+      7016
+    ],
+    [
+      "pyimod01_archive",
+      5421
+    ],
+    [
+      "pyi_rth_inspect",
+      3039
+    ],
+    [
+      "pyi_rth_multiprocessing",
+      2567
+    ],
+    [
+      "pyi_rth_pyside6",
+      2132
+    ],
+    [
+      "pyiboot01_bootstrap",
+      2085
+    ],
+    [
+      "pyimod04_pywin32",
+      1923
+    ],
+    [
+      "pyi_rth_pkgutil",
+      1645
+    ],
+    [
+      "setuptools",
+      1335
+    ],
+    [
+      "pyi_rth_setuptools",
+      1156
+    ],
+    [
+      "struct",
+      344
+    ],
+    [
+      "entrypoint",
+      278
+    ]
+  ],
+  "packages": [
+    [
+      "PySide6_Essentials",
+      "6.8.3"
+    ],
+    [
+      "altgraph",
+      "0.17.5"
+    ],
+    [
+      "beautifulsoup4",
+      "4.15.0"
+    ],
+    [
+      "certifi",
+      "2026.10.18"
+    ],
+    [
+      "charset-normalizer",
+      "3.5.2"
+    ],
+    [
+      "coloredlogs",
+      "15.0.1"
+    ],
+    [
+      "ddddocr",
+      "1.6.1"
+    ],
+    [
+      "et_xmlfile",
+      "2.0.0"
+    ],
+    [
+      "flatbuffers",
+      "25.12.19"
+    ],
+    [
+      "humanfriendly",
+      "10.0"
+    ],
+    [
+      "idna",
+      "3.20"
+    ],
+    [
+      "lxml",
+      "6.1.3"
+    ],
+    [
+      "mpmath",
+      "1.3.0"
+    ],
+    [
+      "numpy",
+      "2.4.6"
+    ],
+    [
+      "onnxruntime",
+      "1.20.1"
+    ],
+    [
+      "opencv-python",
+      "4.11.0.86"
+    ],
+    [
+      "openpyxl",
+      "3.1.5"
+    ],
+    [
+      "packaging",
+      "26.3"
+    ],
+    [
+      "pefile",
+      "2024.8.26"
+    ],
+    [
+      "pillow",
+      "12.3.0"
+    ],
+    [
+      "protobuf",
+      "7.36.2"
+    ],
+    [
+      "pyinstaller",
+      "6.22.3"
+    ],
+    [
+      "pyinstaller-hooks-contrib",
+      "2026.8"
+    ],
+    [
+      "pyreadline3",
+      "3.5.6"
+    ],
+    [
+      "pywin32-ctypes",
+      "0.2.3"
+    ],
+    [
+      "requests",
+      "2.34.2"
+    ],
+    [
+      "setuptools",
+      "84.0.0"
+    ],
+    [
+      "shiboken6",
+      "6.8.3"
+    ],
+    [
+      "soupsieve",
+      "3.0.3"
+    ],
+    [
+      "sympy",
+      "1.14.0"
+    ],
+    [
+      "tai-ho-so-thue-gtgt",
+      "1.0.0"
+    ],
+    [
+      "typing_extensions",
+      "4.16.0"
+    ],
+    [
+      "urllib3",
+      "2.8.0"
+    ]
+  ],
+  "onedir_bytes": 223682817,
+  "onedir_files": 148,
+  "top30_onedir": [
+    {
+      "path": "_internal\\cv2\\cv2.pyd",
+      "bytes": 74938880
+    },
+    {
+      "path": "_internal\\numpy.libs\\libscipy_openblas64_-63c857e738469261263c764a36be9436.dll",
+      "bytes": 20415488
+    },
+    {
+      "path": "_internal\\onnxruntime\\capi\\onnxruntime_pybind11_state.pyd",
+      "bytes": 15845408
+    },
+    {
+      "path": "_internal\\ddddocr\\common_old.onnx",
+      "bytes": 13606051
+    },
+    {
+      "path": "_internal\\onnxruntime\\capi\\onnxruntime.dll",
+      "bytes": 13557800
+    },
+    {
+      "path": "_internal\\PySide6\\Qt6Gui.dll",
+      "bytes": 9285768
+    },
+    {
+      "path": "TaiHoSoThue-Windows.exe",
+      "bytes": 8797616
+    },
+    {
+      "path": "_internal\\libcrypto-3-x64.dll",
+      "bytes": 7983104
+    },
+    {
+      "path": "_internal\\PySide6\\Qt6Widgets.dll",
+      "bytes": 6500488
+    },
+    {
+      "path": "_internal\\PySide6\\Qt6Core.dll",
+      "bytes": 6159496
+    },
+    {
+      "path": "_internal\\python311.dll",
+      "bytes": 5846016
+    },
+    {
+      "path": "_internal\\PySide6\\QtWidgets.pyd",
+      "bytes": 5824648
+    },
+    {
+      "path": "_internal\\lxml\\etree.cp311-win_amd64.pyd",
+      "bytes": 4049920
+    },
+    {
+      "path": "_internal\\PySide6\\QtGui.pyd",
+      "bytes": 3992200
+    },
+    {
+      "path": "_internal\\numpy\\_core\\_multiarray_umath.cp311-win_amd64.pyd",
+      "bytes": 3703296
+    },
+    {
+      "path": "_internal\\PySide6\\QtCore.pyd",
+      "bytes": 3442824
+    },
+    {
+      "path": "_internal\\PIL\\_imaging.cp311-win_amd64.pyd",
+      "bytes": 2632704
+    },
+    {
+      "path": "_internal\\lxml\\objectify.cp311-win_amd64.pyd",
+      "bytes": 1744896
+    },
+    {
+      "path": "_internal\\libssl-3-x64.dll",
+      "bytes": 1579520
+    },
+    {
+      "path": "_internal\\base_library.zip",
+      "bytes": 1443233
+    },
+    {
+      "path": "_internal\\unicodedata.pyd",
+      "bytes": 1128960
+    },
+    {
+      "path": "_internal\\PySide6\\plugins\\platforms\\qwindows.dll",
+      "bytes": 907912
+    },
+    {
+      "path": "_internal\\numpy\\random\\_generator.cp311-win_amd64.pyd",
+      "bytes": 608768
+    },
+    {
+      "path": "_internal\\PySide6\\plugins\\imageformats\\qjpeg.dll",
+      "bytes": 575624
+    },
+    {
+      "path": "_internal\\numpy.libs\\msvcp140-a4c2229bdc2a2a630acdc095b4d86008.dll",
+      "bytes": 575056
+    },
+    {
+      "path": "_internal\\PySide6\\MSVCP140.dll",
+      "bytes": 565384
+    },
+    {
+      "path": "_internal\\shiboken6\\MSVCP140.dll",
+      "bytes": 565384
+    },
+    {
+      "path": "_internal\\numpy\\random\\mtrand.cp311-win_amd64.pyd",
+      "bytes": 512512
+    },
+    {
+      "path": "_internal\\shiboken6\\shiboken6.abi3.dll",
+      "bytes": 371848
+    },
+    {
+      "path": "_internal\\lxml\\html\\_difflib.cp311-win_amd64.pyd",
+      "bytes": 346624
+    }
+  ]
+}

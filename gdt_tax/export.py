@@ -31,6 +31,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
+from .atomic import replace_with_retry
 from .classify import CLASSIFICATION_NAME
 from .errors import GdtError
 from .inventory import MANIFEST_NAME
@@ -343,7 +344,7 @@ def _atomic_write(path: Path, data: bytes) -> None:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        replace_with_retry(temporary, path)
     except OSError as error:
         raise GdtError(f"Không ghi được {path}: {error}") from error
     finally:

@@ -1,0 +1,22 @@
+name: Windows desktop
+on:
+  workflow_dispatch:
+  push:
+    tags: ['desktop-v*']
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Build and verify one-file EXE
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TaiHoSoThue-Windows-x64
+          path: dist/TaiHoSoThue-Windows.exe
+          if-no-files-found: error

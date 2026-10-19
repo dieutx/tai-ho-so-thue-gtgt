@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "bytes": 88321431,
+  "sha256": "17e10d910f50610b5406d5e13088c7d29036ee5fa2da8d44e6f790515ad51c06",
+  "test_total": 460,
+  "skipped": 6,
+  "native_ui_cases": 18,
+  "fixture_cases": 6,
+  "startup_median_s": 15.113699800000177,
+  "idle_working_set_bytes": 106577920
+}

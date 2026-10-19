@@ -17,6 +17,7 @@ from .csrf import token_from_meta
 from .errors import LoginError
 from .headers import DEFAULT_PROFILE, build_page_headers, build_xhr_headers
 from .http import HttpClient
+from .run_hooks import RunHooks
 
 LOGGER_NAME = "gdt_tax.auth"
 PAUSE_BEFORE_RETRY = 3.0
@@ -33,6 +34,7 @@ def login(
     logger = logger or logging.getLogger(LOGGER_NAME)
     payload = base64.b64encode(settings.password.encode("utf-8")).decode("ascii")
 
+    hooks = getattr(http, "hooks", RunHooks())
     for attempt in range(1, settings.login_attempts + 1):
         logger.info("ĐĂNG NHẬP %s/%s", attempt, settings.login_attempts)
         page = http.get(
@@ -45,7 +47,7 @@ def login(
         )
         if page.status_code != 200:
             logger.warning("Không mở được trang đăng nhập: HTTP %s", page.status_code)
-            time.sleep(PAUSE_BEFORE_RETRY)
+            hooks.pause(PAUSE_BEFORE_RETRY, time.sleep)
             continue
 
         csrf = token_from_meta(page.text)
@@ -60,7 +62,7 @@ def login(
                 if not csrf
                 else "bộ nhận dạng CAPTCHA không đọc được mã",
             )
-            time.sleep(PAUSE_BEFORE_RETRY)
+            hooks.pause(PAUSE_BEFORE_RETRY, time.sleep)
             continue
 
         response = http.post(
@@ -86,11 +88,17 @@ def login(
 
         try:
             if str(response.json().get("status")) == "200":
+                accepted = getattr(captcha, "accepted", None)
+                if callable(accepted):
+                    accepted()
                 logger.info("ĐĂNG NHẬP THÀNH CÔNG")
                 return True
         except (ValueError, AttributeError):
             pass
-        time.sleep(PAUSE_AFTER_FAILED_LOGIN)
+        rejected = getattr(captcha, "rejected", None)
+        if callable(rejected):
+            rejected()
+        hooks.pause(PAUSE_AFTER_FAILED_LOGIN, time.sleep)
 
     return False
 

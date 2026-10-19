@@ -11,8 +11,9 @@ import random
 import time
 from collections.abc import Callable
 
-from ..errors import SearchError
+from ..errors import NetworkError, SearchError
 from ..http import HttpClient
+from ..run_hooks import RunHooks
 from .models import TbPageResult, TbSummary, ThongBao, tb_periods
 from .portal import TbPortal
 from .storage import TbStore, write_tb_metadata
@@ -34,6 +35,9 @@ class TbPipeline:
         portal_factory: Callable[[], TbPortal] | None = None,
         logger: logging.Logger | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        hooks: RunHooks | None = None,
+        persist_metadata: bool = True,
+        target_ids: set[str] | None = None,
     ) -> None:
         self.settings = settings
         self.http = http
@@ -42,8 +46,33 @@ class TbPipeline:
         self.portal_factory = portal_factory
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.sleep = sleep
+        self.hooks = hooks or RunHooks()
+        self.persist_metadata = persist_metadata
+        self.target_ids = target_ids
+        self.record_errors: dict[str, str] = {}
+        self.active_record_id = ""
+        self.records: dict = {}
+        self.downloaded_ids: set[str] = set()
+        self.failed_ids: set[str] = set()
+        self.reused_ids: set[str] = set()
+
+    def _persist(self, records):
+        return write_tb_metadata(self.settings.download_dir, records) if self.persist_metadata else None
+
+    def _attempt_download(self, portal, record, downloaded):
+        try:
+            return self._download(portal, record, downloaded)
+        except NetworkError as error:
+            if self.target_ids is None:
+                raise
+            self.record_errors[record.message_id] = str(error)
+            self.logger.error("Không tải được thông báo %s: %s", record.message_id, error)
 
     def run(self) -> TbSummary:
+        self.records = {}
+        self.downloaded_ids = set()
+        self.failed_ids = set()
+        self.reused_ids = set()
         summary = TbSummary(dry_run=self.settings.dry_run)
         periods = tb_periods(
             self.settings.from_date, self.settings.to_date, self.settings.max_days_per_search
@@ -58,15 +87,18 @@ class TbPipeline:
             self.http, self.captcha, self.settings, self.logger
         )
 
-        records: dict[str, ThongBao] = {}
-        downloaded: set[str] = set()
+        records: dict[str, ThongBao] = self.records
+        downloaded: set[str] = self.downloaded_ids
         for period in periods:
+            self.hooks.check()
             summary.periods += 1
             self.logger.info("=== Thông báo: %s ===", period.label)
             self._search_period(portal, period, records, downloaded)
-            write_tb_metadata(self.settings.download_dir, records)
+            self._persist(records)
+            if self.target_ids and self.target_ids.issubset(downloaded):
+                break
 
-        if write_tb_metadata(self.settings.download_dir, records):
+        if self._persist(records):
             self.logger.info("Thông báo: đã ghi danh sách (CSV/JSON/Excel)")
         summary.discovered = len(records)
         summary.downloaded = len(downloaded)
@@ -83,6 +115,7 @@ class TbPipeline:
         total_pages: int | None = None
         seen_ids: set[str] = set()
         while total_pages is None or page <= total_pages:
+            self.hooks.check()
             result = self._search_page(portal, period, page)
             known_total = total_pages is not None
             if result.total_pages is not None:
@@ -101,13 +134,25 @@ class TbPipeline:
                 raise SearchError(f"Trang {page}/{total_pages} thông báo trống")
             seen_ids.update(page_ids)
             for index, found in enumerate(result.records, start=1):
+                self.hooks.check()
                 record = records.setdefault(found.message_id, found)
                 self.logger.info(
                     "TẢI trang=%s mục=%s/%s: %s",
                     page, index, len(result.records), found.so_thong_bao or found.message_id,
                 )
-                self._download(portal, record, downloaded)
-                write_tb_metadata(self.settings.download_dir, records)
+                self.active_record_id = record.message_id
+                targeted = self.target_ids is None or record.message_id in self.target_ids
+                if targeted:
+                    self._attempt_download(portal, record, downloaded)
+                if not self.settings.dry_run and targeted:
+                    if record.message_id in downloaded:
+                        self.failed_ids.discard(record.message_id)
+                    else:
+                        self.failed_ids.add(record.message_id)
+                self._persist(records)
+                self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(downloaded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.message_id in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.message_id in downloaded else "Lỗi tải" if targeted else "Chưa tải")
+                if self.target_ids and self.target_ids.issubset(downloaded):
+                    return
                 self._pause(self.settings.pause_between_records)
             if total_pages is None and not new_ids:
                 break
@@ -118,10 +163,11 @@ class TbPipeline:
     def _pause(self, seconds: float) -> None:
         jitter = self.settings.pause_jitter
         delay = seconds * (1 + random.uniform(0, jitter)) if jitter > 0 and seconds > 0 else seconds
-        self.sleep(delay)
+        self.hooks.pause(delay, self.sleep)
 
     def _search_page(self, portal: TbPortal, period, page: int) -> TbPageResult:
         for attempt in range(1, self.settings.search_attempts + 1):
+            self.hooks.check()
             result = portal.search_tb(period, page)
             self.logger.info(
                 "SEARCH TB %s page=%s try=%s: HTTP=%s, records=%s, pages=%s",
@@ -145,14 +191,18 @@ class TbPipeline:
         if record.message_id in downloaded:
             return
         if self.store.find_existing(record):
+            self.reused_ids.add(record.message_id)
             downloaded.add(record.message_id)
             return
         data = portal.download_tb(record)
         if data is None:
+            self.record_errors[record.message_id] = getattr(portal, "last_download_error", "") or "Cổng không trả PDF hoàn chỉnh. Kiểm tra kết nối/phiên đăng nhập rồi thử lại."
             self.logger.error("LỖI TẢI thông báo: %s", record.so_thong_bao or record.message_id)
             return
         if self.store.save(record, data) is not None:
             downloaded.add(record.message_id)
+        else:
+            self.record_errors[record.message_id] = "Dữ liệu nhận được không phải PDF hoàn chỉnh/hợp lệ; tệp chưa được lưu."
 
 
 __all__ = ["TbPipeline"]

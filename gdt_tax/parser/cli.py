@@ -18,9 +18,11 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from ..atomic import replace_with_retry
 from ..errors import GdtError
 from ..inventory import MANIFEST_NAME
 from ..logging_setup import configure_streams
+from ..run_hooks import RunHooks
 from .extract import PARSER_VERSION, SCHEMA_VERSION, extract_declaration
 from .registry import load_registry
 
@@ -58,6 +60,7 @@ def parse_manifest(
     root: Path,
     *,
     registry=None,
+    hooks: RunHooks | None = None,
     logger: logging.Logger | None = None,
 ) -> list[dict]:
     """Parse mọi XML trong manifest; lỗi một artifact không dừng cả batch."""
@@ -68,6 +71,7 @@ def parse_manifest(
         if not isinstance(rel_path, str):
             continue
         for artifact in container.get("members", []):
+            (hooks or RunHooks()).check()
             if artifact.get("format") != "xml" or artifact.get("status") != "ok":
                 continue
             member_name = artifact.get("member_name", "")
@@ -111,7 +115,7 @@ def write_parsed(results: list[dict], output_dir: Path, name: str = PARSED_NAME)
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, target)
+        replace_with_retry(temporary, target)
     except OSError as error:
         raise GdtError(f"Không ghi được {target}: {error}") from error
     finally:

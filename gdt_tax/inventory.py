@@ -43,8 +43,10 @@ from .archive_limits import (
     MAX_MEMBERS,
     MAX_TOTAL_UNCOMPRESSED,
 )
+from .atomic import replace_with_retry
 from .errors import GdtError
 from .logging_setup import configure_streams
+from .run_hooks import RunHooks
 
 LOGGER_NAME = "gdt_tax.inventory"
 
@@ -554,7 +556,9 @@ def scan_directory(
     metadata_path: Path | None = None,
     cache: dict[str, Container] | None = None,
     force: bool = False,
+    hooks: RunHooks | None = None,
     logger: logging.Logger | None = None,
+    selected_paths: list[Path] | None = None,
 ) -> Manifest:
     """Quét đệ quy ``root`` và dựng manifest; không sửa bất kỳ file nguồn nào."""
     log = logger or logging.getLogger(LOGGER_NAME)
@@ -564,12 +568,17 @@ def scan_directory(
     cases = _load_cases(metadata_path) if metadata_path is not None else {}
     containers: list[Container] = []
     errors: list[dict] = []
+    if selected_paths is not None and any(not path.resolve().is_relative_to(base.resolve()) for path in selected_paths):
+        raise GdtError("Tệp được chọn nằm ngoài thư mục nguồn")
+    candidates = base.rglob("*") if selected_paths is None else iter(dict.fromkeys(
+        base / path.resolve().relative_to(base.resolve()) for path in selected_paths))
     files = sorted(
         path
-        for path in base.rglob("*")
+        for path in candidates
         if path.is_file() and path.name not in _DERIVED_NAMES
     )
     for path in files:
+        (hooks or RunHooks()).check()
         rel_path = path.relative_to(base).as_posix()
         stat = path.stat()
         cached = (cache or {}).get(rel_path)
@@ -962,7 +971,7 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        replace_with_retry(temporary, path)
     except OSError as error:
         raise GdtError(f"Không ghi được {path}: {error}") from error
     finally:

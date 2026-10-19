@@ -16,10 +16,12 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from .atomic import replace_with_retry
 from .errors import GdtError
 from .inventory import MANIFEST_NAME
 from .logging_setup import configure_streams
 from .parser.registry import MappingRegistry, load_registry
+from .run_hooks import RunHooks
 
 LOGGER_NAME = "gdt_tax.classify"
 CLASSIFY_VERSION = "content-classify-v1"
@@ -162,6 +164,7 @@ def classify_manifest(
     manifest: dict,
     *,
     registry: MappingRegistry | None = None,
+    hooks: RunHooks | None = None,
 ) -> list[dict]:
     """Phân loại mọi XML trong manifest; giữ cả artifact lỗi/không XML."""
     registry = registry if registry is not None else load_registry()
@@ -169,6 +172,7 @@ def classify_manifest(
     for container in manifest.get("containers", []):
         rel_path = container.get("rel_path")
         for artifact in container.get("members", []):
+            (hooks or RunHooks()).check()
             if artifact.get("format") != "xml":
                 continue
             classification = classify_artifact(
@@ -207,7 +211,7 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        replace_with_retry(temporary, path)
     except OSError as error:
         raise GdtError(f"Không ghi được {path}: {error}") from error
     finally:
