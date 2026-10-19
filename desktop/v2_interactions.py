@@ -413,6 +413,8 @@ class V2InteractionMixin:
 
     def on_progress(self, payload):
         from .ui import MODES, TITLES
+        if 'captcha_message' in payload:
+            self.status.setText(payload['captcha_message'])
         if 'session' in payload:
             self.refresh_account()
             if payload['session'] == 'AUTHENTICATING':

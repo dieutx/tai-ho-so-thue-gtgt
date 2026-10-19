@@ -1,4 +1,7 @@
-# Tải hồ sơ thuế điện tử
+# Chạy Tải Hồ Sơ Thuế bằng Python
+
+Hướng dẫn cài đặt, cấu hình `.env` và các lệnh Python/CLI như trước đây.
+Nếu cần chạy giao diện desktop từ Python, xem [hướng dẫn phát triển](../BUILD_WINDOWS.md#build).
 
 [![CI](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/badges/main/pipeline.svg)](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/pipelines)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](../pyproject.toml)

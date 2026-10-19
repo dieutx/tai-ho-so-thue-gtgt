@@ -4,11 +4,11 @@
 |---|---:|---:|---:|---:|
 | Baseline | 202,938,102 B | 410,887,557 B | 5.757 s | 167,301,120 B |
 | Full 1.1 | 88,256,580 B | 223,618,350 B | 4.072 s | 168,087,552 B |
-| Full 2.0 | **88,321,431 B** | **223,682,817 B** | **15.114 s** | **106,577,920 B** |
+| Full 2.0 build ban đầu | **88,321,431 B** | **223,682,817 B** | **15.114 s** | **106,577,920 B** |
 
 Giảm 56.48% EXE so với baseline. MB=10^6 B, MiB=2^20 B.
 Giữ OCR tự động, đạt dưới 100 MB; chưa đạt dưới 80 MB. Không dùng UPX.
-SHA-256: `17e10d910f50610b5406d5e13088c7d29036ee5fa2da8d44e6f790515ad51c06`.
+SHA-256: `b94f9d2a111a9af5890bf72b16e9420bf28832cfb5a29502f5e361cfc5111a4a`.
 
 Windows 11 x64, CPython 3.11.15, PyInstaller 6.22.3, Qt Essentials 6.8.3.
 Runtime `.venv-release-1.1` tách khỏi ruff/mypy/psutil ở `.venv-review`.
@@ -205,3 +205,11 @@ Không bundle test, dữ liệu thuế thật, `.env`, logs hoặc công cụ ph
 460 test tổng, 6 skip; ruff/mypy PASS. Native EXE 18 cấu hình và frozen offline/OCR
 hai lượt PASS. Bản đồ nội tạng đầy đủ: [inventory](desktop-evidence/2.0/inventory.json).
 [Phương pháp và giới hạn](DESKTOP_ACCEPTANCE.md).
+
+## Asset 2.0.0 thay thế — CAPTCHA 5 lần
+
+EXE hiện hành **88,323,106 B (88.32 MB)**, SHA-256 `b94f9d2a111a9af5890bf72b16e9420bf28832cfb5a29502f5e361cfc5111a4a`.
+Giữ model mặc định, cùng hash OCR ảnh/model/kết quả với source trên fixture.
+467 test tổng/6 skip, native UI 18/18, frozen offline/OCR hai lượt PASS.
+Chưa đo lại OneDir/startup/RAM; bảng trên giữ số đo build ban đầu, không áp cho
+asset thay thế. [Bằng chứng](desktop-evidence/2.0/captcha-fix/release-summary.json).

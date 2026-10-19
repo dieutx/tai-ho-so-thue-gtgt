@@ -59,12 +59,15 @@ class RunConfig:
 
     def settings(self) -> Settings:
         p = self.preferences
+        # Leave room for five automatic challenges followed by manual fallback.
+        attempts = max(6, p.login_attempts) if p.solver == "ddddocr" else p.login_attempts
+        searches = max(6, p.search_attempts) if p.solver == "ddddocr" else p.search_attempts
         return Settings.from_env(
             environ={}, env_file=None, username=self.username, password=self.password,
             from_date=self.from_date, to_date=self.to_date, download_dir=self.output,
             case_id=self.case_id if self.mode == "tax" else "", dry_run=self.dry_run,
             captcha_solver=p.solver, request_timeout=p.timeout, http_retries=p.retries,
-            login_attempts=p.login_attempts, search_attempts=p.search_attempts,
+            login_attempts=attempts, search_attempts=searches,
             pause_between_records=p.record_delay, pause_between_pages=p.page_delay,
             pause_jitter=p.jitter, page_size=p.page_size, max_days_per_search=p.max_days,
             header_profile=p.header_profile, proxy_url=self.proxy, extra_headers=self.extra_headers,

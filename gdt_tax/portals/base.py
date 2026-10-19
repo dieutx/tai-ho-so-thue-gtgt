@@ -88,11 +88,18 @@ class Portal(ABC):
     def _page_result(self, response) -> PageResult:
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
-        return PageResult(
+        result = PageResult(
             records=parse_records(response.text, self.source),
             total_pages=page_count(response.text, self.source),
             http_status=response.status_code,
         )
+        # Optional GUI feedback; CLI solvers keep their existing behavior.
+        valid = result.records or (result.total_pages is not None and result.total_pages >= 0)
+        method = "accepted" if valid else "rejected"
+        feedback = getattr(self.captcha, method, None)
+        if callable(feedback):
+            feedback()
+        return result
 
 
 __all__ = ["Portal"]

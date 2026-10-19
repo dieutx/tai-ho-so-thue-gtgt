@@ -96,19 +96,161 @@ class AtomicRetryTests(unittest.TestCase):
         self.assertEqual(result.errors, 1)
 
     @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')
-    def test_rejected_ocr_requires_manual_next_attempt(self):
+    def test_five_rejected_ocr_attempts_before_manual_and_reset_on_success(self):
         from desktop.jobs import GuiCaptchaSolver
         from gdt_tax.run_hooks import RunHooks
-        solver = GuiCaptchaSolver(RunHooks(), lambda request: request.respond('AB12'), use_ocr=False)
+        requests = []
+        def manual(request):
+            requests.append(request)
+            request.respond('AB123')
+        solver = GuiCaptchaSolver(RunHooks(), manual, use_ocr=False)
         solver.ocr = Mock()
-        solver.ocr.solve.return_value = 'OCR1'
-        self.assertEqual(solver.solve(b'fixture'), 'OCR1')
-        solver.rejected()
-        self.assertEqual(solver.solve(b'fixture'), 'AB12')
-        self.assertEqual(solver.ocr.solve.call_count, 1)
+        solver.ocr.solve.return_value = 'OCR12'
+        for _ in range(5):
+            self.assertEqual(solver.solve(b'fixture'), 'OCR12')
+            solver.rejected()
+            self.assertEqual(requests, [])
+        self.assertEqual(solver.solve(b'fixture'), 'AB123')
+        self.assertEqual(solver.ocr.solve.call_count, 5)
+        self.assertIn('5 lần', requests[0].message)
         solver.accepted()
-        self.assertEqual(solver.solve(b'fixture'), 'OCR1')
+        self.assertEqual(solver.solve(b'fixture'), 'OCR12')
         solver.close()
+
+    @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')
+    def test_empty_or_crashing_ocr_retries_fresh_challenges_before_manual(self):
+        from desktop.jobs import GuiCaptchaSolver
+        from gdt_tax.run_hooks import RunHooks
+        for error in [None, RuntimeError('model unavailable')]:
+            requests = []
+            def manual(request, requests=requests):
+                requests.append(request)
+                request.respond('abc12')
+            solver = GuiCaptchaSolver(RunHooks(), manual, use_ocr=False)
+            solver.ocr = Mock()
+            solver.ocr.solve.return_value = ''
+            solver.ocr.solve.side_effect = error
+            for number in range(4):
+                self.assertEqual(solver.solve(f'image-{number}'.encode()), '')
+                self.assertEqual(requests, [])
+                solver.rejected()  # Empty OCR must not be counted twice.
+            self.assertEqual(solver.solve(b'image-5'), 'abc12')
+            self.assertEqual(solver.ocr.solve.call_count, 5)
+            self.assertEqual(len(requests), 1)
+            self.assertIn('5 lần', requests[0].message)
+
+    @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')
+    def test_ocr_success_before_limit_never_requests_manual(self):
+        from desktop.jobs import GuiCaptchaSolver
+        from gdt_tax.run_hooks import RunHooks
+        request = Mock()
+        solver = GuiCaptchaSolver(RunHooks(), request, use_ocr=False)
+        solver.ocr = Mock()
+        solver.ocr.solve.return_value = 'abc12'
+        for _ in range(4):
+            solver.solve(b'image')
+            solver.rejected()
+        self.assertEqual(solver.solve(b'image-5'), 'abc12')
+        solver.accepted()
+        request.assert_not_called()
+        self.assertEqual(solver.auto_failures, 0)
+        for _ in range(10):
+            solver.solve(b'image')
+            solver.accepted()
+        request.assert_not_called()
+
+    @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')
+    def test_cancel_during_ocr_does_not_turn_into_retry_or_manual(self):
+        from desktop.jobs import GuiCaptchaSolver
+        from gdt_tax.run_hooks import RunCancelled, RunHooks
+        request = Mock()
+        solver = GuiCaptchaSolver(RunHooks(), request, use_ocr=False)
+        solver.ocr = Mock()
+        solver.ocr.solve.side_effect = RunCancelled('cancel')
+        with self.assertRaises(RunCancelled):
+            solver.solve(b'image')
+        request.assert_not_called()
+
+    def test_gui_ocr_budget_leaves_room_for_manual_without_changing_cli(self):
+        from gdt_tax.config import Settings
+        for mode in ['tax', 'gnt', 'notice']:
+            config = RunConfig(mode, Path('fixture-output'), username='fixture', password='fixture',
+                               preferences=Preferences(login_attempts=1, search_attempts=1))
+            self.assertEqual(config.settings().login_attempts, 6)
+            self.assertEqual(config.settings().search_attempts, 6)
+            config.preferences.solver = 'manual'
+            self.assertEqual(config.settings().login_attempts, 1)
+        settings = Settings.from_env(environ={}, env_file=None, username='fixture', password='fixture', login_attempts=1)
+        self.assertEqual(settings.login_attempts, 1)
+
+    @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')
+    def test_legacy_login_fetches_five_ocr_images_then_manual_on_sixth(self):
+        from desktop.jobs import GuiCaptchaSolver
+        from gdt_tax.portals.etax_legacy import EtaxLegacyPortal
+        from gdt_tax.run_hooks import RunHooks
+        requests = []
+        def manual(request):
+            requests.append(request)
+            request.respond('abc12')
+        solver = GuiCaptchaSolver(RunHooks(), manual, use_ocr=False)
+        solver.ocr = Mock()
+        solver.ocr.solve.return_value = 'bad12'
+        config = RunConfig('gnt', Path('fixture-output'), username='fixture', password='fixture', preferences=Preferences(login_attempts=1))
+        portal = EtaxLegacyPortal(Mock(), solver, config.settings())
+        failures = [Mock(text='loginForm', url='https://fixture.test')] * 5
+        from gdt_tax.portals import etax_legacy
+        success = Mock(text=etax_legacy._LOGIN_OK_MARKER, url='https://fixture.test')
+        with patch.object(portal, '_legacy_captcha_image', side_effect=[f'image-{n}'.encode() for n in range(6)]) as fetch, patch.object(portal, '_post_form', side_effect=failures + [success]) as post:
+            self.assertIs(portal._submit_login(Mock(text='fixture', url='https://fixture.test')), success)
+        self.assertEqual(fetch.call_count, 6)
+        self.assertEqual(post.call_count, 6)
+        self.assertEqual(solver.ocr.solve.call_count, 5)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(solver.auto_failures, 0)
+
+    @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')
+    def test_dvc_search_acceptance_resets_ocr_failures_after_retries(self):
+        from desktop.jobs import GuiCaptchaSolver
+        from gdt_tax.portals.dvc import DvcPortal
+        from gdt_tax.run_hooks import RunHooks
+        from tests.support import FakeResponse
+        solver = GuiCaptchaSolver(RunHooks(), Mock(), use_ocr=False)
+        solver.ocr = Mock()
+        solver.ocr.solve.return_value = 'abc12'
+        portal = DvcPortal(Mock(), solver, Mock())
+        for _ in range(4):
+            solver.solve(b'image')
+            portal._page_result(FakeResponse(text='<html>CAPTCHA rejected</html>'))
+        self.assertEqual(solver.auto_failures, 4)
+        solver.solve(b'image-5')
+        with patch('gdt_tax.portals.base.page_count', return_value=0):
+            portal._page_result(FakeResponse(text='<html>empty but valid</html>'))
+        self.assertEqual(solver.auto_failures, 0)
+        solver.request.assert_not_called()
+
+    @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')
+    def test_dvc_login_retries_ocr_then_manual_with_new_image_each_time(self):
+        from desktop.jobs import GuiCaptchaSolver
+        from gdt_tax import auth
+        from gdt_tax.run_hooks import RunHooks
+        for success_at in [3, 5, 6]:
+            requests = []
+            def manual(request, requests=requests):
+                requests.append(request)
+                request.respond('abc12')
+            solver = GuiCaptchaSolver(RunHooks(), manual, use_ocr=False)
+            solver.ocr = Mock()
+            solver.ocr.solve.return_value = 'abc12'
+            config = RunConfig('tax', Path('fixture-output'), username='fixture', password='fixture', preferences=Preferences(login_attempts=1))
+            http = Mock()
+            http.get.return_value = Mock(status_code=200, text='fixture')
+            http.post.side_effect = [Mock(status_code=200, text='fixture-rejected', json=Mock(return_value={'status': '401'})) for _ in range(success_at - 1)] + [Mock(status_code=200, text='fixture-accepted', json=Mock(return_value={'status': '200'}))]
+            images = [f'captcha-{number}'.encode() for number in range(success_at)]
+            with patch('gdt_tax.auth.token_from_meta', return_value='fixture-csrf'), patch('gdt_tax.auth.fetch_captcha', side_effect=images) as fetch:
+                self.assertTrue(auth.login(http, solver, config.settings()))
+            self.assertEqual(fetch.call_count, success_at)
+            self.assertEqual(solver.ocr.solve.call_count, min(success_at, 5))
+            self.assertEqual(len(requests), 1 if success_at == 6 else 0)
 
 
 @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')

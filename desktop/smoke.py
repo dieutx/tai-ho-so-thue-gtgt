@@ -1,6 +1,7 @@
 """Explicit diagnostic entrypoints; no fixture/business data bundled in release."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -36,6 +37,10 @@ def self_test(source: Path, output: Path, report: Path) -> int:
                 if not text:
                     raise AssertionError("OCR returned empty output")
                 result["ocr_offline"] = True
+                import ddddocr
+                result["ocr_fixture_sha256"] = hashlib.sha256((source / "sample_captcha.png").read_bytes()).hexdigest()
+                result["ocr_text_sha256"] = hashlib.sha256(text.encode('utf-8')).hexdigest()
+                result["ocr_model_sha256"] = hashlib.sha256((Path(ddddocr.__file__).parent / "common_old.onnx").read_bytes()).hexdigest()
             finally:
                 ocr.close()
         result["pass"] = True

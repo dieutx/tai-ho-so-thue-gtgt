@@ -5,6 +5,8 @@ Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không
 
 **[⬇ Tải bản Windows mới nhất](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/releases/permalink/latest/downloads/TaiHoSoThue-Windows.exe)** · [Xem các bản phát hành](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/releases)
 
+**[🐍 Chạy bằng Python như trước — cài đặt, cấu hình .env và các lệnh CLI](docs/CLI_GUIDE.md)**
+
 ![Giao diện Tải Hồ Sơ Thuế 2.0](docs/images/desktop-v2.png)
 
 *Ảnh giao diện mới với dữ liệu kiểm thử; không chứa hồ sơ thuế thật.*
@@ -17,6 +19,7 @@ Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không
 4. Chọn hồ sơ cần lấy → **Tải các tệp đã chọn**; hoặc bấm **Tải chưa tải**. Bấm **Mở tệp** để xem kết quả.
 
 **Tra cứu & tải** lấy luôn hồ sơ trong khoảng đã chọn. Tệp hợp lệ đã có sẽ được dùng lại.
+CAPTCHA được thử tự động tối đa **5 lần**; nếu vẫn chưa thành công, app thông báo và mở ô nhập tay.
 DVC được bật mặc định. **Trạng thái thuế** và **trạng thái tệp** được hiển thị riêng;
 hồ sơ bị từ chối vẫn có thể đã tải thành công.
 

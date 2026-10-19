@@ -70,8 +70,9 @@ class LogBridge(logging.Handler):
 
 
 class CaptchaRequest:
-    def __init__(self, image: bytes) -> None:
+    def __init__(self, image: bytes, message: str = "Nhập mã CAPTCHA trong ảnh để tiếp tục.") -> None:
         self.image = image
+        self.message = message
         self.ready = Event()
         self.answer: str | None = None
 
@@ -82,30 +83,52 @@ class CaptchaRequest:
 
 class GuiCaptchaSolver(CaptchaSolver):
     name = "gui"
+    AUTO_ATTEMPTS = 5
 
     def __init__(self, hooks: RunHooks, request, use_ocr: bool = True) -> None:
         super().__init__()
         self.hooks, self.request = hooks, request
         self.ocr = DdddOcrSolver() if use_ocr else None
-        self.force_manual = False
+        self.auto_failures = 0
+        self.last_was_auto = False
 
     def rejected(self) -> None:
-        self.force_manual = True
-        self.logger.warning("Cổng chưa chấp nhận đăng nhập; xác nhận CAPTCHA bằng tay ở lần tiếp theo")
+        if self.last_was_auto:
+            self.auto_failures += 1
+            self.last_was_auto = False
+            self.logger.warning("Cổng chưa chấp nhận CAPTCHA tự động (lần %s/%s)", self.auto_failures, self.AUTO_ATTEMPTS)
+            self.hooks.emit(captcha_message=f"CAPTCHA tự động chưa được chấp nhận ({self.auto_failures}/{self.AUTO_ATTEMPTS})")
 
     def accepted(self) -> None:
-        self.force_manual = False
+        self.auto_failures = 0
+        self.last_was_auto = False
 
     def solve(self, image: bytes) -> str:
         self.hooks.check()
-        if self.ocr and not self.force_manual:
+        self.last_was_auto = False
+        if self.ocr and self.auto_failures < self.AUTO_ATTEMPTS:
+            attempt = self.auto_failures + 1
+            self.hooks.emit(captcha_message=f"Đang đọc CAPTCHA tự động ({attempt}/{self.AUTO_ATTEMPTS})…")
             try:
                 result = self.ocr.solve(image)
                 if result:
+                    self.last_was_auto = True
                     return result
+            except RunCancelled:
+                raise
             except Exception:
-                self.logger.warning("OCR không khả dụng; chuyển sang nhập CAPTCHA bằng tay")
-        challenge = CaptchaRequest(image)
+                self.logger.warning("OCR chưa đọc được CAPTCHA (lần %s/%s)", attempt, self.AUTO_ATTEMPTS)
+            self.hooks.check()
+            self.auto_failures += 1
+            if self.auto_failures < self.AUTO_ATTEMPTS:
+                self.logger.info("Lấy ảnh CAPTCHA mới để thử tự động (%s/%s)", self.auto_failures + 1, self.AUTO_ATTEMPTS)
+                return ""  # The portal's bounded retry fetches a fresh image.
+        message = (f"Đã thử CAPTCHA tự động {self.AUTO_ATTEMPTS} lần nhưng chưa thành công. "
+                   "Bạn vui lòng nhập mã trong ảnh để tiếp tục."
+                   if self.ocr else "Bạn đang chọn chế độ nhập CAPTCHA bằng tay. Nhập mã trong ảnh để tiếp tục.")
+        self.logger.warning(message)
+        self.hooks.emit(captcha_message=message)
+        challenge = CaptchaRequest(image, message)
         self.request(challenge)
         deadline = time.monotonic() + 180
         while not challenge.ready.wait(0.1):

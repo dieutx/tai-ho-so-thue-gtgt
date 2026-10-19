@@ -2,6 +2,9 @@
 
 ## [2.0.0] — 2026-10-19
 
+- Cập nhật lại asset 2.0.0: tự thử CAPTCHA tối đa 5 lần với ảnh mới khi phải thử
+  lại, sau đó mới thông báo và cho nhập tay. Hiển thị tiến độ OCR; thành công
+  đặt lại bộ đếm. Model OCR giữ nguyên như Python. Không tạo phiên bản mới.
 - Giao diện mới: chọn kỳ nhanh, lọc và chọn nhiều hồ sơ, khung chi tiết,
   lịch sử tải, xuất danh sách Excel; có ảnh UI mới và hướng dẫn ngắn trong README.
 - Tách trạng thái thuế/trạng thái tệp; kiểm tra tệp đã có, tải phần chưa có hoặc
@@ -10,7 +13,7 @@
   đăng nhập lại một lần, báo lỗi HTTP rõ thay vì lặp tra cứu rỗng.
 - Sửa xử lý quyền ghi/OneDrive/tệp khóa/hết đĩa, giữ tệp đã tải xong.
 - DVC mặc định bật; ETAX dùng chung phiên, DVC tách cookie; offline không mạng.
-- Full EXE 88,321,431 B, OCR tự động; 460 test tổng/6 skip, native UI 18/18,
+- Full EXE 88,323,106 B, OCR tự động; 467 test tổng/6 skip, native UI 18/18,
   frozen offline/OCR hai lượt PASS. [Nghiệm thu](docs/DESKTOP_ACCEPTANCE.md).
 
 ## [1.1.0] — 2026-10-19

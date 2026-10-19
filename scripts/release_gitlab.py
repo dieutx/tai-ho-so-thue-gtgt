@@ -43,7 +43,7 @@ def request(client, method, url, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['check', 'publish', 'verify'])
+    parser.add_argument('action', choices=['check', 'publish', 'replace', 'verify'])
     version_info = json.loads((ROOT / 'desktop/resources/release.json').read_text(encoding='utf-8'))
     parser.add_argument('--tag', default='desktop-v' + version_info['version'])
     parser.add_argument('--notes', type=Path)
@@ -60,18 +60,33 @@ def main():
     digest = hashlib.sha256(exe.read_bytes()).hexdigest()
     files = [exe, ROOT / 'dist/SHA256SUMS.txt']
     package_url = API + '/packages/generic/tai-ho-so-thue-windows/' + quote(version, safe='') + '/'
-    if args.action == 'publish':
+    if args.action in {'publish', 'replace'}:
         if not args.notes:
-            raise SystemExit('publish requires --notes FILE')
+            raise SystemExit('publish/replace requires --notes FILE')
         if files[1].read_text(encoding='ascii').split()[0].lower() != digest:
             raise SystemExit('SHA256SUMS.txt does not match EXE')
+        previous = request(client, 'GET', API + '/releases/' + tag).json() if args.action == 'replace' else None
+        if previous:
+            for path in files:
+                if not any(item['name'] == path.name for item in previous['assets']['links']):
+                    raise SystemExit('Existing release does not have expected assets')
         links = []
         for path in files:
+            # A content-addressed URL avoids serving the old cached binary when
+            # replacing an asset while keeping the public download path stable.
+            filename = path.stem + '-' + digest[:12] + path.suffix if previous else path.name
             with path.open('rb') as stream:
-                request(client, 'PUT', package_url + path.name, data=stream, headers={'Content-Type': 'application/octet-stream'})
-            links.append({'name': path.name, 'url': package_url + path.name, 'direct_asset_path': '/' + path.name, 'link_type': 'package'})
+                request(client, 'PUT', package_url + filename, data=stream, headers={'Content-Type': 'application/octet-stream'})
+            links.append({'name': path.name, 'url': package_url + filename, 'direct_asset_path': '/' + path.name, 'link_type': 'package'})
         description = args.notes.read_text(encoding='utf-8')
-        request(client, 'POST', API + '/releases', json={'name': 'Tải Hồ Sơ Thuế ' + version + ' — Windows', 'tag_name': tag, 'description': description, 'assets': {'links': links}})
+        if previous:
+            # Switch the checksum first, then EXE; retain link IDs/permalinks.
+            for link in reversed(links):
+                old = next(item for item in previous['assets']['links'] if item['name'] == link['name'])
+                request(client, 'PUT', API + '/releases/' + tag + '/assets/links/' + str(old['id']), json=link)
+            request(client, 'PUT', API + '/releases/' + tag, json={'description': description})
+        else:
+            request(client, 'POST', API + '/releases', json={'name': 'Tải Hồ Sơ Thuế ' + version + ' — Windows', 'tag_name': tag, 'description': description, 'assets': {'links': links}})
     release = request(client, 'GET', API + '/releases/' + tag).json()
     link = next(item for item in release['assets']['links'] if item['name'] == exe.name)
     response = request(requests.Session(), 'GET', link['direct_asset_url'], stream=True)

@@ -138,6 +138,15 @@ python scripts/release_gitlab.py publish --tag desktop-v2.0.0 --notes .cache/opt
 python scripts/release_gitlab.py verify --tag desktop-v2.0.0
 ```
 
+Thay asset trong cùng phiên bản (chỉ khi được yêu cầu):
+
+```powershell
+python scripts/release_gitlab.py replace --tag desktop-v2.0.0 --notes .cache/optimization/release-notes-2.0.md
+```
+
+Lệnh `replace` giữ nguyên Release/link ID/link tải công khai, upload tệp có hash
+trong tên nội bộ để tránh cache, cập nhật URL asset/checksum và tải lại xác minh.
+
 Chuẩn bị `dist/SHA256SUMS.txt` cùng EXE trước publish. Helper upload Generic Package,
 tạo Release có link EXE/checksum và tải lại để đối chiếu SHA-256/kích thước.
 README dùng permalink latest để giữ link tải khi có phiên bản mới.

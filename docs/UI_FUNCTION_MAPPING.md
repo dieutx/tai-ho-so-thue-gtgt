@@ -13,7 +13,7 @@ in-process, không gọi executable CLI hoặc interpreter bên ngoài.
 | Phân loại | `classify.classify_manifest(manifest)`, payload như CLI, ghi JSON nguyên tử | phan_loai_artifact.json, OK/UNKNOWN/CONFLICT |
 | Xuất Excel | `export.build_rows`, `filter_rows`, `build_workbook`, `write_workbook` | Tax_Return_Summary.xlsx; bộ lọc tax_group/form_code/form_version/period/filing_type/status; CSV bổ sung qua write_csv |
 | Offline toàn bộ | Bốn stage trên theo thứ tự; manifest/parsed/classification nằm trong thư mục kết quả, root XML luôn là nguồn | Không mạng, không credential; thiếu dependency phải báo lỗi, không tự dùng output cũ của job khác |
-| CAPTCHA | `DdddOcrSolver.solve(bytes)`; GUI solver thay ManualSolver.input() | Chỉ model mặc định `common_old.onnx` (desktop dùng `beta=False`) được bundle; OCR lỗi/rỗng mở dialog nhập tay; hủy đánh dấu cancellation; không hỗ trợ refresh vì solve không có callback refresh |
+| CAPTCHA | `GuiCaptchaSolver` → `DdddOcrSolver.solve(bytes)` | Model `common_old.onnx`, `beta=False`; tối đa 5 lần tự động thất bại mới nhập tay; rỗng/lỗi trả vòng retry lấy ảnh mới; nhận feedback đăng nhập/tra cứu, thành công reset; hủy được |
 | Kết nối | Settings.request_timeout/http_retries/login_attempts/search_attempts/pause_between_records/pause_between_pages/pause_jitter/max_days_per_search/page_size/header_profile/proxy_url/extra_headers | HTTP TLS giữ mặc định; không dump HTTP trong desktop; thông số nhạy cảm chỉ ở phiên |
 | Tiếp tục | ZipStore/GntStore/TbStore.find_existing và writer metadata hiện có | Reuse file hợp lệ; downloaded của core gồm cả file reuse, UI ghi rõ điều này |
 

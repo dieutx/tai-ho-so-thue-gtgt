@@ -624,6 +624,9 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         self.captcha_dialog = dialog
         dialog.setWindowTitle("Nhập CAPTCHA")
         layout = QVBoxLayout(dialog)
+        explanation = QLabel(request.message)
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
         image = QPixmap()
         image.loadFromData(request.image)
         label = QLabel()
@@ -636,7 +639,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         buttons.rejected.connect(dialog.reject)
         entry.returnPressed.connect(lambda: dialog.accept() if entry.text().strip() else None)
         layout.addWidget(buttons)
-        fit_dialog(dialog, 350, 210)
+        fit_dialog(dialog, 390, 270)
         entry.setFocus()
         accepted = dialog.exec()
         request.respond(entry.text() if accepted else None)
