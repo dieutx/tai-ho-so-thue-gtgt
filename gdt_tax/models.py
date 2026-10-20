@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import date
 
+from .table_contracts import ParseDiagnostics
+
 
 @dataclass
 class CaseRecord:
@@ -58,6 +60,7 @@ class PageResult:
     records: list[CaseRecord] = field(default_factory=list)
     total_pages: int | None = None
     http_status: int = 0
+    diagnostics: ParseDiagnostics | None = None
 
 
 @dataclass

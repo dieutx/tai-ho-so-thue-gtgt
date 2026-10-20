@@ -24,7 +24,7 @@ import re
 from bs4 import BeautifulSoup, Tag
 
 from ..constants import TB_RESULT_TABLE_ID
-from ..parsing import direct_cells
+from ..table_contracts import SCHEMAS, TableParse, parse_table
 from .models import ThongBao
 
 TB_MIN_CELLS = 10
@@ -62,20 +62,11 @@ def tb_record(cells: list[str], row: Tag) -> ThongBao | None:
 
 def parse_tb_records(html: str) -> list[ThongBao]:
     """Đọc mọi thông báo trong bảng kết quả, bỏ trùng theo ``messageId``."""
-    soup = BeautifulSoup(html, "lxml")
-    table = soup.find("table", id=TB_RESULT_TABLE_ID)
-    if table is None:
-        return []
-    body = table.find("tbody") or table
-    records: list[ThongBao] = []
-    seen: set[str] = set()
-    for row in body.find_all("tr"):
-        record = tb_record(direct_cells(row), row)
-        if record is None or record.message_id in seen:
-            continue
-        seen.add(record.message_id)
-        records.append(record)
-    return records
+    return parse_tb_table(html).records
+
+
+def parse_tb_table(html: str) -> TableParse:
+    return parse_table(html, SCHEMAS["TB"], lambda row, cells: tb_record(cells, row), lambda record: record.message_id)
 
 
 def tb_page_count(html: str) -> int | None:

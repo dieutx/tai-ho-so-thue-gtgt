@@ -20,7 +20,7 @@ from ..csrf import csrf_token
 from ..headers import build_page_headers, build_xhr_headers
 from ..http import HttpClient
 from ..models import CaseRecord, PageResult, SearchPeriod
-from ..parsing import page_count, parse_records
+from ..parsing import page_count, parse_record_table
 
 
 class Portal(ABC):
@@ -88,17 +88,22 @@ class Portal(ABC):
     def _page_result(self, response) -> PageResult:
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
+        parsed = parse_record_table(response.text, self.source)
         result = PageResult(
-            records=parse_records(response.text, self.source),
+            records=parsed.records,
             total_pages=page_count(response.text, self.source),
             http_status=response.status_code,
+            diagnostics=parsed.diagnostics,
         )
         # Optional GUI feedback; CLI solvers keep their existing behavior.
-        valid = result.records or (result.total_pages is not None and result.total_pages >= 0)
-        method = "accepted" if valid else "rejected"
-        feedback = getattr(self.captcha, method, None)
-        if callable(feedback):
-            feedback()
+        if parsed.diagnostics.complete:
+            feedback = getattr(self.captcha, "accepted", None)
+            if callable(feedback):
+                feedback()
+        elif parsed.diagnostics.status == "CAPTCHA_INVALID":
+            feedback = getattr(self.captcha, "rejected", None)
+            if callable(feedback):
+                feedback()
         return result
 
 

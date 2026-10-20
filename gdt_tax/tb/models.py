@@ -12,6 +12,7 @@ from datetime import timedelta
 from ..constants import SOURCE_TB
 from ..dates import parse_date
 from ..models import SearchPeriod
+from ..table_contracts import ParseDiagnostics
 
 
 @dataclass
@@ -45,6 +46,7 @@ class TbPageResult:
     records: list[ThongBao] = field(default_factory=list)
     total_pages: int | None = None
     http_status: int = 0
+    diagnostics: ParseDiagnostics | None = None
 
 
 @dataclass

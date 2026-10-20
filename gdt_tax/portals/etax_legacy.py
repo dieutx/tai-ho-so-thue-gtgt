@@ -40,7 +40,7 @@ from ..http import HttpClient
 from ..legacy_session import LegacySessionState
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..naming import safe_filename_part
-from ..parsing import parse_records
+from ..parsing import parse_record_table
 from .base import Portal
 
 #: Thành công khi trang trả về luồng trang chủ doanh nghiệp.
@@ -544,9 +544,9 @@ class EtaxLegacyPortal(Portal):
         self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
-        records = parse_records(response.text, self.source)
-        return PageResult(records=records, total_pages=_total_pages(response.text),
-                          http_status=response.status_code)
+        parsed = parse_record_table(response.text, self.source)
+        return PageResult(records=parsed.records, total_pages=_total_pages(response.text),
+                          http_status=response.status_code, diagnostics=parsed.diagnostics)
 
     def _open_search_page(self) -> None:
         """Mở trang tra cứu tờ khai (nơi có form ``traCuuKhaiForm``)."""

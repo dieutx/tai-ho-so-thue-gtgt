@@ -278,6 +278,8 @@ class AtomicRetryTests(unittest.TestCase):
         solver.solve(b'image-5')
         with patch('gdt_tax.portals.base.page_count', return_value=0):
             portal._page_result(FakeResponse(text='<html>empty but valid</html>'))
+        self.assertEqual(solver.auto_failures, 4)
+        portal._page_result(FakeResponse(text='<div id="table-container">Không có dữ liệu</div>'))
         self.assertEqual(solver.auto_failures, 0)
         solver.request.assert_not_called()
 

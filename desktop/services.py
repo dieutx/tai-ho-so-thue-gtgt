@@ -10,7 +10,7 @@ from typing import Any
 
 from gdt_tax import classify, export, inventory
 from gdt_tax.config import Settings
-from gdt_tax.errors import LegacyPageError, StorageError
+from gdt_tax.errors import LegacyPageError, SchemaChangedError, StorageError
 from gdt_tax.gnt.pipeline import GntPipeline
 from gdt_tax.gnt.storage import write_gnt_metadata
 from gdt_tax.http import HttpClient
@@ -171,6 +171,10 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
             result.message = "Không có kết quả"
     except RunCancelled:
         result.state, result.message = "CANCELLED", "Đã dừng — còn dữ liệu chưa xử lý"
+    except SchemaChangedError as error:
+        result.state = "PARTIAL" if pipeline.records else "ERROR"
+        result.message = str(error)
+        result.errors = 1
     except SessionExpired:
         if propagate_auth:
             raise
@@ -218,7 +222,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     result.discovered = len(result.rows)
     result.downloaded = len(pipeline.downloaded_ids)
     missing = set(config.target_ids or ()) - pipeline.records.keys()
-    result.errors = max(len(pipeline.failed_ids), int(result.state == "ERROR")) + len(missing)
+    result.errors = max(result.errors, len(pipeline.failed_ids), int(result.state == "ERROR")) + len(missing)
     result.reused = len(pipeline.reused_ids)
     result.account_key = hashlib.sha256(config.username.encode()).hexdigest()
     result.date_range = (config.from_date, config.to_date)
@@ -227,7 +231,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     result.issues = [{"document_id": str(row.get(KINDS[config.mode][1], "")), "message": row["_error_message"]}
                      for row in result.rows if row.get("_error_message")]
     result.issues.extend({"document_id": key, "message": "Hồ sơ không còn trong kết quả tra cứu của kỳ đã chọn; chưa tải tệp."} for key in sorted(missing))
-    if result.state == "ERROR" and not result.issues:
+    if result.state in {"ERROR", "PARTIAL"} and not result.issues:
         result.issues.append({"document_id": "", "message": result.message})
     # Only advertise reports actually produced by this job.
     if metadata_saved and (config.output / report).is_file():

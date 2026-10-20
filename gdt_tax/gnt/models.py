@@ -13,6 +13,7 @@ from datetime import timedelta
 from ..constants import SOURCE_GNT
 from ..dates import parse_date
 from ..models import SearchPeriod
+from ..table_contracts import ParseDiagnostics
 
 
 @dataclass
@@ -57,6 +58,7 @@ class GntPageResult:
     records: list[GiayNopTien] = field(default_factory=list)
     total_pages: int | None = None
     http_status: int = 0
+    diagnostics: ParseDiagnostics | None = None
 
 
 @dataclass

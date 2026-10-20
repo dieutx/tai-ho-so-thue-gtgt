@@ -33,6 +33,7 @@ from bs4 import BeautifulSoup, Tag
 from .constants import ALL_SOURCES, SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
 from .csrf import attribute
 from .models import CaseRecord
+from .table_contracts import SCHEMAS, TableParse, parse_table
 
 ETAX_MIN_CELLS = 10
 DVC_MIN_CELLS = 12
@@ -123,7 +124,7 @@ def etax_legacy_record(cells: list[str], row: Tag) -> CaseRecord | None:
         return None
     row_html = str(row)
     case_id = legacy_message_id(row_html)
-    if not case_id:
+    if not case_id or cells[1] != case_id:
         return None
     return CaseRecord(
         ma_ho_so=case_id,
@@ -140,38 +141,25 @@ def etax_legacy_record(cells: list[str], row: Tag) -> CaseRecord | None:
 
 
 def parse_records(html: str, source: str) -> list[CaseRecord]:
-    """Đọc mọi hồ sơ trong bảng kết quả, bỏ trùng theo mã hồ sơ."""
+    """Compatibility list adapter; portal/pipeline use parse_record_table diagnostics."""
+    return parse_record_table(html, source).records
+
+
+def parse_record_table(html: str, source: str) -> TableParse:
     _check_source(source)
-    soup = BeautifulSoup(html, "lxml")
-    records: list[CaseRecord] = []
-    seen: set[str] = set()
-
-    if source == SOURCE_ETAX_LEGACY:
-        table = soup.find("table", id=LEGACY_RESULT_TABLE_ID)
-        if table is None:
-            return records
-        for row in table.find_all("tr"):
-            cells = direct_cells(row)
-            record = etax_legacy_record(cells, row)
-            if record is None or record.ma_ho_so in seen:
-                continue
-            seen.add(record.ma_ho_so)
-            records.append(record)
-        return records
-
-    for row in soup.select("tbody tr"):
-        cells = direct_cells(row)
+    def decode(row: Tag, cells: list[str]):
+        if source == SOURCE_ETAX_LEGACY:
+            return etax_legacy_record(cells, row)
         if source == SOURCE_ETAX:
             case_id = case_id_from_row(row, cells, fallback_index=1)
-            record = etax_record(cells, case_id)
-        else:
-            case_id = case_id_from_row(row, cells, fallback_index=2)
-            record = dvc_record(cells, case_id)
-        if record is None or record.ma_ho_so in seen:
-            continue
-        seen.add(record.ma_ho_so)
-        records.append(record)
-    return records
+            if cells[1] != case_id:
+                return None
+            return etax_record(cells, case_id)
+        case_id = case_id_from_row(row, cells, fallback_index=2)
+        if cells[2] != case_id:
+            return None
+        return dvc_record(cells, case_id)
+    return parse_table(html, SCHEMAS[source], decode, lambda record: record.ma_ho_so)
 
 
 def _int_attribute(soup: BeautifulSoup, element_id: str, attribute_name: str) -> int | None:

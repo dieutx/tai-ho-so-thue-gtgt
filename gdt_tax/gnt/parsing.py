@@ -34,7 +34,7 @@ import re
 from bs4 import BeautifulSoup, Tag
 
 from ..constants import GNT_RESULT_TABLE_ID
-from ..parsing import direct_cells
+from ..table_contracts import SCHEMAS, TableParse, parse_table
 from .models import GiayNopTien
 
 GNT_MIN_CELLS = 20
@@ -79,20 +79,11 @@ def gnt_record(cells: list[str], row: Tag) -> GiayNopTien | None:
 
 def parse_gnt_records(html: str) -> list[GiayNopTien]:
     """Đọc mọi giấy nộp tiền trong bảng kết quả, bỏ trùng theo ``ctu_id``."""
-    soup = BeautifulSoup(html, "lxml")
-    table = soup.find("table", id=GNT_RESULT_TABLE_ID)
-    if table is None:
-        return []
-    body = table.find("tbody") or table
-    records: list[GiayNopTien] = []
-    seen: set[str] = set()
-    for row in body.find_all("tr"):
-        record = gnt_record(direct_cells(row), row)
-        if record is None or record.ctu_id in seen:
-            continue
-        seen.add(record.ctu_id)
-        records.append(record)
-    return records
+    return parse_gnt_table(html).records
+
+
+def parse_gnt_table(html: str) -> TableParse:
+    return parse_table(html, SCHEMAS["GNT"], lambda row, cells: gnt_record(cells, row), lambda record: record.ctu_id)
 
 
 def gnt_page_count(html: str) -> int | None:

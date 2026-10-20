@@ -12,7 +12,7 @@ from .classification import classify_record
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX, SOURCE_ETAX_LEGACY
 from .csrf import csrf_token
 from .dates import format_date
-from .errors import LoginError, NetworkError, SearchError
+from .errors import LoginError, NetworkError, SchemaChangedError, SearchError
 from .http import HttpClient
 from .models import CaseRecord, PageResult, RunSummary
 from .portals import build_portals
@@ -157,10 +157,14 @@ class Pipeline:
                 self._persist(records)
                 self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(succeeded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.ma_ho_so in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.ma_ho_so in succeeded else "Lỗi tải" if targeted else "Chưa tải")
                 if self.settings.case_id and (success or self.settings.dry_run):
-                    return True
+                    if result.diagnostics is None or result.diagnostics.complete:
+                        return True
                 if self.target_ids and self.target_ids.issubset(succeeded):
-                    return True
+                    if result.diagnostics is None or result.diagnostics.complete:
+                        return True
                 self._pause(self.settings.pause_between_records)
+            if result.diagnostics is not None and not result.diagnostics.complete:
+                raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
             if total_pages is None and not new_ids:
                 break
             page += 1
@@ -179,13 +183,17 @@ class Pipeline:
         for attempt in range(1, self.settings.search_attempts + 1):
             self.hooks.check()
             result = portal.search(period, page)
+            if result.diagnostics is not None and not result.diagnostics.complete and result.diagnostics.status != "CAPTCHA_INVALID":
+                if result.records:
+                    return result
+                raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
             self.logger.info(
                 "SEARCH %s %s page=%s try=%s: HTTP=%s, records=%s, pages=%s",
                 portal.source, period.label, page, attempt, result.http_status,
                 len(result.records), result.total_pages,
             )
             if result.http_status == 200 and (
-                result.records or (result.total_pages is not None and result.total_pages >= 0)
+                result.records or (result.diagnostics is not None and result.diagnostics.status == "EMPTY_CONFIRMED")
             ):
                 return result
             if attempt < self.settings.search_attempts:

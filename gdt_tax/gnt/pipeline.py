@@ -12,7 +12,7 @@ import random
 import time
 from collections.abc import Callable
 
-from ..errors import NetworkError, SearchError
+from ..errors import NetworkError, SchemaChangedError, SearchError
 from ..http import HttpClient
 from ..run_hooks import RunBudget, RunHooks
 from .models import GiayNopTien, GntPageResult, GntSummary, gnt_periods
@@ -157,8 +157,11 @@ class GntPipeline:
                 self._persist(records)
                 self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(downloaded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.ctu_id in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.ctu_id in downloaded else "Lỗi tải" if targeted else "Chưa tải")
                 if self.target_ids and self.target_ids.issubset(downloaded):
-                    return
+                    if result.diagnostics is None or result.diagnostics.complete:
+                        return
                 self._pause(self.settings.pause_between_records)
+            if result.diagnostics is not None and not result.diagnostics.complete:
+                raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
             if total_pages is None and not new_ids:
                 break
             page += 1
@@ -176,13 +179,17 @@ class GntPipeline:
         for attempt in range(1, self.settings.search_attempts + 1):
             self.hooks.check()
             result = portal.search_gnt(period, page)
+            if result.diagnostics is not None and not result.diagnostics.complete and result.diagnostics.status != "CAPTCHA_INVALID":
+                if result.records:
+                    return result
+                raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
             self.logger.info(
                 "SEARCH GNT %s page=%s try=%s: HTTP=%s, records=%s, pages=%s",
                 period.label, page, attempt, result.http_status,
                 len(result.records), result.total_pages,
             )
             if result.http_status == 200 and (
-                result.records or (result.total_pages is not None and result.total_pages >= 0)
+                result.records or (result.diagnostics is not None and result.diagnostics.status == "EMPTY_CONFIRMED")
             ):
                 return result
             if attempt < self.settings.search_attempts:

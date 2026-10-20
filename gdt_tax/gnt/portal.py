@@ -28,7 +28,7 @@ from ..integrity import validate_xml
 from ..models import SearchPeriod
 from ..portals.etax_legacy import EtaxLegacyPortal
 from .models import GiayNopTien, GntPageResult
-from .parsing import gnt_page_count, parse_gnt_records
+from .parsing import gnt_page_count, parse_gnt_table
 
 #: Trang trả lại bảng rỗng kèm câu này khi khoảng ngày không có GNT nào.
 _EMPTY_MARKERS = ("Chưa có giấy nộp tiền", "Không có dữ liệu", "không có giấy nộp tiền")
@@ -91,10 +91,12 @@ class GntPortal(EtaxLegacyPortal):
         self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
+        parsed = parse_gnt_table(response.text)
         return GntPageResult(
-            records=parse_gnt_records(response.text),
+            records=parsed.records,
             total_pages=gnt_page_count(response.text),
             http_status=response.status_code,
+            diagnostics=parsed.diagnostics,
         )
 
     def download_gnt(self, record: GiayNopTien) -> bytes | None:

@@ -40,6 +40,10 @@ class SearchError(GdtError):
     """Không tra cứu được trang kết quả sau nhiều lần thử."""
 
 
+class SchemaChangedError(SearchError):
+    """Result structure is unverified; retrying OCR cannot repair this page."""
+
+
 class DownloadError(GdtError):
     """Không tải được hồ sơ."""
 

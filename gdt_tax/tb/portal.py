@@ -20,7 +20,7 @@ from ..integrity import validate_pdf
 from ..models import SearchPeriod
 from ..portals.etax_legacy import EtaxLegacyPortal, _form_fields
 from .models import TbPageResult, ThongBao
-from .parsing import parse_tb_records, tb_page_count
+from .parsing import parse_tb_table, tb_page_count
 
 #: Trang trả lại bảng rỗng kèm một trong các câu này khi không có thông báo nào.
 _EMPTY_MARKERS = (
@@ -116,10 +116,12 @@ class TbPortal(EtaxLegacyPortal):
         self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
+        parsed = parse_tb_table(response.text)
         return TbPageResult(
-            records=parse_tb_records(response.text),
+            records=parsed.records,
             total_pages=tb_page_count(response.text),
             http_status=response.status_code,
+            diagnostics=parsed.diagnostics,
         )
 
     def download_tb(self, record: ThongBao) -> bytes | None:
