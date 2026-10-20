@@ -1,0 +1,82 @@
+{
+  "baseline_commit": "559892f1ff22f3e68d2fbea7be0608fd0ac597c9",
+  "review_date": "2026-10-20",
+  "production_changes_by_this_review": false,
+  "build_or_release_changes": false,
+  "portal_login_or_live_tax_requests": false,
+  "review_output_only": true,
+  "tickets": 26,
+  "priorities": {
+    "P1": 13,
+    "P2": 13
+  },
+  "synthetic_offline_cases": 18,
+  "repeat_observations_identical": true,
+  "initial_suite": {
+    "total": 486,
+    "errors": 1,
+    "skipped": 6,
+    "failure_stage": "TemporaryDirectory cleanup WinError 145; cause unconfirmed"
+  },
+  "targeted_cleanup_test_rerun": "PASS",
+  "full_suite_rerun": {
+    "total": 486,
+    "passed": 480,
+    "skipped": 6,
+    "errors": 0,
+    "seconds": 14.271
+  },
+  "isolated_baseline_suite": {
+    "total": 486,
+    "passed": 480,
+    "skipped": 6,
+    "errors": 0,
+    "seconds": 17.71
+  },
+  "isolated_baseline_evidence_identical": true,
+  "other_worktree_changes_present": true,
+  "other_worktree_diff_paths_at_validation": [
+    "CHANGELOG.md",
+    "README.md",
+    "desktop/main.py",
+    "desktop/table_model.py",
+    "desktop/ui.py",
+    "desktop/v2_interactions.py",
+    "docs/CLI_GUIDE.md",
+    "gdt_tax/constants.py",
+    "gdt_tax/pipeline.py",
+    "gdt_tax/portals/base.py",
+    "gdt_tax/portals/dvc.py",
+    "tests/test_desktop_v2.py"
+  ],
+  "other_staged_diff_paths_at_validation": [],
+  "supplementary_worktree_review": {
+    "cases": 4,
+    "targeted_tests_passed": 9,
+    "source_hashes_verified": true,
+    "full_suite_and_interactive_ui_not_tested": true
+  },
+  "uncommitted_areas_not_verified": [
+    "interactive Qt selection/native crash behavior",
+    "entire WIP changeset"
+  ],
+  "ruff_baseline_snapshot": "PASS",
+  "ruff_review_scripts": "PASS",
+  "mypy_core_baseline_snapshot": {
+    "result": "PASS",
+    "source_files": 66,
+    "untyped_function_bodies_not_fully_checked": true
+  },
+  "source_references_validated": 119,
+  "local_markdown_links_validated": 39,
+  "dependency_graph_acyclic": true,
+  "evidence_sha256": "b7e61d838be02e1be8156e89426e657962fce73384b261cabc2834265b3e10ca",
+  "backlog_sha256": "2f5e7e651ecf6458bf421bf760ce7170247e745abb8509a30cc1015849cbcdc9",
+  "not_performed": [
+    "fresh frozen build/UI smoke",
+    "load benchmark",
+    "concurrent writer stress",
+    "live portal compatibility",
+    "tax/legal mapping audit"
+  ]
+}

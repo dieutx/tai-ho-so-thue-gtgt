@@ -1,0 +1,716 @@
+{
+  "gdt_tax/parsing.py:parse_records": {
+    "path": "gdt_tax/parsing.py",
+    "symbol": "parse_records",
+    "line": 142,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parsing.py#L142"
+  },
+  "gdt_tax/portals/etax_legacy.py:_total_pages": {
+    "path": "gdt_tax/portals/etax_legacy.py",
+    "symbol": "_total_pages",
+    "line": 164,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/portals/etax_legacy.py#L164"
+  },
+  "gdt_tax/pipeline.py:Pipeline._search_page": {
+    "path": "gdt_tax/pipeline.py",
+    "symbol": "Pipeline._search_page",
+    "line": 174,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/pipeline.py#L174"
+  },
+  "gdt_tax/gnt/pipeline.py:GntPipeline._search_page": {
+    "path": "gdt_tax/gnt/pipeline.py",
+    "symbol": "GntPipeline._search_page",
+    "line": 171,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/gnt/pipeline.py#L171"
+  },
+  "gdt_tax/tb/pipeline.py:TbPipeline._search_page": {
+    "path": "gdt_tax/tb/pipeline.py",
+    "symbol": "TbPipeline._search_page",
+    "line": 168,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/tb/pipeline.py#L168"
+  },
+  "gdt_tax/parsing.py:etax_record": {
+    "path": "gdt_tax/parsing.py",
+    "symbol": "etax_record",
+    "line": 78,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parsing.py#L78"
+  },
+  "gdt_tax/parsing.py:dvc_record": {
+    "path": "gdt_tax/parsing.py",
+    "symbol": "dvc_record",
+    "line": 96,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parsing.py#L96"
+  },
+  "gdt_tax/parsing.py:etax_legacy_record": {
+    "path": "gdt_tax/parsing.py",
+    "symbol": "etax_legacy_record",
+    "line": 116,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parsing.py#L116"
+  },
+  "gdt_tax/gnt/parsing.py:gnt_record": {
+    "path": "gdt_tax/gnt/parsing.py",
+    "symbol": "gnt_record",
+    "line": 51,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/gnt/parsing.py#L51"
+  },
+  "gdt_tax/tb/parsing.py:tb_record": {
+    "path": "gdt_tax/tb/parsing.py",
+    "symbol": "tb_record",
+    "line": 43,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/tb/parsing.py#L43"
+  },
+  "gdt_tax/pipeline.py:Pipeline._search_and_download": {
+    "path": "gdt_tax/pipeline.py",
+    "symbol": "Pipeline._search_and_download",
+    "line": 118,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/pipeline.py#L118"
+  },
+  "gdt_tax/storage.py:ZipStore.find_existing": {
+    "path": "gdt_tax/storage.py",
+    "symbol": "ZipStore.find_existing",
+    "line": 116,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/storage.py#L116"
+  },
+  "gdt_tax/storage.py:write_metadata": {
+    "path": "gdt_tax/storage.py",
+    "symbol": "write_metadata",
+    "line": 168,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/storage.py#L168"
+  },
+  "desktop/file_store.py:DesktopZipStore": {
+    "path": "desktop/file_store.py",
+    "symbol": "DesktopZipStore",
+    "line": 7,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/file_store.py#L7"
+  },
+  "desktop/sessions.py:ETaxSessionManager._mixed_tax": {
+    "path": "desktop/sessions.py",
+    "symbol": "ETaxSessionManager._mixed_tax",
+    "line": 227,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/sessions.py#L227"
+  },
+  "desktop/documents.py:document_id": {
+    "path": "desktop/documents.py",
+    "symbol": "document_id",
+    "line": 36,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/documents.py#L36"
+  },
+  "gdt_tax/export.py:build_rows": {
+    "path": "gdt_tax/export.py",
+    "symbol": "build_rows",
+    "line": 94,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/export.py#L94"
+  },
+  "gdt_tax/export.py:load_inputs": {
+    "path": "gdt_tax/export.py",
+    "symbol": "load_inputs",
+    "line": 368,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/export.py#L368"
+  },
+  "gdt_tax/parser/cli.py:_read_manifest": {
+    "path": "gdt_tax/parser/cli.py",
+    "symbol": "_read_manifest",
+    "line": 37,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/cli.py#L37"
+  },
+  "gdt_tax/classify.py:_read_manifest": {
+    "path": "gdt_tax/classify.py",
+    "symbol": "_read_manifest",
+    "line": 189,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/classify.py#L189"
+  },
+  "desktop/services.py:run_offline": {
+    "path": "desktop/services.py",
+    "symbol": "run_offline",
+    "line": 247,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/services.py#L247"
+  },
+  "gdt_tax/export.py:_write_indicators_sheet": {
+    "path": "gdt_tax/export.py",
+    "symbol": "_write_indicators_sheet",
+    "line": 206,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/export.py#L206"
+  },
+  "gdt_tax/export.py:_write_rows_sheet": {
+    "path": "gdt_tax/export.py",
+    "symbol": "_write_rows_sheet",
+    "line": 236,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/export.py#L236"
+  },
+  "gdt_tax/export.py:write_csv": {
+    "path": "gdt_tax/export.py",
+    "symbol": "write_csv",
+    "line": 355,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/export.py#L355"
+  },
+  "gdt_tax/gnt/storage.py:write_gnt_metadata": {
+    "path": "gdt_tax/gnt/storage.py",
+    "symbol": "write_gnt_metadata",
+    "line": 101,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/gnt/storage.py#L101"
+  },
+  "gdt_tax/tb/storage.py:write_tb_metadata": {
+    "path": "gdt_tax/tb/storage.py",
+    "symbol": "write_tb_metadata",
+    "line": 89,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/tb/storage.py#L89"
+  },
+  "gdt_tax/export.py:_excel_safe": {
+    "path": "gdt_tax/export.py",
+    "symbol": "_excel_safe",
+    "line": 166,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/export.py#L166"
+  },
+  "gdt_tax/parser/models.py:Indicator": {
+    "path": "gdt_tax/parser/models.py",
+    "symbol": "Indicator",
+    "line": 15,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/models.py#L15"
+  },
+  "gdt_tax/parser/xml_reader.py:namespace_map": {
+    "path": "gdt_tax/parser/xml_reader.py",
+    "symbol": "namespace_map",
+    "line": 45,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/xml_reader.py#L45"
+  },
+  "gdt_tax/parser/xml_reader.py:find_text": {
+    "path": "gdt_tax/parser/xml_reader.py",
+    "symbol": "find_text",
+    "line": 57,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/xml_reader.py#L57"
+  },
+  "gdt_tax/parser/extract.py:extract_declaration": {
+    "path": "gdt_tax/parser/extract.py",
+    "symbol": "extract_declaration",
+    "line": 211,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/extract.py#L211"
+  },
+  "gdt_tax/parser/extract.py:_collect_indicators": {
+    "path": "gdt_tax/parser/extract.py",
+    "symbol": "_collect_indicators",
+    "line": 113,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/extract.py#L113"
+  },
+  "gdt_tax/parser/xml_reader.py:_split_decimal": {
+    "path": "gdt_tax/parser/xml_reader.py",
+    "symbol": "_split_decimal",
+    "line": 83,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/xml_reader.py#L83"
+  },
+  "gdt_tax/parser/xml_reader.py:normalize_number": {
+    "path": "gdt_tax/parser/xml_reader.py",
+    "symbol": "normalize_number",
+    "line": 105,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/xml_reader.py#L105"
+  },
+  "gdt_tax/parser/extract.py:_normalize_mapped_value": {
+    "path": "gdt_tax/parser/extract.py",
+    "symbol": "_normalize_mapped_value",
+    "line": 84,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/extract.py#L84"
+  },
+  "gdt_tax/parser/registry.py:FieldMapping": {
+    "path": "gdt_tax/parser/registry.py",
+    "symbol": "FieldMapping",
+    "line": 26,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/registry.py#L26"
+  },
+  "gdt_tax/parser/registry.py:MappingRegistry.add": {
+    "path": "gdt_tax/parser/registry.py",
+    "symbol": "MappingRegistry.add",
+    "line": 67,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/registry.py#L67"
+  },
+  "gdt_tax/parser/registry.py:MappingRegistry.lookup": {
+    "path": "gdt_tax/parser/registry.py",
+    "symbol": "MappingRegistry.lookup",
+    "line": 73,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/registry.py#L73"
+  },
+  "gdt_tax/parser/registry.py:_parse_mapping": {
+    "path": "gdt_tax/parser/registry.py",
+    "symbol": "_parse_mapping",
+    "line": 92,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/registry.py#L92"
+  },
+  "gdt_tax/parser/registry.py:load_registry": {
+    "path": "gdt_tax/parser/registry.py",
+    "symbol": "load_registry",
+    "line": 124,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/registry.py#L124"
+  },
+  "gdt_tax/inventory.py:scan_directory": {
+    "path": "gdt_tax/inventory.py",
+    "symbol": "scan_directory",
+    "line": 553,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/inventory.py#L553"
+  },
+  "gdt_tax/inventory.py:load_cache": {
+    "path": "gdt_tax/inventory.py",
+    "symbol": "load_cache",
+    "line": 724,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/inventory.py#L724"
+  },
+  "gdt_tax/inventory.py:_scan_one": {
+    "path": "gdt_tax/inventory.py",
+    "symbol": "_scan_one",
+    "line": 610,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/inventory.py#L610"
+  },
+  "gdt_tax/parser/cli.py:main": {
+    "path": "gdt_tax/parser/cli.py",
+    "symbol": "main",
+    "line": 167,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/cli.py#L167"
+  },
+  "gdt_tax/classify.py:main": {
+    "path": "gdt_tax/classify.py",
+    "symbol": "main",
+    "line": 235,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/classify.py#L235"
+  },
+  "gdt_tax/export.py:main": {
+    "path": "gdt_tax/export.py",
+    "symbol": "main",
+    "line": 394,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/export.py#L394"
+  },
+  "gdt_tax/cli.py:_main": {
+    "path": "gdt_tax/cli.py",
+    "symbol": "_main",
+    "line": 189,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/cli.py#L189"
+  },
+  "gdt_tax/parser/xml_reader.py:parse_xml": {
+    "path": "gdt_tax/parser/xml_reader.py",
+    "symbol": "parse_xml",
+    "line": 25,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/xml_reader.py#L25"
+  },
+  "gdt_tax/inventory.py:profile_xml": {
+    "path": "gdt_tax/inventory.py",
+    "symbol": "profile_xml",
+    "line": 296,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/inventory.py#L296"
+  },
+  "gdt_tax/gnt/portal.py:is_gnt_xml": {
+    "path": "gdt_tax/gnt/portal.py",
+    "symbol": "is_gnt_xml",
+    "line": 36,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/gnt/portal.py#L36"
+  },
+  "gdt_tax/portals/etax_legacy.py:EtaxLegacyPortal.download": {
+    "path": "gdt_tax/portals/etax_legacy.py",
+    "symbol": "EtaxLegacyPortal.download",
+    "line": 563,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/portals/etax_legacy.py#L563"
+  },
+  "gdt_tax/archive_limits.py": {
+    "path": "gdt_tax/archive_limits.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/archive_limits.py#L1"
+  },
+  "gdt_tax/tb/portal.py:is_tb_pdf": {
+    "path": "gdt_tax/tb/portal.py",
+    "symbol": "is_tb_pdf",
+    "line": 42,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/tb/portal.py#L42"
+  },
+  "gdt_tax/gnt/storage.py:GntStore.find_existing": {
+    "path": "gdt_tax/gnt/storage.py",
+    "symbol": "GntStore.find_existing",
+    "line": 74,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/gnt/storage.py#L74"
+  },
+  "gdt_tax/tb/storage.py:TbStore.find_existing": {
+    "path": "gdt_tax/tb/storage.py",
+    "symbol": "TbStore.find_existing",
+    "line": 62,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/tb/storage.py#L62"
+  },
+  "desktop/documents.py:verify_rows": {
+    "path": "desktop/documents.py",
+    "symbol": "verify_rows",
+    "line": 101,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/documents.py#L101"
+  },
+  "gdt_tax/http.py:HttpClient.url": {
+    "path": "gdt_tax/http.py",
+    "symbol": "HttpClient.url",
+    "line": 111,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/http.py#L111"
+  },
+  "gdt_tax/http.py:HttpClient.request": {
+    "path": "gdt_tax/http.py",
+    "symbol": "HttpClient.request",
+    "line": 117,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/http.py#L117"
+  },
+  "gdt_tax/portals/etax_legacy.py:_form_data": {
+    "path": "gdt_tax/portals/etax_legacy.py",
+    "symbol": "_form_data",
+    "line": 89,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/portals/etax_legacy.py#L89"
+  },
+  "gdt_tax/portals/etax_legacy.py:_operation_url": {
+    "path": "gdt_tax/portals/etax_legacy.py",
+    "symbol": "_operation_url",
+    "line": 108,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/portals/etax_legacy.py#L108"
+  },
+  "desktop/sessions.py:RoutedHttpClient": {
+    "path": "desktop/sessions.py",
+    "symbol": "RoutedHttpClient",
+    "line": 71,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/sessions.py#L71"
+  },
+  "gdt_tax/http.py:HttpClient._retry_delay": {
+    "path": "gdt_tax/http.py",
+    "symbol": "HttpClient._retry_delay",
+    "line": 265,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/http.py#L265"
+  },
+  "gdt_tax/storage.py:decode_zip_bytes": {
+    "path": "gdt_tax/storage.py",
+    "symbol": "decode_zip_bytes",
+    "line": 87,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/storage.py#L87"
+  },
+  "gdt_tax/run_hooks.py:RunHooks": {
+    "path": "gdt_tax/run_hooks.py",
+    "symbol": "RunHooks",
+    "line": 14,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/run_hooks.py#L14"
+  },
+  "gdt_tax/auth.py:login": {
+    "path": "gdt_tax/auth.py",
+    "symbol": "login",
+    "line": 27,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/auth.py#L27"
+  },
+  "gdt_tax/traffic.py:body_as_text": {
+    "path": "gdt_tax/traffic.py",
+    "symbol": "body_as_text",
+    "line": 86,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/traffic.py#L86"
+  },
+  "gdt_tax/traffic.py:mask_headers": {
+    "path": "gdt_tax/traffic.py",
+    "symbol": "mask_headers",
+    "line": 60,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/traffic.py#L60"
+  },
+  "gdt_tax/traffic.py:TrafficDumper": {
+    "path": "gdt_tax/traffic.py",
+    "symbol": "TrafficDumper",
+    "line": 141,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/traffic.py#L141"
+  },
+  "gdt_tax/http.py:HttpClient._log_response": {
+    "path": "gdt_tax/http.py",
+    "symbol": "HttpClient._log_response",
+    "line": 251,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/http.py#L251"
+  },
+  "desktop/jobs.py:Redactor": {
+    "path": "desktop/jobs.py",
+    "symbol": "Redactor",
+    "line": 30,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/jobs.py#L30"
+  },
+  "gdt_tax/logging_setup.py": {
+    "path": "gdt_tax/logging_setup.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/logging_setup.py#L1"
+  },
+  "gdt_tax/export.py:build_workbook": {
+    "path": "gdt_tax/export.py",
+    "symbol": "build_workbook",
+    "line": 248,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/export.py#L248"
+  },
+  "gdt_tax/parser/models.py:ParsedDeclaration": {
+    "path": "gdt_tax/parser/models.py",
+    "symbol": "ParsedDeclaration",
+    "line": 57,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/parser/models.py#L57"
+  },
+  "gdt_tax/pipeline.py:Pipeline._persist": {
+    "path": "gdt_tax/pipeline.py",
+    "symbol": "Pipeline._persist",
+    "line": 54,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/pipeline.py#L54"
+  },
+  "gdt_tax/gnt/pipeline.py:GntPipeline._persist": {
+    "path": "gdt_tax/gnt/pipeline.py",
+    "symbol": "GntPipeline._persist",
+    "line": 60,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/gnt/pipeline.py#L60"
+  },
+  "gdt_tax/tb/pipeline.py:TbPipeline._persist": {
+    "path": "gdt_tax/tb/pipeline.py",
+    "symbol": "TbPipeline._persist",
+    "line": 59,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/tb/pipeline.py#L59"
+  },
+  "gdt_tax/atomic.py:replace_with_retry": {
+    "path": "gdt_tax/atomic.py",
+    "symbol": "replace_with_retry",
+    "line": 9,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/atomic.py#L9"
+  },
+  "gdt_tax/verification.py:raise_for_portal_verification": {
+    "path": "gdt_tax/verification.py",
+    "symbol": "raise_for_portal_verification",
+    "line": 16,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/verification.py#L16"
+  },
+  "gdt_tax/portals/etax_legacy.py:EtaxLegacyPortal._submit_login": {
+    "path": "gdt_tax/portals/etax_legacy.py",
+    "symbol": "EtaxLegacyPortal._submit_login",
+    "line": 277,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/portals/etax_legacy.py#L277"
+  },
+  "desktop/sessions.py:is_auth_failure": {
+    "path": "desktop/sessions.py",
+    "symbol": "is_auth_failure",
+    "line": 39,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/sessions.py#L39"
+  },
+  "desktop/sessions.py:ETaxSessionManager.execute": {
+    "path": "desktop/sessions.py",
+    "symbol": "ETaxSessionManager.execute",
+    "line": 168,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/sessions.py#L168"
+  },
+  "gdt_tax/constants.py": {
+    "path": "gdt_tax/constants.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/constants.py#L1"
+  },
+  "gdt_tax/config.py:Settings.periods": {
+    "path": "gdt_tax/config.py",
+    "symbol": "Settings.periods",
+    "line": 155,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/config.py#L155"
+  },
+  "gdt_tax/config.py:Settings.source_enabled": {
+    "path": "gdt_tax/config.py",
+    "symbol": "Settings.source_enabled",
+    "line": 171,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/config.py#L171"
+  },
+  "gdt_tax/portals/__init__.py:build_portals": {
+    "path": "gdt_tax/portals/__init__.py",
+    "symbol": "build_portals",
+    "line": 22,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/portals/__init__.py#L22"
+  },
+  "gdt_tax/portals/etax_legacy.py:EtaxLegacyPortal": {
+    "path": "gdt_tax/portals/etax_legacy.py",
+    "symbol": "EtaxLegacyPortal",
+    "line": 173,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/portals/etax_legacy.py#L173"
+  },
+  "gdt_tax/gnt/portal.py:GntPortal": {
+    "path": "gdt_tax/gnt/portal.py",
+    "symbol": "GntPortal",
+    "line": 49,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/gnt/portal.py#L49"
+  },
+  "gdt_tax/tb/portal.py:TbPortal": {
+    "path": "gdt_tax/tb/portal.py",
+    "symbol": "TbPortal",
+    "line": 47,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/tb/portal.py#L47"
+  },
+  "gdt_tax/portals/base.py:Portal": {
+    "path": "gdt_tax/portals/base.py",
+    "symbol": "Portal",
+    "line": 26,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/portals/base.py#L26"
+  },
+  "gdt_tax/pipeline.py:Pipeline": {
+    "path": "gdt_tax/pipeline.py",
+    "symbol": "Pipeline",
+    "line": 26,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/pipeline.py#L26"
+  },
+  "gdt_tax/gnt/pipeline.py:GntPipeline": {
+    "path": "gdt_tax/gnt/pipeline.py",
+    "symbol": "GntPipeline",
+    "line": 26,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/gnt/pipeline.py#L26"
+  },
+  "gdt_tax/tb/pipeline.py:TbPipeline": {
+    "path": "gdt_tax/tb/pipeline.py",
+    "symbol": "TbPipeline",
+    "line": 25,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/tb/pipeline.py#L25"
+  },
+  "gdt_tax/portals/etax_legacy.py:_XmlZipResponse": {
+    "path": "gdt_tax/portals/etax_legacy.py",
+    "symbol": "_XmlZipResponse",
+    "line": 623,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/portals/etax_legacy.py#L623"
+  },
+  "desktop/services.py:run_online": {
+    "path": "desktop/services.py",
+    "symbol": "run_online",
+    "line": 143,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/services.py#L143"
+  },
+  "tests/fixtures": {
+    "path": "tests/fixtures",
+    "symbol": null,
+    "line": null,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/tests/fixtures"
+  },
+  "tests/test_parsing.py": {
+    "path": "tests/test_parsing.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/tests/test_parsing.py#L1"
+  },
+  "tests/test_etax_legacy.py": {
+    "path": "tests/test_etax_legacy.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/tests/test_etax_legacy.py#L1"
+  },
+  "tests/test_gnt.py": {
+    "path": "tests/test_gnt.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/tests/test_gnt.py#L1"
+  },
+  "tests/test_tb.py": {
+    "path": "tests/test_tb.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/tests/test_tb.py#L1"
+  },
+  "tests/test_verification.py": {
+    "path": "tests/test_verification.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/tests/test_verification.py#L1"
+  },
+  "docs/core-review-20261020/reproduce_findings.py": {
+    "path": "docs/core-review-20261020/reproduce_findings.py",
+    "symbol": null,
+    "line": 1,
+    "url": "reproduce_findings.py"
+  },
+  ".gitlab-ci.yml": {
+    "path": ".gitlab-ci.yml",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/.gitlab-ci.yml#L1"
+  },
+  "requirements-desktop.txt": {
+    "path": "requirements-desktop.txt",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/requirements-desktop.txt#L1"
+  },
+  "pyproject.toml": {
+    "path": "pyproject.toml",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/pyproject.toml#L1"
+  },
+  "scripts/build_windows.ps1": {
+    "path": "scripts/build_windows.ps1",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/scripts/build_windows.ps1#L1"
+  },
+  "scripts/smoke_test_windows.ps1": {
+    "path": "scripts/smoke_test_windows.ps1",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/scripts/smoke_test_windows.ps1#L1"
+  },
+  "scripts/audit_bundle.py": {
+    "path": "scripts/audit_bundle.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/scripts/audit_bundle.py#L1"
+  },
+  "gdt_tax/run_hooks.py:RunHooks.emit": {
+    "path": "gdt_tax/run_hooks.py",
+    "symbol": "RunHooks.emit",
+    "line": 31,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/run_hooks.py#L31"
+  },
+  "desktop/jobs.py:LogBridge": {
+    "path": "desktop/jobs.py",
+    "symbol": "LogBridge",
+    "line": 50,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/jobs.py#L50"
+  },
+  "docs/ARCHITECTURE.md": {
+    "path": "docs/ARCHITECTURE.md",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/docs/ARCHITECTURE.md#L1"
+  },
+  "docs/development/REVIEW.md": {
+    "path": "docs/development/REVIEW.md",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/docs/development/REVIEW.md#L1"
+  },
+  "scripts/release_gitlab.py:main": {
+    "path": "scripts/release_gitlab.py",
+    "symbol": "main",
+    "line": 44,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/scripts/release_gitlab.py#L44"
+  },
+  "scripts/release_gitlab.py:request": {
+    "path": "scripts/release_gitlab.py",
+    "symbol": "request",
+    "line": 37,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/scripts/release_gitlab.py#L37"
+  },
+  "scripts/write_release_metadata.py": {
+    "path": "scripts/write_release_metadata.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/scripts/write_release_metadata.py#L1"
+  },
+  "desktop/updates.py": {
+    "path": "desktop/updates.py",
+    "symbol": null,
+    "line": 1,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/desktop/updates.py#L1"
+  },
+  "gdt_tax/classify.py:classify_artifact": {
+    "path": "gdt_tax/classify.py",
+    "symbol": "classify_artifact",
+    "line": 93,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/classify.py#L93"
+  },
+  "gdt_tax/classification.py:classify_record": {
+    "path": "gdt_tax/classification.py",
+    "symbol": "classify_record",
+    "line": 30,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/classification.py#L30"
+  },
+  "gdt_tax/inventory.py:_case_view": {
+    "path": "gdt_tax/inventory.py",
+    "symbol": "_case_view",
+    "line": 538,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/inventory.py#L538"
+  },
+  "gdt_tax/form_mappings": {
+    "path": "gdt_tax/form_mappings",
+    "symbol": null,
+    "line": null,
+    "url": "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/blob/559892f1ff22f3e68d2fbea7be0608fd0ac597c9/gdt_tax/form_mappings"
+  }
+}
