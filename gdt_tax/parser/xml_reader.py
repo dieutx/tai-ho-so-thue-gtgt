@@ -11,41 +11,51 @@ from decimal import Decimal, InvalidOperation
 
 from lxml import etree
 
-MAX_XML_BYTES = 32 * 1024 * 1024
-MAX_XML_DEPTH = 100
-MAX_XML_NODES = 200_000
+from ..xml_policy import MAX_XML_BYTES, MAX_XML_DEPTH, MAX_XML_NODES, XmlPolicy, XmlReadError
+from ..xml_policy import parse_xml as _parse_xml
 
 _WHITESPACE = re.compile(r"[\s\u00a0]")
 
 
-class XmlReadError(Exception):
-    """XML không đọc được (lỗi cú pháp, quá lớn, quá sâu...)."""
-
-
 def parse_xml(data: bytes) -> etree._Element:
     """Parse XML an toàn; ném :class:`XmlReadError` thay vì để lỗi lọt ra."""
-    if len(data) > MAX_XML_BYTES:
-        raise XmlReadError("XML_TOO_LARGE")
-    parser = etree.XMLParser(
-        resolve_entities=False,
-        load_dtd=False,
-        no_network=True,
-        huge_tree=False,
-        recover=False,
-    )
-    try:
-        root = etree.fromstring(data, parser=parser)
-    except (etree.XMLSyntaxError, ValueError, TypeError) as error:
-        raise XmlReadError(f"INVALID_XML: {error}") from error
-    if root is None:
-        raise XmlReadError("EMPTY_XML")
-    return root
+    return _parse_xml(data, XmlPolicy(MAX_XML_BYTES, MAX_XML_DEPTH, MAX_XML_NODES))
 
 
 def namespace_map(root: etree._Element) -> dict[str, str]:
     """Map tiền tố XPath cho namespace mặc định của root (nếu có)."""
-    default = root.nsmap.get(None)
-    return {"n": default} if default else {}
+    uri = etree.QName(root).namespace
+    return {"n": uri} if uri else {}
+
+
+def main_scope(root: etree._Element) -> tuple[etree._Element, etree._Element]:
+    """Select a single main declaration and its metadata, excluding appendices."""
+    roots = {'HSoThueDTu', 'TBao', 'TKhai'}
+    if localname(root) not in roots:
+        documents = [node for node in root.iterdescendants() if localname(node) in roots
+                     and not any(localname(parent) in roots for parent in node.iterancestors())]
+        if len(documents) > 1:
+            raise XmlReadError('AMBIGUOUS_MAIN_DECLARATION')
+        if documents:
+            root = documents[0]
+    uri = etree.QName(root).namespace
+    candidates = [node for node in root.iter() if isinstance(node.tag, str)
+                  and etree.QName(node).namespace == uri and localname(node) == 'HSoKhaiThue'
+                  and not in_appendix(node)]
+    if len(candidates) > 1:
+        raise XmlReadError('AMBIGUOUS_MAIN_DECLARATION')
+    primary = candidates[0] if candidates else root
+    common = [node for node in primary.iter() if isinstance(node.tag, str)
+              and etree.QName(node).namespace == uri and localname(node) == 'TTinChung'
+              and not in_appendix(node)]
+    if len(common) > 1:
+        raise XmlReadError('AMBIGUOUS_DECLARATION_METADATA')
+    return primary, common[0] if common else primary
+
+
+def in_appendix(node: etree._Element) -> bool:
+    return any((localname(parent) or '').casefold().startswith(('pluc', 'bangke', 'appendix'))
+               for parent in node.iterancestors())
 
 
 def localname(element: etree._Element) -> str | None:
@@ -144,6 +154,8 @@ __all__ = [
     "find_text",
     "is_zero",
     "localname",
+    "main_scope",
+    "in_appendix",
     "namespace_map",
     "normalize_number",
     "parse_xml",

@@ -25,13 +25,15 @@ from .xml_reader import (
     XmlReadError,
     find_first,
     find_text,
+    in_appendix,
     localname,
+    main_scope,
     namespace_map,
     normalize_number,
     parse_xml,
 )
 
-PARSER_VERSION = "declaration-parser-v2"
+PARSER_VERSION = "declaration-parser-v3"
 SCHEMA_VERSION = "parsed-declaration-v1"
 
 #: Node chứa chỉ tiêu tổng hợp trên tờ khai chính (không phải bảng kê chi tiết).
@@ -163,10 +165,11 @@ def _collect_indicators(
     # Bổ sung chỉ tiêu chưa có trong mapping (giữ NEED_MAPPING, không đoán).
     for node_name in MAIN_INDICATOR_NODES:
         for container in root.iter():
-            if localname(container) != node_name:
+            if (localname(container) != node_name or in_appendix(container)
+                    or etree.QName(container).namespace != etree.QName(root).namespace):
                 continue
             for child in container:
-                _collect_from(child, indicators, seen, mapping)
+                _collect_from(child, indicators, seen, mapping, etree.QName(root).namespace)
     return indicators
 
 
@@ -175,9 +178,12 @@ def _collect_from(
     indicators: list[Indicator],
     seen: set[str],
     mapping: FormMapping | None,
+    namespace_uri: str | None,
 ) -> None:
     name = localname(element)
     if name is None or name in seen:
+        return
+    if etree.QName(element).namespace != namespace_uri:
         return
     if _INDICATOR_CODE.match(name) and not _NON_INDICATOR.search(name):
         seen.add(name)
@@ -205,7 +211,7 @@ def _collect_from(
     if _NON_INDICATOR.search(name):
         return
     for child in element:
-        _collect_from(child, indicators, seen, mapping)
+        _collect_from(child, indicators, seen, mapping, namespace_uri)
 
 
 def extract_declaration(
@@ -220,6 +226,7 @@ def extract_declaration(
     """Parse một XML thành :class:`ParsedDeclaration`; lỗi trả ``status='error'``."""
     try:
         root = parse_xml(data)
+        root, metadata = main_scope(root)
     except XmlReadError as error:
         return ParsedDeclaration(
             schema_version=SCHEMA_VERSION,
@@ -242,18 +249,18 @@ def extract_declaration(
         )
 
     ns = namespace_map(root)
-    form_code, _ = find_first(root, (".//n:maTKhai", ".//n:MSo"), ns)
-    form_name, _ = find_first(root, (".//n:tenTKhai", ".//n:Ten"), ns)
-    form_version, _ = find_first(root, (".//n:pbanTKhaiXML", ".//n:PBan"), ns)
-    filing_type, _ = find_first(root, (".//n:loaiTKhai",), ns)
-    supplement, _ = find_first(root, (".//n:soLan",), ns)
-    tax_code, _ = find_first(root, (".//n:mst", ".//n:MST"), ns)
-    taxpayer_name, _ = find_first(root, (".//n:tenNNT", ".//n:TNNT"), ns)
-    address, _ = find_first(root, (".//n:dchiNNT", ".//n:DDanh"), ns)
-    period_raw, _ = find_first(root, (".//n:kyKKhai",), ns)
-    period_type, _ = find_first(root, (".//n:kieuKy",), ns)
-    period_from, _ = find_first(root, (".//n:kyKKhaiTuNgay",), ns)
-    period_to, _ = find_first(root, (".//n:kyKKhaiDenNgay",), ns)
+    form_code, _ = find_first(metadata, (".//n:maTKhai", ".//n:MSo"), ns)
+    form_name, _ = find_first(metadata, (".//n:tenTKhai", ".//n:Ten"), ns)
+    form_version, _ = find_first(metadata, (".//n:pbanTKhaiXML", ".//n:PBan"), ns)
+    filing_type, _ = find_first(metadata, (".//n:loaiTKhai",), ns)
+    supplement, _ = find_first(metadata, (".//n:soLan",), ns)
+    tax_code, _ = find_first(metadata, (".//n:mst", ".//n:MST"), ns)
+    taxpayer_name, _ = find_first(metadata, (".//n:tenNNT", ".//n:TNNT"), ns)
+    address, _ = find_first(metadata, (".//n:dchiNNT", ".//n:DDanh"), ns)
+    period_raw, _ = find_first(metadata, (".//n:kyKKhai",), ns)
+    period_type, _ = find_first(metadata, (".//n:kieuKy",), ns)
+    period_from, _ = find_first(metadata, (".//n:kyKKhaiTuNgay",), ns)
+    period_to, _ = find_first(metadata, (".//n:kyKKhaiDenNgay",), ns)
     period_year, period_month, period_quarter = _period_parts(period_raw, period_type)
 
     mapping = registry.lookup(form_code, form_version) if registry is not None else None

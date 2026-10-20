@@ -47,12 +47,20 @@ from .atomic import replace_with_retry
 from .errors import GdtError
 from .logging_setup import configure_streams
 from .run_hooks import RunHooks
+from .xml_policy import (
+    MAX_XML_BYTES,
+    MAX_XML_DEPTH,
+    MAX_XML_NODES,
+    XmlPolicy,
+    XmlReadError,
+    parse_xml,
+)
 
 LOGGER_NAME = "gdt_tax.inventory"
 
 #: Phiên bản schema manifest và thuật toán profile. Đổi khi thêm/bớt trường.
 INVENTORY_SCHEMA_VERSION = "artifact-inventory-v2"
-PROFILE_VERSION = "xml-profile-v2"
+PROFILE_VERSION = "xml-profile-v3"
 
 MANIFEST_NAME = "manifest_artifact.json"
 DISCOVERY_JSON = "bao_cao_discovery.json"
@@ -81,9 +89,6 @@ _DERIVED_NAMES = frozenset(
 )
 
 # --- Giới hạn tài nguyên (chống bomb/Zip Slip/XML quá lớn) ---
-MAX_XML_BYTES = 32 * 1024 * 1024
-MAX_XML_DEPTH = 100
-MAX_XML_NODES = 200_000
 MAX_STRUCTURE_PATHS = 20_000
 MAX_SIGNATURE_PATHS = 400
 
@@ -217,19 +222,6 @@ def detect_format(data: bytes) -> str:
     return "unknown"
 
 
-def _xml_parser() -> etree.XMLParser:
-    """Parser XML an toàn: không resolve entity/DTD, không gọi mạng."""
-    return etree.XMLParser(
-        resolve_entities=False,
-        load_dtd=False,
-        no_network=True,
-        huge_tree=False,
-        recover=False,
-        remove_comments=False,
-        remove_pis=False,
-    )
-
-
 def _localname(element: etree._Element) -> str | None:
     if not isinstance(element.tag, str):
         return None
@@ -298,11 +290,9 @@ def profile_xml(data: bytes) -> XmlProfile:
     if len(data) > MAX_XML_BYTES:
         return XmlProfile(status="error", error="XML_TOO_LARGE")
     try:
-        root = etree.fromstring(data, parser=_xml_parser())
-    except (etree.XMLSyntaxError, ValueError, TypeError) as error:
-        return XmlProfile(status="error", error=f"INVALID_XML: {error}")
-    if root is None:
-        return XmlProfile(status="error", error="EMPTY_XML")
+        root = parse_xml(data, XmlPolicy(MAX_XML_BYTES, MAX_XML_DEPTH, MAX_XML_NODES))
+    except XmlReadError as error:
+        return XmlProfile(status="error", error=str(error))
     try:
         first_by_name, paths, max_depth, node_count = _walk_xml(
             root, MAX_XML_DEPTH, MAX_XML_NODES
@@ -311,7 +301,7 @@ def profile_xml(data: bytes) -> XmlProfile:
         return XmlProfile(status="error", error=str(error))
 
     root_name = _localname(root)
-    default_ns = root.nsmap.get(None)
+    default_ns = etree.QName(root).namespace
     namespaces = sorted({uri for uri in root.nsmap.values() if uri})
 
     form_code_el = _pick(first_by_name, ("maTKhai", "MSo", "maMauBieu"))
