@@ -46,6 +46,7 @@ from .archive_limits import (
 from .atomic import replace_with_retry
 from .errors import GdtError
 from .logging_setup import configure_streams
+from .outcomes import quality_summary, write_summary
 from .run_hooks import RunHooks
 from .xml_policy import (
     MAX_XML_BYTES,
@@ -983,6 +984,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest-name", default=MANIFEST_NAME, help="Tên file manifest")
     parser.add_argument("--rehash", action="store_true", help="Bỏ qua cache, băm lại toàn bộ")
     parser.add_argument("--json-only", action="store_true", help="Chỉ ghi JSON, không ghi Markdown")
+    parser.add_argument("--summary-json", help="Ghi quality summary JSON, exit 0=đủ, 1=partial, 2=input lỗi")
     parser.add_argument("-v", "--verbose", action="store_true", help="Log chi tiết")
     return parser
 
@@ -1007,7 +1009,7 @@ def main(argv: list[str] | None = None) -> int:
         json_path, md_path = write_discovery(report, output)
     except GdtError as error:
         log.error("%s", error)
-        return 1
+        return 2
     summary = manifest.summary
     log.info(
         "Đã kiểm kê %s file, %s container, %s member, %s signature",
@@ -1018,7 +1020,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     log.info("Manifest: %s", manifest_path)
     log.info("Báo cáo: %s", json_path if args.json_only else md_path)
-    return 0
+    quality_rows = [{"status": c.status} for c in manifest.containers]
+    quality_rows.extend({"status": "error"} for c in manifest.containers for a in c.members
+                        if a.status == "error" or (a.xml is not None and a.xml.status == "error"))
+    outcome = quality_summary("inventory", quality_rows, complete_status="ok")
+    outcome["containers"] = len(manifest.containers)
+    outcome["scan_errors"] = len(manifest.errors)
+    if manifest.errors:
+        outcome["exit_code"] = 1
+    try:
+        return write_summary(args.summary_json, outcome)
+    except GdtError as error:
+        log.error("%s", error)
+        return 2
 
 
 __all__ = [

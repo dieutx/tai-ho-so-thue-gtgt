@@ -277,17 +277,17 @@ def run_offline(config: RunConfig, hooks: RunHooks, logger: logging.Logger) -> J
                         raise ValueError("Manifest thuộc bộ tệp khác; chạy Kiểm kê lại hoặc Chạy toàn bộ")
                 if stage == "parse":
                     rows = parse_manifest(manifest_data, root, registry=load_registry(config.forms_dir or None), hooks=hooks)
-                    result.files.append(write_parsed(rows, output))
+                    result.files.append(write_parsed(rows, output, manifest=manifest_data))
                     result.rows = rows
                     result.discovered = len(rows)
                     result.errors += sum(r.get("status") == "error" for r in rows)
-                    skipped_ids.update(str(r.get("artifact_id")) for r in rows if r.get("status") == "NEED_MAPPING")
+                    skipped_ids.update(str(r.get("artifact_id")) for r in rows if (r.get("status") == "NEED_MAPPING" or r.get("validation_status") == "PARTIAL"))
                     result.skipped = len(skipped_ids)
                 elif stage == "classify":
-                    rows = classify.classify_manifest(manifest_data, registry=load_registry(config.forms_dir or None), hooks=hooks)
+                    registry = load_registry(config.forms_dir or None)
+                    rows = classify.classify_manifest(manifest_data, registry=registry, hooks=hooks)
                     target = output / classify.CLASSIFICATION_NAME
-                    classify._atomic_write_json(target, {"schema_version": "artifact-classification-v1",
-                        "rule_version": classify.CLASSIFY_VERSION, "count": len(rows), "classifications": rows})
+                    classify._atomic_write_json(target, classify.classification_payload(manifest_data, rows, registry))
                     result.files.append(target)
                     skipped_ids.update(str(r.get("artifact_id")) for r in rows if r.get("status") != "OK")
                     result.skipped = len(skipped_ids)
@@ -296,7 +296,7 @@ def run_offline(config: RunConfig, hooks: RunHooks, logger: logging.Logger) -> J
                 else:
                     parsed = _read(output / PARSED_NAME)
                     classified = _read(output / classify.CLASSIFICATION_NAME)
-                    rows = export.filter_rows(export.build_rows(manifest_data, parsed, classified), **config.filters)
+                    rows = export.filter_rows(export.build_rows(manifest_data, parsed, classified, allow_legacy=False), **config.filters)
                     hooks.check()
                     result.files.append(export.write_workbook(export.build_workbook(rows, manifest_data, parsed, classified), output / export.WORKBOOK_NAME))
                     if config.csv:
@@ -304,7 +304,7 @@ def run_offline(config: RunConfig, hooks: RunHooks, logger: logging.Logger) -> J
                     result.rows, result.discovered = rows, len(rows)
                     if config.stage == "export":
                         result.errors = sum(r.get("status") == "error" for r in rows)
-                        result.skipped = sum(r.get("status") == "NEED_MAPPING" or r.get("classification_status") != "OK" for r in rows)
+                        result.skipped = sum((r.get("status") == "NEED_MAPPING" or r.get("validation_status") == "PARTIAL") or r.get("classification_status") != "OK" for r in rows)
             hooks.emit(discovered=result.discovered, downloaded=0)
             hooks.check()
         except RunCancelled:

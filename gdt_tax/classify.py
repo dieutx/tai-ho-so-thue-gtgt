@@ -16,10 +16,12 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from .artifact_contracts import lineage, validate_payload
 from .atomic import replace_with_retry
 from .errors import GdtError
 from .inventory import MANIFEST_NAME
 from .logging_setup import configure_streams
+from .outcomes import quality_summary, write_summary
 from .parser.registry import MappingRegistry, load_registry
 from .run_hooks import RunHooks
 
@@ -170,6 +172,7 @@ def classify_manifest(
     hooks: RunHooks | None = None,
 ) -> list[dict]:
     """Phân loại mọi XML trong manifest; giữ cả artifact lỗi/không XML."""
+    validate_payload(manifest, "containers")
     registry = registry if registry is not None else load_registry()
     results: list[dict] = []
     for container in manifest.get("containers", []):
@@ -189,6 +192,12 @@ def classify_manifest(
     return results
 
 
+def classification_payload(manifest: dict, rows: list[dict], registry: MappingRegistry) -> dict:
+    return {"schema_version": "artifact-classification-v1", "rule_version": CLASSIFY_VERSION,
+            "count": len(rows), "classifications": rows, "lineage": lineage(manifest),
+            "registry_sha256": registry.fingerprint}
+
+
 def _read_manifest(path: Path) -> dict:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -196,6 +205,7 @@ def _read_manifest(path: Path) -> dict:
         raise GdtError(f"Không đọc được manifest {path}: {error}") from error
     if not isinstance(payload, dict):
         raise GdtError(f"Manifest {path} không phải object")
+    validate_payload(payload, "containers")
     return payload
 
 
@@ -231,6 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", help="Thư mục ghi kết quả (mặc định: thư mục nguồn)")
     parser.add_argument("--manifest", help="Đường dẫn manifest")
     parser.add_argument("--forms-dir", help="Thư mục mapping mẫu biểu")
+    parser.add_argument("--summary-json", help="Ghi quality summary JSON, exit 0=đủ, 1=partial, 2=input lỗi")
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser
 
@@ -250,16 +261,11 @@ def main(argv: list[str] | None = None) -> int:
         manifest = _read_manifest(manifest_path)
         registry = load_registry(args.forms_dir, logger=log)
         results = classify_manifest(manifest, registry=registry)
-        payload = {
-            "schema_version": "artifact-classification-v1",
-            "rule_version": CLASSIFY_VERSION,
-            "count": len(results),
-            "classifications": results,
-        }
+        payload = classification_payload(manifest, results, registry)
         _atomic_write_json(output / CLASSIFICATION_NAME, payload)
     except GdtError as error:
         log.error("%s", error)
-        return 1
+        return 2
     ok = sum(1 for item in results if item["status"] == "OK")
     unknown = sum(1 for item in results if item["status"] == "UNKNOWN")
     conflict = sum(1 for item in results if item["status"] == "CONFLICT")
@@ -268,7 +274,12 @@ def main(argv: list[str] | None = None) -> int:
         len(results), ok, unknown, conflict,
     )
     log.info("Kết quả: %s", output / CLASSIFICATION_NAME)
-    return 0
+    summary = quality_summary("classify", results, complete_status="OK")
+    try:
+        return write_summary(args.summary_json, summary)
+    except GdtError as error:
+        log.error("%s", error)
+        return 2
 
 
 __all__ = [

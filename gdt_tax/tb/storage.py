@@ -24,6 +24,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
+from gdt_tax.spreadsheet_values import append_row, csv_value
+
 from ..atomic import replace_with_retry
 from ..constants import TB_METADATA_CSV, TB_METADATA_JSON, TB_METADATA_XLSX
 from ..errors import StorageError
@@ -116,7 +118,7 @@ def write_tb_metadata(
     with StringIO(newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({key: csv_value(value) for key, value in row.items()} for row in rows)
         csv_bytes = stream.getvalue().encode("utf-8-sig")
     _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
     _atomic_write(csv_path, csv_bytes)
@@ -130,13 +132,13 @@ def write_tb_excel_report(path: str | Path, rows: Iterable[Mapping[str, object]]
     sheet = workbook.active
     sheet.title = "Danh sách thông báo"
     sheet.freeze_panes = "A2"
-    sheet.append([header for header, _ in EXCEL_COLUMNS])
+    append_row(sheet, [header for header, _ in EXCEL_COLUMNS])
     for index, row in enumerate(rows, start=1):
         values: list[object] = [index]
         for _, field in EXCEL_COLUMNS[1:]:
             value = row.get(field, "") if field else ""
             values.append(_excel_value(value))
-        sheet.append(values)
+        append_row(sheet, values)
 
     header_fill = PatternFill("solid", fgColor="1F4E78")
     for cell in sheet[1]:

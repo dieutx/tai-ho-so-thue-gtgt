@@ -29,6 +29,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
+from gdt_tax.spreadsheet_values import append_row, csv_value
+
 from .archive_limits import (
     MAX_ARCHIVE_BYTES,
     MAX_COMPRESSION_RATIO,
@@ -195,7 +197,7 @@ def write_metadata(
     with StringIO(newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({key: csv_value(value) for key, value in row.items()} for row in rows)
         csv_bytes = stream.getvalue().encode("utf-8-sig")
     groups: dict[str, list] = {group: [] for group in TAX_GROUPS}
     for row in rows:
@@ -219,14 +221,14 @@ def write_excel_report(path: str | Path, rows: Iterable[Mapping[str, object]]) -
     sheet = workbook.active
     sheet.title = "Danh sách tờ khai"
     sheet.freeze_panes = "A2"
-    sheet.append([header for header, _ in EXCEL_COLUMNS])
+    append_row(sheet, [header for header, _ in EXCEL_COLUMNS])
 
     for index, row in enumerate(rows, start=1):
         values: list[object] = [index]
         for _, field in EXCEL_COLUMNS[1:]:
             value = row.get(field, "") if field else ""
             values.append(_excel_value(value))
-        sheet.append(values)
+        append_row(sheet, values)
 
     header_fill = PatternFill("solid", fgColor="1F4E78")
     for cell in sheet[1]:

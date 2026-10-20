@@ -136,9 +136,12 @@ class DesktopTests(unittest.TestCase):
             self.assertTrue(result.rows)
             cli_output = self.root / "cli"
             self.assertEqual(inventory.main([str(source), "--output", str(cli_output)]), 0)
-            self.assertEqual(parse_cli([str(source), "--manifest", str(cli_output / inventory.MANIFEST_NAME), "--output", str(cli_output)]), 0)
-            self.assertEqual(classify.main([str(source), "--manifest", str(cli_output / inventory.MANIFEST_NAME), "--output", str(cli_output)]), 0)
-            self.assertEqual(export.main([str(cli_output)]), 0)
+            # This fixture set contains unmapped/unknown forms: files are written,
+            # while CLI and desktop both report partial quality.
+            self.assertEqual(result.state, "PARTIAL")
+            self.assertEqual(parse_cli([str(source), "--manifest", str(cli_output / inventory.MANIFEST_NAME), "--output", str(cli_output)]), 1)
+            self.assertEqual(classify.main([str(source), "--manifest", str(cli_output / inventory.MANIFEST_NAME), "--output", str(cli_output)]), 1)
+            self.assertEqual(export.main([str(cli_output)]), 1)
         for name in ["parsed_declarations.json", "phan_loai_artifact.json"]:
             self.assertEqual(json.loads((config.output / name).read_text(encoding="utf-8")), json.loads((cli_output / name).read_text(encoding="utf-8")))
         from openpyxl import load_workbook

@@ -31,12 +31,15 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
+from .artifact_contracts import source_key, validate_bundle
 from .atomic import replace_with_retry
 from .classify import CLASSIFICATION_NAME
 from .errors import GdtError
 from .inventory import MANIFEST_NAME
 from .logging_setup import configure_streams
+from .outcomes import quality_summary, write_summary
 from .parser.cli import PARSED_NAME
+from .spreadsheet_values import append_row, csv_value, numeric_cell
 
 LOGGER_NAME = "gdt_tax.export"
 EXPORT_VERSION = "excel-export-v1"
@@ -65,9 +68,11 @@ INDEX_COLUMNS = (
 GROUP_SHEETS = (("02_GTGT", "GTGT"), ("03_TNCN", "TNCN"), ("04_TNDN", "TNDN"))
 
 
-def record_id(source_sha256: str | None, artifact_id: str | None) -> str:
+def record_id(source_sha256: str | None, artifact_id: str | None, source: tuple[str, str, str] | None = None) -> str:
     """ID nội bộ ổn định theo hash nguồn + artifact (không dùng số thứ tự)."""
     basis = f"{source_sha256 or ''}\x00{artifact_id or ''}"
+    if source is not None:
+        basis += "\x00" + "\x00".join(source)
     return hashlib.sha256(basis.encode()).hexdigest()
 
 
@@ -76,9 +81,11 @@ def _read_json(path: Path) -> dict | None:
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    return payload if isinstance(payload, dict) else None
+    except (OSError, ValueError) as error:
+        raise GdtError(f"ARTIFACT_INPUT_INVALID: {path.name}") from error
+    if not isinstance(payload, dict):
+        raise GdtError(f"ARTIFACT_INPUT_INVALID: {path.name}")
+    return payload
 
 
 def _classification_index(payload: dict | None) -> dict[str, dict]:
@@ -95,9 +102,12 @@ def build_rows(
     manifest: dict | None,
     parsed: dict | None,
     classification: dict | None,
+    *, allow_legacy: bool = True,
 ) -> list[dict]:
     """Ghép manifest + parsed + classification thành danh sách dòng tờ khai."""
+    validate_bundle(manifest, parsed, classification, allow_legacy=allow_legacy)
     class_by_id = _classification_index(classification)
+    class_by_source = {source_key(item): item for item in (classification or {}).get("classifications", [])}
     sha_by_id: dict[str, str | None] = {}
     if manifest:
         for container in manifest.get("containers", []):
@@ -109,10 +119,13 @@ def build_rows(
         if not isinstance(declaration, dict):
             continue
         artifact_id = declaration.get("artifact_id") or ""
-        cls = class_by_id.get(artifact_id, {})
+        cls = class_by_source.get(source_key(declaration))
+        if cls is None:
+            candidate = class_by_id.get(artifact_id, {})
+            cls = candidate if allow_legacy and not candidate.get("source_zip") else {}
         sha = declaration.get("source_sha256") or sha_by_id.get(artifact_id)
         row = {
-            "record_id": record_id(sha, artifact_id),
+            "record_id": record_id(sha, artifact_id, source_key(declaration)),
             "tax_type": cls.get("tax_group") or declaration.get("tax_type_hint") or "UNKNOWN",
             "form_code": declaration.get("form_code"),
             "form_name": declaration.get("form_name"),
@@ -132,6 +145,11 @@ def build_rows(
             "classification_status": cls.get("status") or "UNKNOWN",
         }
         row["indicators"] = declaration.get("indicators", [])
+        for key in ("error", "warnings", "mapping_version", "mapping_sha256", "registry_sha256",
+                    "parser_version", "validation_status", "extraction_complete"):
+            row[key] = declaration.get(key)
+        row["classification_reason"] = cls.get("reason")
+        row["rule_version"] = cls.get("rule_version") or (classification or {}).get("rule_version")
         rows.append(row)
     return rows
 
@@ -182,9 +200,9 @@ def _write_table_sheet(workbook: Workbook, title: str, rows: list[dict]) -> None
     sheet = workbook.create_sheet(title)
     sheet.freeze_panes = "A2"
     headers = [label for _, label in INDEX_COLUMNS]
-    sheet.append(headers)
+    append_row(sheet, headers)
     for row in rows:
-        sheet.append([_excel_safe(row.get(key)) for key, _ in INDEX_COLUMNS])
+        append_row(sheet, [_excel_safe(row.get(key)) for key, _ in INDEX_COLUMNS])
     header_fill = PatternFill("solid", fgColor="1F4E78")
     for cell in sheet[1]:
         cell.fill = header_fill
@@ -209,22 +227,25 @@ def _write_indicators_sheet(workbook: Workbook, rows: list[dict]) -> None:
     headers = [
         "record_id", "tax_type", "form_code", "form_version", "MST", "Kỳ tính thuế",
         "filing_type", "supplement_number", "canonical_name", "indicator_code",
-        "display_name", "value", "raw_value", "status", "xpath",
+        "display_name", "value", "raw_value", "status", "xpath", "value_type", "warnings",
     ]
-    sheet.append(headers)
+    append_row(sheet, headers)
     for row in rows:
         for indicator in row.get("indicators", []):
-            sheet.append([
+            value, precision_warning = numeric_cell(indicator.get("value"), indicator.get("value_type"))
+            append_row(sheet, [
                 row["record_id"], row["tax_type"], row["form_code"], row["form_version"],
                 row["taxpayer_tax_code"], row["period_raw"], row["filing_type"],
                 row["supplement_number"],
                 _excel_safe(indicator.get("canonical_name")),
                 _excel_safe(indicator.get("code")),
                 _excel_safe(indicator.get("display_name")),
-                _excel_safe(indicator.get("value")),
+                value,
                 _excel_safe(indicator.get("raw_value")),
                 indicator.get("status"),
                 _excel_safe(indicator.get("xpath")),
+                indicator.get("value_type"),
+                "; ".join([*indicator.get("warnings", []), *([precision_warning] if precision_warning else [])]),
             ])
     for cell in sheet[1]:
         cell.fill = PatternFill("solid", fgColor="1F4E78")
@@ -235,9 +256,9 @@ def _write_indicators_sheet(workbook: Workbook, rows: list[dict]) -> None:
 
 def _write_rows_sheet(workbook: Workbook, title: str, headers: list[str], rows: list[list]) -> None:
     sheet = workbook.create_sheet(title)
-    sheet.append(headers)
+    append_row(sheet, headers)
     for row in rows:
-        sheet.append(row)
+        append_row(sheet, row)
     for cell in sheet[1]:
         cell.fill = PatternFill("solid", fgColor="1F4E78")
         cell.font = Font(color="FFFFFF", bold=True)
@@ -265,7 +286,7 @@ def build_workbook(
             "Mỗi dòng giữ record_id, source_zip, source_inner_file, source_sha256 để truy ngược.",
         ]
     ):
-        readme.append([line])
+        append_row(readme, [line])
 
     _write_table_sheet(workbook, "01_RETURN_INDEX", rows)
     for title, group in GROUP_SHEETS:
@@ -285,18 +306,23 @@ def build_workbook(
     errors = [r for r in rows if r["status"] == "error"]
     _write_rows_sheet(
         workbook, "08_PARSE_ERRORS",
-        ["record_id", "source_zip", "source_inner_file", "status"],
-        [[r["record_id"], r["source_zip"], r["source_inner_file"], r["status"]] for r in errors],
+        ["record_id", "source_zip", "source_inner_file", "status", "error", "warnings"],
+        [[r["record_id"], r["source_zip"], r["source_inner_file"], r["status"], r.get("error"), "; ".join(r.get("warnings") or [])] for r in errors],
     )
-    mapping_versions = sorted({r["mapping_id"] for r in rows if r["mapping_id"]})
+    mapping_versions = sorted({tuple(str(r.get(key) or "") for key in ("mapping_id", "mapping_version", "mapping_sha256", "registry_sha256")) for r in rows if r["mapping_id"]})
     _write_rows_sheet(
-        workbook, "09_MAPPING_VERSIONS", ["mapping_id"], [[m] for m in mapping_versions],
+        workbook, "09_MAPPING_VERSIONS", ["mapping_id", "mapping_version", "mapping_sha256", "registry_sha256"], [list(m) for m in mapping_versions],
     )
     summary = _audit_summary(rows, manifest, parsed, classification)
     _write_rows_sheet(
         workbook, "10_AUDIT_LOG", ["Chỉ số", "Giá trị"],
         [[k, _excel_safe(v)] for k, v in summary.items()],
     )
+    quality_columns = ["record_id", "validation_status", "extraction_complete", "error", "warnings",
+                       "classification_status", "classification_reason", "rule_version", "parser_version"]
+    _write_rows_sheet(workbook, "11_QUALITY", quality_columns,
+                      [["; ".join(row.get(key) or []) if key == "warnings" else row.get(key)
+                        for key in quality_columns] for row in rows])
     return workbook
 
 
@@ -318,6 +344,9 @@ def _audit_summary(rows, manifest, parsed, classification) -> dict:
         "errors": status.get("error", 0),
         "classifications": (classification or {}).get("count", 0),
         "parser_version": (parsed or {}).get("parser_version"),
+        "rule_version": (classification or {}).get("rule_version"),
+        "lineage": json.dumps((parsed or {}).get("lineage"), sort_keys=True),
+        "partial_extraction": sum(r.get("validation_status") == "PARTIAL" for r in rows),
     }
 
 
@@ -352,13 +381,13 @@ def _atomic_write(path: Path, data: bytes) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def write_csv(path: Path, rows: list[dict]) -> Path:
+def write_csv(path: Path, rows: list[dict], *, raw: bool = False) -> Path:
     fieldnames = [key for key, _ in INDEX_COLUMNS]
     with StringIO(newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         for row in rows:
-            writer.writerow({key: row.get(key, "") for key in fieldnames})
+            writer.writerow({key: row.get(key, "") if raw else csv_value(row.get(key, "")) for key in fieldnames})
         data = stream.getvalue().encode("utf-8-sig")
     path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write(path, data)
@@ -387,6 +416,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--filing-type", help="Lọc theo loại nộp")
     parser.add_argument("--status", help="Lọc theo trạng thái parse")
     parser.add_argument("--csv", help="Ghi thêm CSV vào đường dẫn này")
+    parser.add_argument("--raw-csv", action="store_true", help="CSV dữ liệu thô cho máy, không mở trực tiếp trong Excel")
+    parser.add_argument("--allow-legacy-data", action="store_true", help="Cho phép dữ liệu cũ chưa có lineage; vẫn kiểm tra membership/hash")
+    parser.add_argument("--summary-json", help="Ghi quality summary JSON, exit 0=đủ, 1=partial, 2=input lỗi")
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser
 
@@ -405,7 +437,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest, parsed, classification = load_inputs(folder)
         if parsed is None:
             raise GdtError(f"Chưa có {PARSED_NAME} trong {folder}; chạy gdt-parse trước")
-        rows = build_rows(manifest, parsed, classification)
+        rows = build_rows(manifest, parsed, classification, allow_legacy=args.allow_legacy_data)
         filtered = filter_rows(
             rows,
             tax_group=args.tax_group,
@@ -418,13 +450,19 @@ def main(argv: list[str] | None = None) -> int:
         workbook = build_workbook(filtered, manifest, parsed, classification)
         target = write_workbook(workbook, output / WORKBOOK_NAME)
         if args.csv:
-            write_csv(Path(args.csv), filtered)
+            write_csv(Path(args.csv), filtered, raw=args.raw_csv)
     except GdtError as error:
         log.error("%s", error)
-        return 1
+        return 2
     log.info("Đã xuất %s dòng tờ khai", len(filtered))
     log.info("Workbook: %s", target)
-    return 0
+    quality_rows = [{**row, "status": row["status"] if row.get("classification_status") == "OK" else "CLASSIFICATION_INCOMPLETE"} for row in rows]
+    summary = quality_summary("export", quality_rows, complete_status="MAPPED")
+    try:
+        return write_summary(args.summary_json, summary)
+    except GdtError as error:
+        log.error("%s", error)
+        return 2
 
 
 __all__ = [
