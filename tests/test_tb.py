@@ -236,6 +236,12 @@ class TbPortalTests(unittest.TestCase):
         self.assertTrue(is_tb_pdf(data))
         self.assertEqual(self.state["downloads"], ["90000000000000001"])
 
+    def test_download_uses_real_result_form_after_portal_renames_it(self):
+        portal = self.make_portal({'query_html': fixture('tb_results_page1.html').replace('tKhaiForm', 'tbLookupForm')})
+        record = portal.search_tb(self.period(), 1).records[0]
+        self.assertEqual(portal._search_form_id, 'tbLookupForm')
+        self.assertTrue(is_tb_pdf(portal.download_tb(record)))
+
     def test_html_thay_pdf_thi_khong_luu_nham(self):
         portal = self.make_portal(
             {"download_response": FakeResponse("<html>hết phiên</html>",

@@ -7,6 +7,7 @@ chỉ tiêu chi tiết, mapping theo registry, unknown form, XML lỗi.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -262,7 +263,7 @@ class ManifestReaderTests(unittest.TestCase):
                                 "member_name": "return.xml",
                                 "format": "xml",
                                 "status": "ok",
-                                "sha256": "deadbeef",
+                                "sha256": hashlib.sha256(RETURN_XML).hexdigest(),
                             }
                         ],
                     }
@@ -274,6 +275,41 @@ class ManifestReaderTests(unittest.TestCase):
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["form_code"], "842")
             self.assertNotEqual(results[0]["status"], "error")
+
+    def test_changed_or_missing_source_is_reported_without_parsing_new_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / 'return.xml'
+            manifest = {'containers': [{'rel_path': path.name, 'format': 'xml', 'members': [{
+                'artifact_id': 'fixture', 'member_name': path.name, 'format': 'xml', 'status': 'ok',
+                'sha256': hashlib.sha256(RETURN_XML).hexdigest()}]}]}
+            path.write_bytes(RETURN_XML + b'\n')
+            changed = parse_manifest(manifest, root)[0]
+            self.assertEqual(changed['status'], 'error')
+            self.assertIn('SOURCE_CHANGED', changed['error'])
+            self.assertEqual(changed['indicators'], [])
+            path.unlink()
+            missing = parse_manifest(manifest, root)[0]
+            self.assertEqual(missing['status'], 'error')
+            self.assertIn('SOURCE_UNREADABLE', missing['error'])
+
+    def test_manifest_cannot_read_outside_root_or_bypass_xml_size_limit(self):
+        from unittest.mock import patch
+
+        from gdt_tax.parser.cli import _read_member_bytes
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = base / 'source'
+            root.mkdir()
+            (base / 'outside.xml').write_bytes(RETURN_XML)
+            (root / 'large.xml').write_bytes(RETURN_XML)
+            self.assertIsNone(_read_member_bytes(root, '../outside.xml', '', is_archive=False))
+            self.assertIsNone(_read_member_bytes(root, str(base / 'outside.xml'), '', is_archive=False))
+            with patch('gdt_tax.parser.cli.MAX_XML_BYTES', 8):
+                self.assertIsNone(_read_member_bytes(root, 'large.xml', '', is_archive=False))
+                with zipfile.ZipFile(root / 'large.zip', 'w') as archive:
+                    archive.writestr('large.xml', RETURN_XML)
+                self.assertIsNone(_read_member_bytes(root, 'large.zip', 'large.xml', is_archive=True))
 
 
 class TncnGoldenTests(unittest.TestCase):

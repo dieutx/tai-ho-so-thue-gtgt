@@ -221,6 +221,41 @@ class LegacyPortalTests(unittest.TestCase):
         # login_attempts=2 → gửi form đăng nhập đúng 2 lần
         self.assertEqual(state["login_posts"], 2)
 
+    def test_login_retry_uses_refreshed_hidden_fields_and_referer(self):
+        portal = self.make_portal()
+        initial = FakeResponse(LOGIN_PAGE_HTML.replace('</form>', "<input name='dse_pageId' value='old'></form>"),
+                               url='https://fixture.test/initial')
+        refreshed = FakeResponse(initial.text.replace("value='old'", "value='new'"),
+                                 url='https://fixture.test/retry')
+        sent = []
+        def post(action, fields, referer):
+            sent.append((dict(fields), referer))
+            if len(sent) == 1:
+                return refreshed
+            return FakeResponse(LOGIN_OK_HTML)
+        with mock.patch.object(portal, '_legacy_captcha_image', return_value=FAKE_CAPTCHA_BYTES) as image, mock.patch.object(portal, '_post_fields', side_effect=post):
+            portal._submit_login(initial)
+        self.assertEqual([fields['dse_pageId'] for fields, _ in sent], ['old', 'new'])
+        self.assertEqual([referer for _, referer in sent], [initial.url, refreshed.url])
+        self.assertEqual(image.call_args_list, [mock.call(initial.url), mock.call(refreshed.url)])
+
+    def test_renamed_tax_result_form_supports_next_query_and_download(self):
+        portal = self.make_portal()
+        renamed = fixture('etax_legacy_results.html').replace('traCuuKhaiForm', 'taxLookupForm')
+        renamed = renamed.replace('</form>', "<input name='dse_operationName' value='traCuuToKhaiProc'></form>")
+        self.state['query_html'] = renamed
+        first = portal.search(self.period(), 1)
+        self.assertEqual(len(first.records), 2)
+        self.assertEqual(portal._search_form_id, 'taxLookupForm')
+        self.assertEqual(len(portal.search(self.period(), 1).records), 2)
+        self.assertIsNotNone(decode_zip_bytes(portal.download(first.records[0], '', '')))
+
+    def test_expected_form_name_in_script_does_not_override_real_form(self):
+        portal = self.make_portal()
+        html = ("<script>var formName='traCuuKhaiForm';</script>"
+                "<form id='taxLookupForm'><input name='dse_operationName' value='traCuuToKhaiProc'></form>")
+        self.assertEqual(portal._form_id_for_operation(html, 'traCuuToKhaiProc', 'traCuuKhaiForm'), 'taxLookupForm')
+
     def test_tai_xml_duoc_goi_zip_hop_le(self):
         portal = self.make_portal()
         record = portal.search(self.period(), page=1).records[0]

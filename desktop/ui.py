@@ -547,7 +547,10 @@ class MainWindow(V2InteractionMixin, QMainWindow):
                 self.stage.setCurrentIndex(0)
 
     def error(self, text: str) -> None:
-        QMessageBox.warning(self, "Tải Hồ Sơ Thuế", text)
+        message = QMessageBox(QMessageBox.Icon.Warning, "Tải Hồ Sơ Thuế", text,
+                              QMessageBox.StandardButton.Ok, self)
+        message.setTextFormat(Qt.TextFormat.PlainText)
+        message.exec()
 
     def settings(self) -> None:
         dialog = AdvancedDialog(self)

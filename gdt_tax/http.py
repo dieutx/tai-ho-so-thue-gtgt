@@ -37,6 +37,7 @@ from .traffic import (
     mask_headers,
     mask_secrets,
 )
+from .verification import raise_for_portal_verification
 
 LOGGER_NAME = "gdt_tax.http"
 #: Độ dài tối đa của phần tham số in ra dòng log ``INFO``.
@@ -145,6 +146,7 @@ class HttpClient:
                 elapsed,
                 format_size(len(body)),
             )
+            raise_for_portal_verification(response)
             self._log_response(response)
             if self.dumper is not None:
                 self.dumper.record(

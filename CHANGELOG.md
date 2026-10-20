@@ -2,6 +2,15 @@
 
 ## [2.0.0] — 2026-10-19
 
+- Build local đăng nhập 20/10: nhận diện trang xác minh truy cập HTTP 200;
+  không tính lỗi tài khoản/mật khẩu thành 5 lần OCR; bỏ log alert JavaScript
+  chưa thực thi; hiển thị đúng nguyên nhân đăng nhập. Giữ phiên bản 2.0.0.
+  [Bằng chứng và giới hạn](docs/CAPTCHA_ACCESS_VERIFICATION_20261020.md).
+- Build local review 20/10/2026: cập nhật form DSE sau đăng nhập bị từ chối,
+  dừng fallback nhập tay bị từ chối thay vì hỏi lặp; dùng đúng form khi cổng đổi
+  tên; kiểm tra lại nguồn XML và bắt buộc OCR source/EXE khớp. 476 test/6 skip,
+  native UI 18/18 và frozen offline/OCR đạt. Giữ 2.0.0; chưa thay asset công khai.
+  [Review và hash bản local](docs/DEEP_REVIEW_20261020.md).
 - Cập nhật lại asset 2.0.0: tự thử CAPTCHA tối đa 5 lần với ảnh mới khi phải thử
   lại, sau đó mới thông báo và cho nhập tay. Hiển thị tiến độ OCR; thành công
   đặt lại bộ đếm. Model OCR giữ nguyên như Python. Không tạo phiên bản mới.

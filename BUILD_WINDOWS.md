@@ -8,6 +8,9 @@ Bản Full 2.0 onefile/windowed, giữ CAPTCHA tự
 động ddddocr. Số đo, thành phần bị loại và lý do ở
 [docs/BUILD_SIZE_REPORT.md](docs/BUILD_SIZE_REPORT.md).
 
+Bản sửa đăng nhập local ngày 20/10/2026, hash và giới hạn kiểm chứng:
+[báo cáo CAPTCHA/xác minh truy cập](docs/CAPTCHA_ACCESS_VERIFICATION_20261020.md).
+
 ## Build
 
 Máy build cần Windows x64, CPython 3.11 x64 và Internet để cài dependency:
@@ -22,6 +25,12 @@ nằm trong `.venv-release-tools` từ `requirements-build-tools.txt`. Script ch
 ruff, mypy cho core, tạo metadata phiên bản, build spec, audit rồi smoke-test chính EXE.
 Mỗi lệnh lỗi đều dừng build. Không xóa dữ liệu người dùng hoặc toàn bộ dist.
 `dist` dành riêng cho executable phát hành; bằng chứng test ở `.cache`.
+
+Audit bắt buộc model OCR mặc định đúng hash, DLL ONNX và module bảng ký tự.
+Smoke đối chiếu source/EXE trên cùng ảnh: kết quả OCR, model, bảng ký tự và CPU
+provider phải khớp. Cũng kiểm tra giới hạn 5 lượt tự động rồi một lượt nhập tay;
+nếu cổng chưa xác nhận lượt nhập tay thì dừng thay vì tiếp tục hỏi cùng thông báo.
+[Review ngày 20/10/2026](docs/DEEP_REVIEW_20261020.md) ghi các lỗi và bằng chứng.
 
 Pin trong `requirements-desktop.txt` dành cho CPython 3.11 x64; onnxruntime
 1.20.1 là bản Windows cài được cho interpreter này. Đổi Python cần đo lại pin và

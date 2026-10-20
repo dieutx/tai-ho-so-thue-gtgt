@@ -128,7 +128,7 @@ class TbPortal(EtaxLegacyPortal):
             raise LegacyEtaxError("Chưa có trang kết quả thông báo để tải theo")
         response = self._post_form(
             self._search_page_html,
-            TB_FORM_ID,
+            self._search_form_id,
             self._search_page_url,
             {
                 "dse_operationName": TB_OPERATION,

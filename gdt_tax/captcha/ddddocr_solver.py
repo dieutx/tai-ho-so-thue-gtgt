@@ -36,8 +36,9 @@ class DdddOcrSolver(CaptchaSolver):
     ) -> None:
         """``beta=True`` dùng mô hình mới hơn của ddddocr.
 
-        Khi đó cần tải sẵn file mô hình và chỉ đường dẫn qua ``import_onnx_path``
-        (cùng ``charsets_path`` nếu mô hình có bảng ký tự riêng).
+        Gói ddddocr có sẵn mô hình beta ``common.onnx``. Bản desktop đóng gói
+        mô hình mặc định ``common_old.onnx`` và luôn dùng ``beta=False``.
+        Mô hình tùy chỉnh dùng ``import_onnx_path`` cùng ``charsets_path``.
         """
         super().__init__(**options)
         self.length = length

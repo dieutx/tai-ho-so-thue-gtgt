@@ -16,7 +16,7 @@ from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
 
 from gdt_tax.captcha.base import CaptchaSolver, normalize_text
 from gdt_tax.captcha.ddddocr_solver import DdddOcrSolver
-from gdt_tax.errors import StorageError
+from gdt_tax.errors import CaptchaError, StorageError
 from gdt_tax.proxy import parse_proxy
 from gdt_tax.run_hooks import RunCancelled, RunHooks
 
@@ -91,20 +91,32 @@ class GuiCaptchaSolver(CaptchaSolver):
         self.ocr = DdddOcrSolver() if use_ocr else None
         self.auto_failures = 0
         self.last_was_auto = False
+        self.manual_fallback_pending = False
+
+    def _check_manual_fallback(self) -> None:
+        if self.ocr and self.manual_fallback_pending:
+            message = ("Cổng chưa xác nhận yêu cầu sau lượt nhập tay CAPTCHA. Đã dừng để tránh hỏi mã liên tục. "
+                       "Kiểm tra mã CAPTCHA, tài khoản/mật khẩu và kết nối, rồi thử lại tác vụ.")
+            self.logger.warning(message)
+            self.hooks.emit(captcha_message=message)
+            raise CaptchaError(message)
 
     def rejected(self) -> None:
+        self._check_manual_fallback()
         if self.last_was_auto:
             self.auto_failures += 1
             self.last_was_auto = False
-            self.logger.warning("Cổng chưa chấp nhận CAPTCHA tự động (lần %s/%s)", self.auto_failures, self.AUTO_ATTEMPTS)
-            self.hooks.emit(captcha_message=f"CAPTCHA tự động chưa được chấp nhận ({self.auto_failures}/{self.AUTO_ATTEMPTS})")
+            self.logger.warning("Cổng chưa chấp nhận yêu cầu dùng CAPTCHA tự động (lần %s/%s); chưa xác định nguyên nhân", self.auto_failures, self.AUTO_ATTEMPTS)
+            self.hooks.emit(captcha_message=f"Yêu cầu dùng CAPTCHA tự động chưa được chấp nhận ({self.auto_failures}/{self.AUTO_ATTEMPTS})")
 
     def accepted(self) -> None:
         self.auto_failures = 0
         self.last_was_auto = False
+        self.manual_fallback_pending = False
 
     def solve(self, image: bytes) -> str:
         self.hooks.check()
+        self._check_manual_fallback()
         self.last_was_auto = False
         if self.ocr and self.auto_failures < self.AUTO_ATTEMPTS:
             attempt = self.auto_failures + 1
@@ -114,10 +126,12 @@ class GuiCaptchaSolver(CaptchaSolver):
                 if result:
                     self.last_was_auto = True
                     return result
+                self.logger.warning("OCR trả kết quả rỗng hoặc sai độ dài (lần %s/%s)", attempt, self.AUTO_ATTEMPTS)
             except RunCancelled:
                 raise
-            except Exception:
-                self.logger.warning("OCR chưa đọc được CAPTCHA (lần %s/%s)", attempt, self.AUTO_ATTEMPTS)
+            except Exception as error:
+                # Exception messages may contain local paths or private input.
+                self.logger.warning("OCR lỗi %s (lần %s/%s)", type(error).__name__, attempt, self.AUTO_ATTEMPTS)
             self.hooks.check()
             self.auto_failures += 1
             if self.auto_failures < self.AUTO_ATTEMPTS:
@@ -140,6 +154,7 @@ class GuiCaptchaSolver(CaptchaSolver):
             if self.hooks.cancel:
                 self.hooks.cancel.set()
             raise RunCancelled("Đã hủy CAPTCHA")
+        self.manual_fallback_pending = self.ocr is not None
         return normalize_text(challenge.answer)
 
     def close(self) -> None:

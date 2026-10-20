@@ -73,6 +73,19 @@ def _form_node(html: str, form_id: str):
     return form
 
 
+def _credentials_rejected(html: str) -> bool:
+    """Only recognize displayed server errors, never validator JavaScript."""
+    soup = BeautifulSoup(html, 'html.parser')
+    for node in soup(['script', 'style', 'noscript', 'template']):
+        node.decompose()
+    visible = ' '.join(soup.stripped_strings).casefold()
+    return any(message in visible for message in (
+        'tên đăng nhập hoặc mật khẩu của bạn không chính xác',
+        'tên đăng nhập hoặc mật khẩu không đúng',
+        'sai tên đăng nhập hoặc mật khẩu',
+    ))
+
+
 def _form_data(form) -> tuple[str, dict[str, str]]:
     """Action URL và toàn bộ ô input có tên của một form đã tìm thấy."""
     action = str(form.get("action") or "/etaxnnt/Request")
@@ -248,7 +261,7 @@ class EtaxLegacyPortal(Portal):
             login_url,
             headers=build_page_headers(profile=self.profile, headers={"Referer": response.url}),
         )
-        if response.status_code != 200 or _LOGIN_FORM_ID not in response.text:
+        if response.status_code != 200 or _form_node(response.text, _LOGIN_FORM_ID) is None:
             raise LegacyEtaxError("Trang legacy không trả về form đăng nhập")
 
         ok_response = self._submit_login(response)
@@ -284,18 +297,27 @@ class EtaxLegacyPortal(Portal):
                     "_verifyCode": code,
                 },
             )
-            for message in _alerts(response.text):
-                self.logger.info("Legacy: %s", message)
-            if _LOGIN_OK_MARKER in response.text and _LOGIN_FORM_ID not in response.text:
+            # Script alert strings include unexecuted empty-field validators.
+            # They are not server-side authentication errors.
+            if _LOGIN_OK_MARKER in response.text and _form_node(response.text, _LOGIN_FORM_ID) is None:
                 accepted = getattr(self.captcha, "accepted", None)
                 if callable(accepted):
                     accepted()
                 return response
+            if _credentials_rejected(response.text):
+                raise LegacyEtaxError(
+                    'Cổng Thuế báo tên đăng nhập hoặc mật khẩu không chính xác. '
+                    'Kiểm tra lại tài khoản và mật khẩu; đã dừng thử CAPTCHA.'
+                )
             rejected = getattr(self.captcha, "rejected", None)
             if callable(rejected):
                 rejected()
             last_message = "tên đăng nhập/mật khẩu/CAPTCHA không được chấp nhận"
             self.logger.warning("Legacy: đăng nhập chưa được (lần %s/%s)", attempt, self.login_attempts)
+            # A rejected login can rotate DSE hidden fields and the form action.
+            # The next image and POST must belong to the latest login page.
+            if _form_node(response.text, _LOGIN_FORM_ID) is not None:
+                login_page = response
         raise LegacyEtaxError(f"Không đăng nhập được trang legacy: {last_message}")
 
     def _open_home_page(self, login_result) -> None:
@@ -335,18 +357,22 @@ class EtaxLegacyPortal(Portal):
         return self._post_fields(action, fields, referer)
 
     def _post_fields(self, action: str, fields: Mapping[str, Any], referer: str):
-        """POST đúng hình dạng request của trang legacy (XHR, form-urlencoded)."""
+        """POST form đăng nhập điều hướng trang; nghiệp vụ legacy dùng XHR."""
+        # loginForm's logon()/checkVerify() calls native form.submit().
+        # Its POST navigates the document; other legacy operations remain XHR.
+        navigation = fields.get('dse_operationName') == 'corpUserLoginProc'
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Origin': LEGACY_ETAX_ORIGIN,
+            'Referer': referer,
+        }
         return self.http.post(
             action,
             data={key: str(value) for key, value in fields.items()},
-            headers=build_xhr_headers(
+            headers=build_page_headers(profile=self.profile, headers=headers) if navigation else build_xhr_headers(
                 profile=self.profile,
                 accept="text/html,application/xhtml+xml,*/*;q=0.8",
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Origin": LEGACY_ETAX_ORIGIN,
-                    "Referer": referer,
-                },
+                headers=headers,
             ),
         )
 
@@ -355,9 +381,10 @@ class EtaxLegacyPortal(Portal):
         """Trả form id/name thực tế của trang, chấp nhận cả khi cổng đổi id."""
         if not html:
             return ""
-        if expected and expected in html:
-            return expected
         soup = BeautifulSoup(html, "html.parser")
+        if expected and (soup.find('form', id=expected) is not None
+                         or soup.find('form', attrs={'name': expected}) is not None):
+            return expected
         for form in soup.find_all("form"):
             fields = {
                 str(field.get("name")): str(field.get("value") or "")
@@ -501,7 +528,8 @@ class EtaxLegacyPortal(Portal):
             return PageResult(http_status=response.status_code)
         # Không thay form tốt bằng trang lỗi/hết phiên HTTP 200.
         empty_result = "Chưa có tờ khai nào" in response.text
-        if _SEARCH_FORM_ID not in response.text or (
+        form_id = self._form_id_for_operation(response.text, 'traCuuToKhaiProc', self._search_form_id)
+        if not form_id or (
             _RESULT_TABLE_ID not in response.text and not empty_result
         ):
             if self.session_state is not None:
@@ -511,6 +539,7 @@ class EtaxLegacyPortal(Portal):
                 )
             self.logger.warning("Legacy không trả bảng kết quả/form tra cứu; có thể đã hết phiên")
             return PageResult(http_status=response.status_code)
+        self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
         records = parse_records(response.text, self.source)

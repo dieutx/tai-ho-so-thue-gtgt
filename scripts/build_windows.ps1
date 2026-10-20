@@ -57,7 +57,7 @@ try {
         & $Python scripts/size_inventory.py $exe --folder (Join-Path $measureRoot 'onedir/TaiHoSoThue-Windows') --output (Join-Path $measureRoot 'inventory.json')
         if ($LASTEXITCODE -ne 0) { throw 'Size inventory failed' }
     }
-    & (Join-Path $PSScriptRoot 'smoke_test_windows.ps1') -Exe $exe
+    & (Join-Path $PSScriptRoot 'smoke_test_windows.ps1') -Exe $exe -Python $Python
     if ($LASTEXITCODE -ne 0) { throw 'Frozen smoke test failed' }
     Get-FileHash -LiteralPath $exe -Algorithm SHA256
 } finally { Pop-Location }

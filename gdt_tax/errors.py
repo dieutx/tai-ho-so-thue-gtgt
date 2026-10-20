@@ -32,6 +32,10 @@ class CaptchaError(GdtError):
     """Không nạp hoặc không dùng được bộ nhận dạng CAPTCHA."""
 
 
+class PortalVerificationError(GdtError):
+    """The portal returned an access verification page instead of app content."""
+
+
 class SearchError(GdtError):
     """Không tra cứu được trang kết quả sau nhiều lần thử."""
 

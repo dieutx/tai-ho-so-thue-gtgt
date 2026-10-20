@@ -1,5 +1,9 @@
 # Dung lượng Full 2.0 — 19/10/2026
 
+Build local ngày 20/10 vẫn dùng cùng mô hình OCR.
+[Dung lượng, hash và kiểm chứng bản local mới nhất](CAPTCHA_ACCESS_VERIFICATION_20261020.md).
+Bảng và các asset ngày 19/10 bên dưới giữ số đo lịch sử; chưa đo lại startup/RAM.
+
 | Build | EXE | OneDir | Startup trung vị | RAM idle |
 |---|---:|---:|---:|---:|
 | Baseline | 202,938,102 B | 410,887,557 B | 5.757 s | 167,301,120 B |

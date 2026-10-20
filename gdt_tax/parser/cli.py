@@ -10,21 +10,25 @@ Không cần tài khoản/CAPTCHA/mạng; chạy lại cùng input/version khôn
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import sys
 import tempfile
 import zipfile
+import zlib
 from pathlib import Path
 
+from ..archive_limits import MAX_ARCHIVE_BYTES, MAX_COMPRESSION_RATIO, MAX_MEMBERS
 from ..atomic import replace_with_retry
 from ..errors import GdtError
-from ..inventory import MANIFEST_NAME
+from ..inventory import MANIFEST_NAME, _unsafe_member
 from ..logging_setup import configure_streams
 from ..run_hooks import RunHooks
 from .extract import PARSER_VERSION, SCHEMA_VERSION, extract_declaration
 from .registry import load_registry
+from .xml_reader import MAX_XML_BYTES
 
 LOGGER_NAME = "gdt_tax.parser.cli"
 PARSED_NAME = "parsed_declarations.json"
@@ -43,15 +47,30 @@ def _read_manifest(path: Path) -> dict:
 def _read_member_bytes(
     root: Path, rel_path: str, member_name: str, *, is_archive: bool
 ) -> bytes | None:
-    path = root / rel_path
     try:
+        path = (root / rel_path).resolve()
+        if Path(rel_path).is_absolute() or not path.is_relative_to(root.resolve()):
+            return None
         # Inventory nhận diện định dạng từ bytes, nên ZIP bị đổi đuôi vẫn phải
         # được đọc như archive. Không suy định dạng lại từ tên file ở đây.
         if is_archive:
+            if path.stat().st_size > MAX_ARCHIVE_BYTES or _unsafe_member(member_name):
+                return None
             with zipfile.ZipFile(path) as archive:
-                return archive.read(member_name)
-        return path.read_bytes()
-    except (OSError, zipfile.BadZipFile, KeyError, RuntimeError):
+                info = archive.getinfo(member_name)
+                if (len(archive.infolist()) > MAX_MEMBERS or info.flag_bits & 1
+                        or info.file_size > MAX_XML_BYTES
+                        or info.file_size / max(1, info.compress_size) > MAX_COMPRESSION_RATIO):
+                    return None
+                with archive.open(info) as stream:
+                    data = stream.read(MAX_XML_BYTES + 1)
+        else:
+            if path.stat().st_size > MAX_XML_BYTES:
+                return None
+            with path.open('rb') as stream:
+                data = stream.read(MAX_XML_BYTES + 1)
+        return data if len(data) <= MAX_XML_BYTES else None
+    except (OSError, ValueError, zipfile.BadZipFile, KeyError, RuntimeError, NotImplementedError, EOFError, zlib.error):
         return None
 
 
@@ -81,17 +100,22 @@ def parse_manifest(
                 member_name,
                 is_archive=container.get("format") == "zip",
             )
-            if data is None:
-                log.warning("Không đọc lại được %s::%s", rel_path, member_name)
-                continue
+            actual_hash = hashlib.sha256(data).hexdigest() if data is not None else None
+            expected_hash = artifact.get('sha256')
+            read_error = ('SOURCE_UNREADABLE_OR_UNSAFE: chạy Kiểm kê lại' if data is None else
+                          'SOURCE_CHANGED: tệp đã đổi sau kiểm kê; chạy Kiểm kê lại'
+                          if expected_hash and actual_hash != expected_hash else '')
             declaration = extract_declaration(
-                data,
+                b'' if read_error else (data or b''),
                 artifact_id=artifact.get("artifact_id"),
                 source_zip=rel_path,
                 source_inner_file=member_name,
-                source_sha256=artifact.get("sha256"),
+                source_sha256=expected_hash if read_error else actual_hash,
                 registry=registry,
             )
+            if read_error:
+                declaration.error = read_error
+                log.warning('%s: %s::%s', read_error, rel_path, member_name)
             results.append(declaration.to_dict())
     return results
 

@@ -171,6 +171,59 @@ class AtomicRetryTests(unittest.TestCase):
             solver.solve(b'image')
         request.assert_not_called()
 
+    @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')
+    def test_rejected_manual_fallback_stops_legacy_and_dvc_login(self):
+        from desktop.jobs import GuiCaptchaSolver
+        from gdt_tax import auth
+        from gdt_tax.errors import CaptchaError
+        from gdt_tax.portals.etax_legacy import EtaxLegacyPortal
+        from gdt_tax.run_hooks import RunHooks
+
+        for portal_name in ['legacy', 'dvc']:
+            with self.subTest(portal=portal_name):
+                requests = []
+                def manual(request, requests=requests):
+                    requests.append(request)
+                    request.respond('abc12')
+                solver = GuiCaptchaSolver(RunHooks(), manual, use_ocr=False)
+                solver.ocr = Mock()
+                solver.ocr.solve.return_value = 'bad12'
+                config = RunConfig('login', Path('fixture-output'), username='fixture', password='fixture')
+                if portal_name == 'legacy':
+                    portal = EtaxLegacyPortal(Mock(), solver, config.settings())
+                    with patch.object(portal, '_legacy_captcha_image', return_value=b'fixture'), patch.object(portal, '_post_form', return_value=Mock(text='loginForm')) as post:
+                        with self.assertRaisesRegex(CaptchaError, 'nhập tay'):
+                            portal._submit_login(Mock(text='fixture', url='https://fixture.test'))
+                else:
+                    http = Mock()
+                    http.get.return_value = Mock(status_code=200, text='fixture')
+                    http.post.return_value = Mock(status_code=200, text='fixture', json=Mock(return_value={'status': '401'}))
+                    with patch('gdt_tax.auth.token_from_meta', return_value='fixture'), patch('gdt_tax.auth.fetch_captcha', return_value=b'fixture'):
+                        with self.assertRaisesRegex(CaptchaError, 'nhập tay'):
+                            auth.login(http, solver, config.settings())
+                    post = http.post
+                self.assertEqual(post.call_count, 6)
+                self.assertEqual(solver.ocr.solve.call_count, 5)
+                self.assertEqual(len(requests), 1)
+
+    @unittest.skipUnless(HAS_QT, 'Desktop Qt dependencies are optional for core-only installs')
+    def test_ocr_diagnostics_distinguish_empty_output_and_exception_without_raw_error(self):
+        from desktop.jobs import GuiCaptchaSolver
+        from gdt_tax.run_hooks import RunHooks
+        solver = GuiCaptchaSolver(RunHooks(), Mock(), use_ocr=False)
+        solver.ocr = Mock()
+        solver.ocr.solve.return_value = ''
+        with self.assertLogs(solver.logger, level='WARNING') as logs:
+            self.assertEqual(solver.solve(b'fixture'), '')
+        self.assertIn('rỗng', ' '.join(logs.output))
+        solver.ocr.solve.side_effect = FileNotFoundError('private-account private-path')
+        with self.assertLogs(solver.logger, level='WARNING') as logs:
+            self.assertEqual(solver.solve(b'fixture'), '')
+        message = ' '.join(logs.output)
+        self.assertIn('FileNotFoundError', message)
+        self.assertNotIn('private-account', message)
+        self.assertNotIn('private-path', message)
+
     def test_gui_ocr_budget_leaves_room_for_manual_without_changing_cli(self):
         from gdt_tax.config import Settings
         for mode in ['tax', 'gnt', 'notice']:
@@ -266,6 +319,18 @@ class DesktopUpgradeTests(unittest.TestCase):
 
     def tearDown(self):
         cleanup_temporary_directory(self.temp)
+
+    def test_login_error_shows_actual_verification_reason(self):
+        from desktop.services import JobResult
+        from desktop.ui import MainWindow
+        from gdt_tax.verification import VERIFICATION_MESSAGE
+        window = MainWindow(SettingsStore(self.root / 'settings.json'))
+        window.active_config = RunConfig('login', self.root, username='fixture', password='fixture')
+        with patch.object(window, 'error') as show_error:
+            window.on_completed(JobResult('ERROR', VERIFICATION_MESSAGE, self.root))
+        show_error.assert_called_once_with(VERIFICATION_MESSAGE)
+        self.assertIn('xác minh trình duyệt', window.status.text())
+        window.close()
 
     def test_single_account_dialog_hold_to_reveal_and_clear_on_close(self):
         from PySide6.QtWidgets import QLineEdit, QPushButton

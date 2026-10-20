@@ -7,14 +7,48 @@ import logging
 import os
 import socket
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from desktop import __version__
 from gdt_tax.captcha.ddddocr_solver import DdddOcrSolver
+from gdt_tax.errors import CaptchaError, PortalVerificationError
 from gdt_tax.parser.registry import load_registry
 from gdt_tax.run_hooks import RunHooks
+from gdt_tax.verification import raise_for_portal_verification
 
 from .services import RunConfig, run_offline
+
+
+def captcha_retry_check() -> bool:
+    """Exercise the frozen GUI solver offline, including rejected manual fallback."""
+    from .jobs import GuiCaptchaSolver
+    requests = []
+    def manual(request):
+        requests.append(request)
+        request.respond('AB123')
+    solver = GuiCaptchaSolver(RunHooks(), manual, use_ocr=False)
+    solver.ocr = Mock()
+    solver.ocr.solve.return_value = 'AB123'
+    try:
+        for _ in range(5):
+            solver.solve(b'offline-fixture')
+            solver.rejected()
+        solver.solve(b'offline-fixture')
+        try:
+            solver.rejected()
+        except CaptchaError:
+            pass
+        else:
+            raise AssertionError('Rejected manual fallback did not stop the task')
+        if len(requests) != 1 or solver.ocr.solve.call_count != 5:
+            raise AssertionError('Automatic/manual CAPTCHA retry budget changed')
+        solver.accepted()
+        if solver.solve(b'offline-fixture') != 'AB123' or len(requests) != 1:
+            raise AssertionError('Successful CAPTCHA did not reset the automatic solver')
+        return True
+    finally:
+        solver.close()
 
 
 def self_test(source: Path, output: Path, report: Path) -> int:
@@ -41,8 +75,20 @@ def self_test(source: Path, output: Path, report: Path) -> int:
                 result["ocr_fixture_sha256"] = hashlib.sha256((source / "sample_captcha.png").read_bytes()).hexdigest()
                 result["ocr_text_sha256"] = hashlib.sha256(text.encode('utf-8')).hexdigest()
                 result["ocr_model_sha256"] = hashlib.sha256((Path(ddddocr.__file__).parent / "common_old.onnx").read_bytes()).hexdigest()
+                charset = ocr._get_ocr().get_charset()
+                result['ocr_charset_sha256'] = hashlib.sha256(json.dumps(charset, ensure_ascii=True).encode('utf-8')).hexdigest()
+                result['ocr_providers'] = ocr._get_ocr().get_model_info()['ocr_model']['providers']
             finally:
                 ocr.close()
+            result['captcha_fallback_bounded'] = captcha_retry_check()
+            challenge = ('<apm_do_not_touch></apm_do_not_touch><body>human visitor'
+                         '<input name="answer" id="ans"><button id="jar">Submit</button></body>')
+            try:
+                raise_for_portal_verification(SimpleNamespace(content=challenge.encode(), text=challenge))
+            except PortalVerificationError:
+                result['portal_verification_detected'] = True
+            else:
+                raise AssertionError('Access verification page was not detected')
         result["pass"] = True
         code = 0
     except Exception as error:

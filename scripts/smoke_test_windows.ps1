@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Exe = (Join-Path (Split-Path $PSScriptRoot -Parent) 'dist/TaiHoSoThue-Windows.exe'))
+param([string]$Exe = (Join-Path (Split-Path $PSScriptRoot -Parent) 'dist/TaiHoSoThue-Windows.exe'), [string]$Python)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path $PSScriptRoot -Parent
@@ -12,6 +12,14 @@ $null = New-Item -ItemType Directory -Path $standalone
 $copied = Join-Path $standalone 'TaiHoSoThue-Windows.exe'
 Copy-Item -LiteralPath $exePath -Destination $copied
 $fixture = Join-Path $root 'tests/fixtures'
+$sourceResult = $null
+if ($Python) {
+    $sourceReport = Join-Path $testRoot 'source-report.json'
+    & $Python -m desktop.main --self-test $fixture --test-output (Join-Path $testRoot 'source-output') --test-report $sourceReport
+    if ($LASTEXITCODE -ne 0) { throw 'Source OCR self-test failed' }
+    $sourceResult = Get-Content -LiteralPath $sourceReport -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $sourceResult.pass -or $sourceResult.frozen) { throw 'Invalid source OCR reference' }
+}
 foreach ($index in 1..2) {
     $report = Join-Path $testRoot ('report-' + $index + '.json')
     $output = Join-Path $testRoot ('ket qua ' + $index)
@@ -20,7 +28,14 @@ foreach ($index in 1..2) {
     if (-not $process.WaitForExit(180000)) { throw 'Smoke test timed out; process left for inspection' }
     if ($process.ExitCode -ne 0) { throw ('Frozen self-test failed: ' + $report) }
     $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
-    if (-not $result.pass -or -not $result.frozen -or -not $result.ocr_offline) { throw 'Frozen/OCR acceptance failed' }
+    if (-not $result.pass -or -not $result.frozen -or -not $result.ocr_offline -or -not $result.captcha_fallback_bounded) { throw 'Frozen/OCR acceptance failed' }
+    if (-not $result.portal_verification_detected) { throw 'Frozen portal verification detection failed' }
+    if ($sourceResult) {
+        foreach ($field in @('ocr_fixture_sha256', 'ocr_text_sha256', 'ocr_model_sha256', 'ocr_charset_sha256')) {
+            if ($result.$field -ne $sourceResult.$field) { throw ('Source/frozen OCR differs: ' + $field) }
+        }
+        if (($result.ocr_providers -join ',') -ne ($sourceResult.ocr_providers -join ',')) { throw 'Source/frozen ONNX provider differs' }
+    }
 }
 $gui = Start-Process -FilePath $copied -ArgumentList @('--quit-after', '1500') -WorkingDirectory $standalone -WindowStyle Hidden -PassThru
 if (-not $gui.WaitForExit(60000) -or $gui.ExitCode -ne 0) { throw 'GUI startup failed' }

@@ -1,0 +1,18 @@
+{
+  "pass": true,
+  "archive_entries": 160,
+  "forbidden_entries": 0,
+  "secret_matches": 0,
+  "qt_windows_plugin": true,
+  "form_mapping_json": 5,
+  "bundled_ocr_models": 1,
+  "ocr": {
+    "pass": true,
+    "model": "ddddocr/common_old.onnx",
+    "model_sha256": "b8f2ad9cbc1f2e3922a6cb9459e30824e7e2467f3fb4fd61420640e34ea0bf68",
+    "source_model_sha256": "b8f2ad9cbc1f2e3922a6cb9459e30824e7e2467f3fb4fd61420640e34ea0bf68",
+    "model_matches_source": true,
+    "missing_files": [],
+    "missing_modules": []
+  }
+}

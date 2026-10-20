@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "build_date": "2026-10-20",
+  "local_build": true,
+  "published": false,
+  "bytes": 88326543,
+  "sha256": "cfaf74f24e232b08884e13942fb38079bc98d326e36de338802e41bbe9282ee2",
+  "test_total": 476,
+  "passed": 470,
+  "skipped": 6,
+  "ruff": "PASS",
+  "mypy_core": "PASS",
+  "native_ui_cases": 18,
+  "frozen_offline_runs": 2,
+  "source_frozen_ocr_parity": true,
+  "captcha_fallback_bounded": true,
+  "archived_captcha_images_with_matching_ocr": 3,
+  "live_source_worker": {
+    "login": "SUCCESS",
+    "tax_query": "SUCCESS",
+    "ocr_calls": 4,
+    "manual_dialogs": 0
+  },
+  "ocr": {
+    "ocr_text_sha256": "e9b147869a9170cfd520d2825bfb3ecfd02acbd4a4c5551769196bf8c9802892",
+    "ocr_model_sha256": "b8f2ad9cbc1f2e3922a6cb9459e30824e7e2467f3fb4fd61420640e34ea0bf68",
+    "ocr_charset_sha256": "78f29d65544184cd23e582bfe7aaad1288a5bdf02e6977b1ee4a8a4f57f8e7f2",
+    "ocr_providers": [
+      "CPUExecutionProvider"
+    ]
+  },
+  "original_user_login_failure_reproduced_live": false
+}

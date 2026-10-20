@@ -1,5 +1,10 @@
 # Nghiệm thu desktop 2.0 — 19/10/2026
 
+Build local mới trong `dist` ngày 20/10/2026: xem
+[bản sửa đăng nhập, hash và nghiệm thu mới](CAPTCHA_ACCESS_VERIFICATION_20261020.md).
+[Review toàn bộ trước đó](DEEP_REVIEW_20261020.md). Các số bên dưới thuộc
+asset công khai ngày 19/10; build local mới chưa thay asset này.
+
 Full Windows x64, onefile/windowed, OCR tự động, version 2.0.0.0.
 EXE **88,323,106 B (88.32 MB)**; chưa ký Authenticode.
 

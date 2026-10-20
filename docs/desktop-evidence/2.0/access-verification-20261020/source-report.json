@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "frozen": false,
+  "state": "PARTIAL",
+  "declarations": 15,
+  "mapped": 5,
+  "ocr_offline": true,
+  "ocr_fixture_sha256": "10d2f69f612553fd88e5ef7d39e1674c415cb175d59d4aa6c938c51306e030b6",
+  "ocr_text_sha256": "e9b147869a9170cfd520d2825bfb3ecfd02acbd4a4c5551769196bf8c9802892",
+  "ocr_model_sha256": "b8f2ad9cbc1f2e3922a6cb9459e30824e7e2467f3fb4fd61420640e34ea0bf68",
+  "ocr_charset_sha256": "78f29d65544184cd23e582bfe7aaad1288a5bdf02e6977b1ee4a8a4f57f8e7f2",
+  "ocr_providers": [
+    "CPUExecutionProvider"
+  ],
+  "captcha_fallback_bounded": true,
+  "portal_verification_detected": true,
+  "pass": true
+}

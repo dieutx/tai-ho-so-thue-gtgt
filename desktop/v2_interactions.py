@@ -454,7 +454,7 @@ class V2InteractionMixin:
             if result.state == 'SUCCESS' and after:
                 QTimer.singleShot(0, after)
             elif result.state == 'ERROR':
-                self.error('Đăng nhập chưa thành công. Kiểm tra tài khoản, mật khẩu, CAPTCHA hoặc mạng; nhật ký đã ẩn bí mật.')
+                self.error(result.message)
         else:
             previous = self.result
             if config and config.action in {'verify', 'export_report'} and previous:
