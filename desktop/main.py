@@ -7,6 +7,8 @@ from pathlib import Path
 
 
 def main(argv: list[str] | None = None) -> int:
+    from desktop.crash_log import install_crash_log
+    install_crash_log()
     parser = argparse.ArgumentParser(description="Tải Hồ Sơ Thuế desktop")
     parser.add_argument("--self-test", metavar="FIXTURE_DIRECTORY")
     parser.add_argument("--test-output")

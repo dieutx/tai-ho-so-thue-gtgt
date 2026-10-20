@@ -2,7 +2,7 @@
 
 Mọi request đi qua :meth:`HttpClient.request` đều được log một dòng ở mức
 ``INFO`` (phương thức, đường dẫn, tham số, mã trạng thái, thời gian, dung lượng)
-và chi tiết header/body ở mức ``DEBUG``. Nhờ vậy chỉ cần chạy với ``-v`` hoặc
+và metadata/header đã làm sạch cùng hash body ở mức ``DEBUG``. Chạy với ``-v`` hoặc
 ``--log-file`` là thấy đủ dữ liệu để sửa công cụ khi cổng Dịch vụ công đổi giao
 diện; xem :mod:`gdt_tax.traffic` để biết cách che dữ liệu nhạy cảm và lưu file.
 """
@@ -43,11 +43,12 @@ from .run_hooks import RunBudget, RunHooks
 from .traffic import (
     BODY_LOG_LIMIT,
     TrafficDumper,
-    describe_body,
+    body_fingerprint,
     describe_params,
     format_size,
     mask_headers,
     mask_secrets,
+    safe_url,
 )
 from .verification import raise_for_portal_verification
 
@@ -68,7 +69,7 @@ class HttpClient:
     ``extra_headers`` cho phép thêm hoặc ghi đè header cho **mọi** request ngay
     lúc chạy (``--header``/``GDT_EXTRA_HEADERS``), nên khi cổng yêu cầu thêm một
     header mới thì không phải chờ sửa mã nguồn. ``dump_dir`` bật ghi lại traffic
-    thật để dựng fixture (``--dump-http``). ``proxy`` đẩy toàn bộ request qua proxy
+    metadata (``--dump-http``); payload gốc cần bật private riêng. ``proxy`` đẩy request qua proxy
     Việt Nam khi chạy trên máy ở nước ngoài (``--proxy``/``GDT_PROXY_URL``).
     """
 
@@ -89,6 +90,7 @@ class HttpClient:
         hooks: RunHooks | None = None,
         origin_policy: OriginPolicy | None = None,
         max_backoff: float = 60.0,
+        private_dump: bool = False,
     ) -> None:
         self.hooks = hooks or RunHooks()
         if self.hooks.budget is None:
@@ -110,7 +112,7 @@ class HttpClient:
         self.proxy = proxy
         self.secrets = proxy.secrets() if proxy else ()
         #: Ghi lại request/response khi ``--dump-http`` được bật, ngược lại là ``None``.
-        self.dumper = TrafficDumper(dump_dir, logger=self.logger) if dump_dir else None
+        self.dumper = TrafficDumper(dump_dir, logger=self.logger, private=private_dump) if dump_dir else None
         self._prepare_session()
 
     def _prepare_session(self) -> None:
@@ -180,7 +182,7 @@ class HttpClient:
             self.logger.info(
                 "HTTP %s %s%s → %s (%.2fs, %s)",
                 method,
-                url,
+                safe_url(url),
                 self._describe_params(params),
                 response.status_code,
                 elapsed,
@@ -324,12 +326,12 @@ class HttpClient:
         """Ghi lại request sắp gửi; chỉ tốn công khi log đang ở mức ``DEBUG``."""
         if not self.logger.isEnabledFor(logging.DEBUG):
             return
-        self.logger.debug("GỬI %s %s (lần %s/%s)", method, url, attempt, self.retries)
+        self.logger.debug("GỬI %s %s (lần %s/%s)", method, safe_url(url), attempt, self.retries)
         if params:
             self.logger.debug("  tham số: %s", describe_params(params, limit=BODY_LOG_LIMIT))
         if headers:
             self.logger.debug("  header: %s", mask_headers(headers))
-        body = describe_body(payload, limit=BODY_LOG_LIMIT)
+        body = body_fingerprint(payload)
         if body:
             self.logger.debug("  body: %s", body)
 
@@ -341,8 +343,8 @@ class HttpClient:
         Thông báo của ``requests`` thường chứa cả URL proxy kèm tài khoản, nên phải
         che trước khi đưa vào log.
         """
-        detail = mask_secrets(str(error), self.secrets)
-        message = f"Không gửi được {method} {url}: {detail}"
+        detail = mask_secrets(type(error).__name__, self.secrets)
+        message = f"Không gửi được {method} {safe_url(url)}: {detail}"
         if self.proxy is not None:
             message += (
                 f" (qua proxy {self.proxy.label} — kiểm tra proxy còn sống và "
@@ -355,9 +357,9 @@ class HttpClient:
         if not self.logger.isEnabledFor(logging.DEBUG):
             return
         self.logger.debug("  ← header: %s", mask_headers(getattr(response, "headers", {})))
-        text = getattr(response, "text", "")
+        text = body_fingerprint(getattr(response, "content", b""))
         if text:
-            self.logger.debug("  ← body: %s", describe_body(text, limit=BODY_LOG_LIMIT))
+            self.logger.debug("  ← body: %s", text)
 
     def _describe_params(self, params: Any) -> str:
         if not params:

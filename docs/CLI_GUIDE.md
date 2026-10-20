@@ -333,7 +333,10 @@ Số liệu kiểm chứng theo từng lần rà soát nằm trong
 - Không tự tính lại thuế, thuế suất, chuyển lỗ hay ưu đãi.
 - Không cộng dồn nhiều lần nộp cùng kỳ và không tự chọn bản bổ sung “mới nhất”.
 - Giữ `source_zip`, `source_inner_file`, SHA-256 và XPath để kiểm toán.
-- HTTP dump có thể chứa dữ liệu nhạy cảm dù log thông thường đã che nhiều trường.
+- `--dump-http` ghi metadata/hash đã làm sạch, không ghi payload gốc.
+- `--dump-http-private` (hoặc `GDT_HTTP_DUMP_PRIVATE=true`) bật raw response
+  trong thư mục `PRIVATE`, tối đa 100 request trong 15 phút, 2 MB/body.
+  Dữ liệu này vẫn nhạy cảm: không đưa vào gói hỗ trợ, xóa sau khi chẩn đoán.
 
 ## Kiểm thử
 
@@ -363,8 +366,8 @@ xác nhận cổng thuế hiện đang hoạt động hoặc mọi mẫu XML đ�
 - Chạy trên máy chủ ngoài Việt Nam: cấu hình proxy Việt Nam bằng
   `GDT_PROXY_URL` hoặc `--proxy`.
 - Khoảng sau cutoff không có dữ liệu: đây là hành vi dự kiến khi DVC đang tắt.
-- Cổng đổi HTML/endpoint: chạy với `--log-file`; chỉ dùng `--dump-http` trong
-  môi trường riêng tư.
+- Cổng đổi HTML/endpoint: dùng `--log-file` hoặc metadata từ `--dump-http`.
+  Chỉ bật `--dump-http-private` khi cần điều tra riêng tư.
 - Excel đang mở gây lỗi ghi báo cáo: đóng workbook rồi chạy lại; file gốc hợp
   lệ được dùng lại.
 - Muốn chạy lại từ đầu: dùng thư mục output mới. Không xóa dữ liệu cũ nếu chưa

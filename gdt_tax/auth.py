@@ -86,7 +86,7 @@ def login(
                 },
             ),
         )
-        logger.info("LOGIN: HTTP=%s %s", response.status_code, response.text[:200])
+        logger.info("LOGIN: HTTP=%s", response.status_code)
 
         try:
             if str(response.json().get("status")) == "200":

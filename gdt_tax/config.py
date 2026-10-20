@@ -140,6 +140,7 @@ class Settings:
     log_file: str = ""
     #: Thư mục lưu nguyên request/response để dựng fixture (``--dump-http``).
     http_dump_dir: str = ""
+    http_dump_private: bool = False
     #: Bộ header gửi đi: ``browser`` (mặc định) hoặc ``minimal``. Xem gdt_tax.headers.
     header_profile: str = DEFAULT_PROFILE
     #: Proxy cho mọi request (``--proxy``/``GDT_PROXY_URL``); trống là đi trực tiếp.
@@ -272,6 +273,7 @@ class Settings:
                 extra_headers=pick("extra_headers", env.text_map, "EXTRA_HEADERS") or {},
                 log_file=pick("log_file", env.text, "LOG_FILE"),
                 http_dump_dir=pick("http_dump_dir", env.text, "HTTP_DUMP_DIR"),
+                http_dump_private=pick("http_dump_private", env.boolean, "HTTP_DUMP_PRIVATE", False),
                 header_profile=pick("header_profile", env.text, "HEADER_PROFILE", DEFAULT_PROFILE),
                 proxy_url=pick("proxy_url", env.text, "PROXY_URL"),
                 legacy_etax=bool(pick("legacy_etax", env.boolean, "LEGACY_ETAX", True)),

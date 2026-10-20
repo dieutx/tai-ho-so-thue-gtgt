@@ -170,7 +170,7 @@ class ParserTests(unittest.TestCase):
 
 class LogSecretsTests(unittest.TestCase):
     def settings(self, password: str):
-        return mock.Mock(password=password)
+        return mock.Mock(username="synthetic-user", password=password)
 
     def test_gom_ca_mat_khau_proxy_va_mat_khau_tai_khoan(self):
         secrets = log_secrets(
@@ -180,7 +180,8 @@ class LogSecretsTests(unittest.TestCase):
         self.assertIn("mat-khau-proxy", secrets)
 
     def test_khong_co_proxy_thi_chi_che_mat_khau_tai_khoan(self):
-        self.assertEqual(log_secrets(self.settings("mat-khau-cong"), None), ("mat-khau-cong",))
+        self.assertEqual(log_secrets(self.settings("mat-khau-cong"), None),
+                         ("synthetic-user", "mat-khau-cong", "bWF0LWtoYXUtY29uZw=="))
 
     def test_khong_co_mat_khau_thi_chi_che_proxy(self):
         secrets = log_secrets(self.settings(""), parse_proxy("1.2.3.4:8080:u:mat-khau-proxy"))
