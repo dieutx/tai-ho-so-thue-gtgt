@@ -15,6 +15,7 @@ from gdt_tax.gnt.portal import GntPortal
 from gdt_tax.http import HttpClient
 from gdt_tax.identity import RecordKey, account_fingerprint
 from gdt_tax.legacy_session import LegacySessionState, SessionExpired
+from gdt_tax.ownership import prepare_output
 from gdt_tax.portals import build_portals
 from gdt_tax.portals.etax_legacy import EtaxLegacyPortal
 from gdt_tax.proxy import parse_proxy
@@ -176,6 +177,8 @@ class ETaxSessionManager:
             config = config.normalized_selection()
             self.set_account(config.username, config.password)
             settings = config.settings()
+            if config.mode != "login":
+                prepare_output(settings)
             if config.mode == "tax" and config.dvc and settings.from_date < settings.etax_cutoff <= settings.to_date:
                 return self._mixed_tax(config, hooks, captcha, logger)
             needs_legacy = config.mode in {"login", "gnt", "notice"} or any(

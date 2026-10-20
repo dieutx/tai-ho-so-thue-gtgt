@@ -593,6 +593,7 @@ def scan_directory(
         base / path.resolve().relative_to(base.resolve()) for path in selected_paths))
     files = sorted(path for path in candidates if path.name not in _DERIVED_NAMES
                    and not path.name.endswith(".integrity.json")
+                   and not path.name.startswith(".gdt-")
                    and _candidate_file(path))
     for path in files:
         (hooks or RunHooks()).check()

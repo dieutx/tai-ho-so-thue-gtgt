@@ -122,6 +122,8 @@ class DocumentStateTests(unittest.TestCase):
                 self.assertEqual([document_id(mode, r) for r in result.rows if r['_file_status'] == 'downloaded'], [key])
 
     def test_existing_valid_xml_survives_selected_retry_without_content_change(self):
+        from gdt_tax.ownership import check_owner
+        check_owner(self.root, account_fingerprint('fixture-user'), create=True)
         config = RunConfig('gnt', self.root, username='fixture-user', password='fixture-secret', preferences=self.prefs)
         query = run_online(replace(config, dry_run=True), RunHooks(), StubCaptcha(), logging.getLogger('gdt_tax.test'), http=FakeHttp(make_gnt_handler({})))
         row = query.rows[0]
@@ -166,6 +168,8 @@ class DocumentStateTests(unittest.TestCase):
         self.assertIn('HTTP 500', result.issues[0]['message'])
 
     def test_gui_resume_keeps_original_zip_filename(self):
+        from gdt_tax.ownership import check_owner
+        check_owner(self.root, account_fingerprint('fixture-user'), create=True)
         config = RunConfig('tax', self.root, username='fixture-user', password='fixture-secret', preferences=self.prefs, dry_run=True)
         query = run_online(config, RunHooks(), StubCaptcha(), logging.getLogger('gdt_tax.test'), http=FakeHttp(make_legacy_handler({})))
         row = query.rows[0]

@@ -142,7 +142,18 @@ def safe_destination(path: Path, data: bytes, source: dict) -> Path:
     except OSError:
         pass
     key = hashlib.sha256(json.dumps(source, sort_keys=True).encode() + b"\x00" + data).hexdigest()
-    return path.with_name(path.stem + "__" + key[:16] + path.suffix)
+    for index in range(1000):
+        suffix = "" if index == 0 else "_" + str(index)
+        candidate = path.with_name(path.stem + "__" + key[:16] + suffix + path.suffix)
+        if not candidate.exists():
+            return candidate
+        try:
+            existing = read_bounded(candidate, MAX_ARCHIVE_BYTES)
+            if existing == data and matches_evidence(candidate, existing, source):
+                return candidate
+        except OSError:
+            pass
+    raise OSError("DOWNLOAD_DESTINATION_CONFLICT_LIMIT")
 
 
 def matches_evidence(path: Path, data: bytes, source: dict, *, require: bool = False) -> bool:

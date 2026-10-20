@@ -14,6 +14,7 @@ from collections.abc import Callable
 from ..errors import NetworkError, SchemaChangedError, SearchError
 from ..http import HttpClient
 from ..identity import account_fingerprint, scope_targets
+from ..ownership import prepare_output
 from ..run_hooks import RunBudget, RunHooks
 from .models import TbPageResult, TbSummary, ThongBao, tb_periods
 from .portal import TbPortal
@@ -82,6 +83,7 @@ class TbPipeline:
         if self.target_ids is not None:
             self.target_ids = scope_targets(self.target_ids, account_key=self.account_key,
                                            sources=["TB"], document_kind="NOTICE")
+        prepare_output(self.settings)
         summary = TbSummary(dry_run=self.settings.dry_run)
         periods = tb_periods(
             self.settings.from_date, self.settings.to_date, self.settings.max_days_per_search

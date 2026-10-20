@@ -197,6 +197,8 @@ class EtaxFlowTests(PipelineTestCase):
         self.assertTrue(payload[0]["tep_zip"].endswith(".zip"))
 
     def test_bo_qua_zip_da_tai(self):
+        from gdt_tax.ownership import prepare_output
+        prepare_output(self.settings_for())
         for record in parse_records(fixture("etax_results.html"), "ETAX"):
             record.account_key = account_fingerprint(self.settings_for().username)
             ZipStore(self.directory).save(record, sample_zip())
@@ -380,12 +382,13 @@ class FailureTests(PipelineTestCase):
             self.run_pipeline(make_handler(search=search), settings)
 
     def test_dry_run_khong_doi_ten_file_cu_va_khong_tinh_la_tai(self):
+        from gdt_tax.identity import IdentityError
         old = self.directory / "11320250292469209-ten-cu.zip"
         old.write_bytes(sample_zip())
-        summary, _ = self.run_pipeline(make_handler(search=etax_search), self.settings_for(dry_run=True))
+        with self.assertRaisesRegex(IdentityError, 'DIRECTORY_LEGACY_UNOWNED'):
+            self.run_pipeline(make_handler(search=etax_search), self.settings_for(dry_run=True))
         self.assertTrue(old.is_file())
-        self.assertEqual(summary.downloaded, 0)
-        self.assertTrue(summary.search_complete)
+        self.assertEqual(list(self.directory.iterdir()), [old])
 
     def test_case_id_loi_tai_van_tim_tiep_doan_sau(self):
         attempts = []

@@ -1,8 +1,8 @@
 # Record identity contract (CORE-03 A)
 
 The contract increment (A) defines identity; integration (B) applies it to online
-pipelines, catalogs, attachments and desktop selection. **CORE-03 is not complete**
-until directory ownership and explicit legacy migration (C) are implemented.
+pipelines, catalogs, attachments and desktop selection. Increment C adds directory
+ownership and explicit reversible legacy catalog migration.
 
 RecordKey consists of account_key, source, document_kind and remote_id. Canonical
 UTF-8 JSON arrays are encoded as URL-safe base64 with the version prefix `rk1.`;
@@ -38,10 +38,8 @@ are preserved and are never adopted as a successful authenticated download. A
 selected GUI row with UNKNOWN or another account requires a new query. Dry-run
 does not write catalogs or ownership evidence.
 
-Next increment: enforce directory ownership and add explicit legacy catalog
-migration with unknown ownership and rollback instructions. Existing metadata
-continues to read as UNKNOWN; it is retained separately when new owned rows are
-merged. Directory isolation is still pending, so do not treat this as closure of
-CORE-03 or CORE-13.
+See [IDENTITY_MIGRATION.md](IDENTITY_MIGRATION.md) for ownership enforcement before
+authentication, UNKNOWN legacy handling, preview/apply/rollback commands and the
+boundary between authenticated online entrypoints and offline storage utilities.
 Synthetic tests cover roundtrip, delimiter/Unicode preservation, collisions,
 malformed versions, migration idempotency/conflicts and target scoping.

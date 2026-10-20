@@ -15,6 +15,7 @@ from collections.abc import Callable
 from ..errors import NetworkError, SchemaChangedError, SearchError
 from ..http import HttpClient
 from ..identity import account_fingerprint, scope_targets
+from ..ownership import prepare_output
 from ..run_hooks import RunBudget, RunHooks
 from .models import GiayNopTien, GntPageResult, GntSummary, gnt_periods
 from .portal import GntPortal
@@ -83,6 +84,7 @@ class GntPipeline:
         if self.target_ids is not None:
             self.target_ids = scope_targets(self.target_ids, account_key=self.account_key,
                                            sources=["GNT"], document_kind="GNT")
+        prepare_output(self.settings)
         summary = GntSummary(dry_run=self.settings.dry_run)
         periods = gnt_periods(
             self.settings.from_date, self.settings.to_date, self.settings.max_days_per_search

@@ -16,6 +16,7 @@ from .errors import LoginError, NetworkError, SchemaChangedError, SearchError
 from .http import HttpClient
 from .identity import account_fingerprint, scope_targets
 from .models import CaseRecord, PageResult, RunSummary
+from .ownership import prepare_output
 from .portals import build_portals
 from .run_hooks import RunBudget, RunHooks
 from .storage import ZipStore, write_metadata
@@ -102,6 +103,8 @@ class Pipeline:
         if self.settings.case_id and sources:
             self.case_targets = scope_targets([self.settings.case_id], account_key=self.account_key,
                                              sources=sources, document_kind="DECLARATION")
+        if active:
+            prepare_output(self.settings)
         # Legacy có phiên DSE riêng. Không phụ thuộc đăng nhập hay CSRF của DVC.
         csrf = ""
         if any(period.source != SOURCE_ETAX_LEGACY for period in active):
