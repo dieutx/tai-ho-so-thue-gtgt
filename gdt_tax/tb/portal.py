@@ -16,6 +16,7 @@ from ..constants import LEGACY_ETAX_BASE, TB_FORM_ID, TB_OPERATION, TB_RESULT_TA
 from ..dates import format_date
 from ..errors import LegacyEtaxError
 from ..headers import build_page_headers
+from ..integrity import validate_pdf
 from ..models import SearchPeriod
 from ..portals.etax_legacy import EtaxLegacyPortal, _form_fields
 from .models import TbPageResult, ThongBao
@@ -41,7 +42,7 @@ _SESSION_KEYS = (
 
 def is_tb_pdf(data: bytes) -> bool:
     """Dữ liệu có phải PDF (không phải HTML lỗi/hết phiên)."""
-    return data.lstrip()[:5] == b"%PDF-"
+    return validate_pdf(data).ok
 
 
 class TbPortal(EtaxLegacyPortal):

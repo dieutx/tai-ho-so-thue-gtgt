@@ -32,7 +32,6 @@ from typing import Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from bs4 import BeautifulSoup
-from lxml import etree
 
 from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from ..errors import LegacyEtaxError, LegacyPageError
@@ -592,15 +591,8 @@ class EtaxLegacyPortal(Portal):
         if response.status_code != 200:
             return response
         content_type = response.headers.get("content-type", "").lower()
-        parser = etree.XMLParser(resolve_entities=False, load_dtd=False, no_network=True)
-        try:
-            root = etree.fromstring(response.content, parser=parser)
-            xml_ok = (
-                etree.QName(root).localname.lower() not in {"html", "error"}
-                and not root.getroottree().docinfo.doctype
-            )
-        except (etree.XMLSyntaxError, ValueError, TypeError):
-            xml_ok = False
+        from ..integrity import validate_xml
+        xml_ok = validate_xml(response.content, "declaration").ok
         if "text/html" in content_type or not xml_ok:
             self.logger.error(
                 "Legacy không trả XML hợp lệ cho %s (hết phiên hoặc tờ khai không tải được)",

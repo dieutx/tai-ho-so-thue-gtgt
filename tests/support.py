@@ -50,7 +50,7 @@ def fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
-def sample_zip(payload: bytes = b"<to-khai/>") -> bytes:
+def sample_zip(payload: bytes = b"<HSoThueDTu/>") -> bytes:
     """Tạo một ZIP hợp lệ trong bộ nhớ."""
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
@@ -58,7 +58,7 @@ def sample_zip(payload: bytes = b"<to-khai/>") -> bytes:
     return buffer.getvalue()
 
 
-def zip_payload(payload: bytes = b"<to-khai/>") -> str:
+def zip_payload(payload: bytes = b"<HSoThueDTu/>") -> str:
     """ZIP mã hoá Base64, đúng dạng cổng trả về trong JSON."""
     return base64.b64encode(sample_zip(payload)).decode("ascii")
 

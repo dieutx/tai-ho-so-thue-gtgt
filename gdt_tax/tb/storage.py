@@ -26,9 +26,19 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from gdt_tax.spreadsheet_values import append_row, csv_value
 
+from ..archive_limits import MAX_MEMBER_BYTES
 from ..atomic import replace_with_retry
 from ..constants import TB_METADATA_CSV, TB_METADATA_JSON, TB_METADATA_XLSX
 from ..errors import StorageError
+from ..integrity import (
+    candidate_paths,
+    matches_evidence,
+    read_bounded,
+    safe_destination,
+    source_reference,
+    validate_pdf,
+    write_evidence,
+)
 from .models import ThongBao
 from .naming import tb_pdf_filename
 from .portal import is_tb_pdf
@@ -63,17 +73,19 @@ class TbStore:
 
     def find_existing(self, record: ThongBao) -> Path | None:
         """Trả về file PDF đã có nếu hợp lệ (dùng để resume)."""
-        path = self.path_for(record)
-        if not path.is_file():
-            return None
-        try:
-            if not is_tb_pdf(path.read_bytes()):
-                return None
-        except OSError:
-            return None
-        record.tep_pdf = path.name
-        self.logger.info("Bỏ qua thông báo đã có: %s", path.name)
-        return path
+        for path in candidate_paths(self.path_for(record), record.tep_pdf):
+            if not path.is_file():
+                continue
+            try:
+                content = read_bounded(path, MAX_MEMBER_BYTES)
+                if not is_tb_pdf(content) or not matches_evidence(path, content, source_reference(record, "pdf")):
+                    continue
+            except OSError:
+                continue
+            record.tep_pdf = path.name
+            self.logger.info("Bỏ qua thông báo đã có: %s", path.name)
+            return path
+        return None
 
     def save(self, record: ThongBao, data: bytes) -> Path | None:
         """Ghi file PDF sau khi kiểm tra nội dung."""
@@ -81,8 +93,9 @@ class TbStore:
             self.logger.error("Phản hồi không phải PDF hợp lệ: %s", record.message_id)
             return None
         self.directory.mkdir(parents=True, exist_ok=True)
-        path = self.path_for(record)
+        path = safe_destination(self.path_for(record), data, source_reference(record, "pdf"))
         _atomic_write(path, data)
+        write_evidence(path, validate_pdf(data), source_reference(record, "pdf"))
         record.tep_pdf = path.name
         self.logger.info("Đã lưu %s (%s bytes)", path.name, f"{len(data):,}")
         return path

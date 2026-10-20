@@ -24,6 +24,7 @@ from ..constants import (
 )
 from ..dates import format_date
 from ..errors import LegacyEtaxError
+from ..integrity import validate_xml
 from ..models import SearchPeriod
 from ..portals.etax_legacy import EtaxLegacyPortal
 from .models import GiayNopTien, GntPageResult
@@ -35,15 +36,7 @@ _EMPTY_MARKERS = ("Chưa có giấy nộp tiền", "Không có dữ liệu", "kh
 
 def is_gnt_xml(data: bytes) -> bool:
     """Dữ liệu có phải XML giấy nộp tiền (không phải HTML lỗi/hết phiên)."""
-    from lxml import etree
-
-    parser = etree.XMLParser(resolve_entities=False, load_dtd=False, no_network=True)
-    try:
-        root = etree.fromstring(data, parser=parser)
-    except (etree.XMLSyntaxError, ValueError, TypeError):
-        return False
-    name = etree.QName(root).localname.lower()
-    return name not in {"html", "error"} and not root.getroottree().docinfo.doctype
+    return validate_xml(data, "gnt").ok
 
 
 class GntPortal(EtaxLegacyPortal):

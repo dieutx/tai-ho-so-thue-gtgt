@@ -153,7 +153,8 @@ class ZipStoreTests(unittest.TestCase):
         (self.directory / "G[12]-ten-cu.zip").write_bytes(sample_zip())
         found = self.store.find_existing(record)
         self.assertIsNotNone(found)
-        self.assertEqual(found.name, zip_filename(record))
+        self.assertEqual(found.name, "G[12]-ten-cu.zip")
+        self.assertTrue((self.directory / "G[12]-ten-cu.zip").exists())
 
     def test_save_from_response_giai_ma_base64(self):
         record = make_record()

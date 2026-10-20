@@ -592,6 +592,7 @@ def scan_directory(
     candidates = base.rglob("*") if selected_paths is None else iter(dict.fromkeys(
         base / path.resolve().relative_to(base.resolve()) for path in selected_paths))
     files = sorted(path for path in candidates if path.name not in _DERIVED_NAMES
+                   and not path.name.endswith(".integrity.json")
                    and _candidate_file(path))
     for path in files:
         (hooks or RunHooks()).check()

@@ -42,6 +42,15 @@ from .atomic import replace_with_retry
 from .classification import TAX_GROUPS
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX
 from .errors import StorageError
+from .integrity import (
+    matches_evidence,
+    read_bounded,
+    safe_destination,
+    source_reference,
+    valid_declaration_zip,
+    validate_tax_zip,
+    write_evidence,
+)
 from .models import CaseRecord
 from .naming import zip_filename
 
@@ -93,11 +102,15 @@ def decode_zip_bytes(response) -> bytes | None:
     ``{"content": "<base64>", "fileName": "..."}``.
     """
     data = response.content
+    if len(data) > (MAX_ARCHIVE_BYTES * 4 // 3 + 4096):
+        return None
     try:
         payload = response.json()
     except ValueError:
         payload = None
     if isinstance(payload, dict) and payload.get("content"):
+        if not isinstance(payload["content"], str) or len(payload["content"]) > (MAX_ARCHIVE_BYTES + 2) // 3 * 4:
+            return None
         try:
             data = base64.b64decode(payload["content"], validate=True)
         except (ValueError, TypeError):
@@ -135,11 +148,9 @@ class ZipStore:
             try:
                 if candidate.stat().st_size > MAX_ARCHIVE_BYTES:
                     continue
-                if not valid_zip(candidate.read_bytes()):
+                content = read_bounded(candidate, MAX_ARCHIVE_BYTES)
+                if not valid_declaration_zip(content) or not matches_evidence(candidate, content, source_reference(record, "zip")):
                     continue
-                if candidate != preferred and not preferred.exists():
-                    candidate.rename(preferred)
-                    candidate = preferred
                 record.tep_zip = candidate.name
                 self.logger.info("Bỏ qua ZIP đã có: %s", candidate.name)
                 return candidate
@@ -149,12 +160,14 @@ class ZipStore:
 
     def save(self, record: CaseRecord, data: bytes) -> Path | None:
         """Ghi ZIP xuống đĩa sau khi kiểm tra tính toàn vẹn."""
-        if not valid_zip(data):
+        result = validate_tax_zip(data)
+        if not result.ok:
             self.logger.error("Phản hồi không phải ZIP hợp lệ: %s", record.ma_ho_so)
             return None
         self.directory.mkdir(parents=True, exist_ok=True)
-        path = self.path_for(record)
+        path = safe_destination(self.path_for(record), data, source_reference(record, "zip"))
         _atomic_write(path, data)
+        write_evidence(path, result, source_reference(record, "zip"))
         record.tep_zip = path.name
         self.logger.info("Đã lưu %s (%s bytes)", path.name, f"{len(data):,}")
         return path

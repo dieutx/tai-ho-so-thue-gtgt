@@ -3,6 +3,7 @@ beautifulsoup4>=4.12,<5
 lxml>=5,<7
 openpyxl>=3.1,<4
 requests>=2.32,<3
+pypdf>=6.21.1,<7
 
 # Nhận dạng CAPTCHA mặc định (solver "ddddocr"): ONNX, mô hình ~10MB, không cần
 # torch hay paddle, nhanh khoảng 50 lần so với easyocr trên CAPTCHA của cổng.
