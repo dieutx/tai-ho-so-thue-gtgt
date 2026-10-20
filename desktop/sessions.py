@@ -74,7 +74,10 @@ class RoutedHttpClient:
         self.legacy, self.dvc = legacy, dvc
 
     def request(self, method: str, path: str, **kwargs):
-        target = self.legacy if path.startswith(LEGACY_ETAX_ORIGIN + "/") else self.dvc
+        from gdt_tax.http_policy import OriginPolicy, origin
+        url = self.dvc.url(path)
+        OriginPolicy().validate(url)
+        target = self.legacy if origin(url) == LEGACY_ETAX_ORIGIN else self.dvc
         return target.request(method, path, **kwargs)
 
     def get(self, path: str, **kwargs):

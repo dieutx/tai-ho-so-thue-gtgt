@@ -10,10 +10,15 @@ diện; xem :mod:`gdt_tax.traffic` để biết cách che dữ liệu nhạy c�
 from __future__ import annotations
 
 import logging
+import math
+import tempfile
 import time
 from collections.abc import Mapping
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 import requests
 
@@ -26,8 +31,15 @@ from .headers import (
     chrome_order,
     reconcile_client_hints,
 )
+from .http_policy import (
+    CAPTCHA_OPERATION,
+    DOWNLOAD_OPERATION,
+    PAGE_OPERATION,
+    OperationPolicy,
+    OriginPolicy,
+)
 from .proxy import Proxy
-from .run_hooks import RunHooks
+from .run_hooks import RunBudget, RunHooks
 from .traffic import (
     BODY_LOG_LIMIT,
     TrafficDumper,
@@ -75,8 +87,17 @@ class HttpClient:
         header_profile: str = DEFAULT_PROFILE,
         proxy: Proxy | None = None,
         hooks: RunHooks | None = None,
+        origin_policy: OriginPolicy | None = None,
+        max_backoff: float = 60.0,
     ) -> None:
         self.hooks = hooks or RunHooks()
+        if self.hooks.budget is None:
+            self.hooks.budget = RunBudget()
+        self.origin_policy = origin_policy or OriginPolicy()
+        if not all(math.isfinite(value) and value >= 0 for value in
+                   (min_backoff, default_backoff, max_backoff)):
+            raise ValueError("Backoff must be finite and nonnegative")
+        self.max_backoff = max_backoff
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.retries = max(1, retries)
@@ -110,16 +131,34 @@ class HttpClient:
 
     def url(self, path: str) -> str:
         """Ghép đường dẫn tương đối thành URL đầy đủ."""
-        if path.startswith("http://") or path.startswith("https://"):
-            return path
-        return f"{self.base_url}{path}"
+        if path.startswith("//") or "://" in path:
+            return urljoin(self.base_url + "/", path)
+        return urljoin(self.base_url + "/", path.lstrip("/"))
 
     def request(self, method: str, path: str, **kwargs: Any) -> requests.Response:
+        if self.hooks.budget is None:
+            self.hooks.budget = RunBudget()
+        method = method.upper()
+        operation = kwargs.pop("operation", None)
+        if operation is None:
+            endpoint = urlsplit(path).path.lower()
+            template = (DOWNLOAD_OPERATION if "download" in endpoint else
+                        CAPTCHA_OPERATION if "captcha" in endpoint or "imageservlet" in endpoint else
+                        OperationPolicy() if endpoint.endswith("/request") else PAGE_OPERATION)
+            operation = OperationPolicy(template.name, template.max_bytes,
+                                        retry_safe=method in {"GET", "HEAD", "OPTIONS"}
+                                        and not endpoint.endswith("/request"))
+        if not isinstance(operation, OperationPolicy):
+            raise ValueError("Invalid operation policy")
         kwargs.setdefault("timeout", self.timeout)
+        follow_redirects = kwargs.pop("allow_redirects", True)
+        kwargs["allow_redirects"] = False
+        kwargs["stream"] = True
         headers = self._merge_headers(kwargs.get("headers"))
         if headers:
             kwargs["headers"] = headers
         url = self.url(path)
+        self.origin_policy.validate(url)
         params = kwargs.get("params")
         payload = kwargs.get("data") if kwargs.get("data") is not None else kwargs.get("json")
         sent_headers = self._effective_headers(headers)
@@ -127,12 +166,13 @@ class HttpClient:
             kwargs.setdefault("proxies", self.proxy.proxies())
 
         response: requests.Response | None = None
-        for attempt in range(1, self.retries + 1):
+        attempts = self.retries if operation.retry_safe else 1
+        for attempt in range(1, attempts + 1):
             self.hooks.check()
             self._log_request(method, url, sent_headers, params, payload, attempt)
             started = time.monotonic()
             try:
-                response = self.session.request(method, url, **kwargs)
+                response = self._exchange(method, url, operation, follow_redirects, kwargs)
             except requests.exceptions.RequestException as error:
                 raise self._network_error(method, url, error) from error
             elapsed = time.monotonic() - started
@@ -158,7 +198,7 @@ class HttpClient:
                     response=response,
                     elapsed=elapsed,
                 )
-            if response.status_code != 429 or attempt == self.retries:
+            if response.status_code != 429 or attempt == attempts:
                 return response
             delay = self._retry_delay(response)
             self.logger.warning(
@@ -170,6 +210,68 @@ class HttpClient:
             self.hooks.pause(delay)
         assert response is not None  # vòng lặp luôn chạy ít nhất một lần
         return response
+
+    def _exchange(self, method, url, operation, follow_redirects, kwargs):
+        history = []
+        options = dict(kwargs)
+        for hop in range(6):
+            self.hooks.check()
+            budget = self.hooks.budget
+            assert budget is not None
+            budget.request()
+            remaining = budget.remaining()
+            configured = options.get("timeout", self.timeout)
+            options["timeout"] = tuple(min(float(value), remaining) for value in configured) if isinstance(configured, tuple) else min(float(configured), remaining)
+            response = self.session.request(method, url, **options)
+            try:
+                location = response.headers.get("Location") or response.headers.get("location")
+                if follow_redirects and response.status_code in {301, 302, 303, 307, 308} and location:
+                    if hop == 5:
+                        raise NetworkError("HTTP_REDIRECT_LIMIT")
+                    target = urljoin(url, location)
+                    self.origin_policy.validate(target, previous=url)
+                    history.append(response)
+                    if response.status_code == 303 and method != "HEAD" or response.status_code in {301, 302} and method == "POST":
+                        method = "GET"
+                        for key in ("data", "json", "files"):
+                            options.pop(key, None)
+                        options["headers"] = {key: value for key, value in options.get("headers", {}).items()
+                                              if key.casefold() not in {"content-type", "content-length", "transfer-encoding"}}
+                    # Query params belong to the first request, not the redirect target.
+                    options.pop("params", None)
+                    url = target
+                    continue
+                self._buffer_response(response, operation.max_bytes)
+                response.history = history
+                return response
+            finally:
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
+        raise NetworkError("HTTP_REDIRECT_LIMIT")
+
+    def _buffer_response(self, response, limit):
+        length = response.headers.get("Content-Length") or response.headers.get("content-length")
+        if length and str(length).isdigit() and int(length) > limit:
+            raise NetworkError("HTTP_RESPONSE_TOO_LARGE")
+        iterator = getattr(response, "iter_content", None)
+        # Fakes without streaming support remain usable by embedded consumers.
+        chunks = iterator(chunk_size=64 * 1024) if callable(iterator) else [response.content]
+        total = 0
+        with tempfile.SpooledTemporaryFile(max_size=1024 * 1024) as spool:
+            for chunk in chunks:
+                self.hooks.check()
+                if not chunk:
+                    continue
+                assert self.hooks.budget is not None
+                self.hooks.budget.consume(len(chunk))
+                total += len(chunk)
+                if total > limit:
+                    raise NetworkError("HTTP_RESPONSE_TOO_LARGE")
+                spool.write(chunk)
+            spool.seek(0)
+            response._content = spool.read()
+        response._content_consumed = True
 
     def get(self, path: str, **kwargs: Any) -> requests.Response:
         return self.request("GET", path, **kwargs)
@@ -265,9 +367,18 @@ class HttpClient:
     def _retry_delay(self, response: requests.Response) -> float:
         raw = response.headers.get("Retry-After", "")
         try:
-            return max(self.min_backoff, float(raw))
+            delay = float(raw)
         except (TypeError, ValueError):
-            return self.default_backoff
+            try:
+                when = parsedate_to_datetime(raw)
+                if when.tzinfo is None:
+                    when = when.replace(tzinfo=timezone.utc)
+                delay = (when - datetime.now(timezone.utc)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                delay = self.default_backoff
+        if not math.isfinite(delay) or delay < 0:
+            delay = self.default_backoff
+        return min(self.max_backoff, max(self.min_backoff, delay))
 
 
 __all__ = ["HttpClient", "PARAMS_LOG_LIMIT"]

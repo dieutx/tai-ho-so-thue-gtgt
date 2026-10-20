@@ -1,15 +1,27 @@
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlsplit
 
 from gdt_tax.errors import ConfigError, NetworkError
 from gdt_tax.http import HttpClient
+from gdt_tax.http_policy import OriginPolicy
 from gdt_tax.proxy import SOCKS_HINT, Proxy, _has_pysocks, parse_proxy
 from gdt_tax.traffic import mask_secrets
 
 #: Dạng "host:port:tài-khoản:mật-khẩu" mà nhiều nhà cung cấp proxy Việt Nam đưa.
 #: Dùng địa chỉ giả — không bao giờ dán proxy thật của bạn vào test hay tài liệu.
 VN_PROXY = "1.2.3.4:8080:nha-cung-cap:bi-mat-proxy"
+
+
+class FixtureOriginPolicy(OriginPolicy):
+    """Only local proxy fixtures may use HTTP; never selected by production CLI."""
+
+    def validate(self, url, *, previous=None):
+        parsed = urlsplit(url)
+        if parsed.scheme != "http" or parsed.hostname not in {
+                "127.0.0.1", "may-chu-khong-ton-tai.test", "may-chu.test"}:
+            raise AssertionError("Unexpected proxy fixture origin")
 
 
 class ParseProxyTests(unittest.TestCase):
@@ -151,6 +163,7 @@ class ProxyServerTestCase(unittest.TestCase):
         server, received = self.start_proxy()
         client = HttpClient(
             base_url="http://may-chu-khong-ton-tai.test/tthc",
+            origin_policy=FixtureOriginPolicy(),
             proxy=Proxy(host="127.0.0.1", port=server.server_port),
             retries=1,
         )
@@ -167,6 +180,7 @@ class ProxyServerTestCase(unittest.TestCase):
         server, received = self.start_proxy()
         client = HttpClient(
             base_url="http://may-chu-khong-ton-tai.test/tthc",
+            origin_policy=FixtureOriginPolicy(),
             proxy=Proxy(host="127.0.0.1", port=server.server_port, username="u", password="bi-mat"),
             retries=1,
         )
@@ -180,6 +194,7 @@ class ProxyServerTestCase(unittest.TestCase):
         server, received = self.start_proxy()
         client = HttpClient(
             base_url=f"http://127.0.0.1:{server.server_port}/tthc",
+            origin_policy=FixtureOriginPolicy(),
             retries=1,
         )
         self.addCleanup(client.close)
@@ -193,6 +208,7 @@ class ProxyErrorTests(unittest.TestCase):
         # Port không có gì lắng nghe → requests ném ProxyError.
         client = HttpClient(
             base_url="http://may-chu.test/tthc",
+            origin_policy=FixtureOriginPolicy(),
             proxy=Proxy(host="127.0.0.1", port=1, username="u", password="bi-mat-proxy"),
             retries=1,
             timeout=2,
@@ -208,7 +224,8 @@ class ProxyErrorTests(unittest.TestCase):
         self.assertIn("proxy 127.0.0.1:1", message)
 
     def test_loi_mang_thuong_cung_duoc_boc(self):
-        client = HttpClient(base_url="http://may-chu-khong-ton-tai.test/tthc", retries=1, timeout=2)
+        client = HttpClient(base_url="http://may-chu-khong-ton-tai.test/tthc", retries=1, timeout=2,
+                            origin_policy=FixtureOriginPolicy())
         self.addCleanup(client.close)
         with self.assertRaises(NetworkError):
             client.get("/tchs")

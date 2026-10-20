@@ -16,7 +16,7 @@ from .errors import LoginError, NetworkError, SearchError
 from .http import HttpClient
 from .models import CaseRecord, PageResult, RunSummary
 from .portals import build_portals
-from .run_hooks import RunHooks
+from .run_hooks import RunBudget, RunHooks
 from .storage import ZipStore, write_metadata
 
 LOGGER_NAME = "gdt_tax.pipeline"
@@ -41,7 +41,9 @@ class Pipeline:
         self.portal_factory = portal_factory
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.sleep = sleep
-        self.hooks = hooks or RunHooks()
+        self.hooks: RunHooks = hooks or getattr(http, "hooks", None) or RunHooks()
+        if self.hooks.budget is None:
+            self.hooks.budget = RunBudget()
         self.persist_metadata = persist_metadata
         self.target_ids = target_ids
         self.record_errors: dict[str, str] = {}
@@ -172,6 +174,8 @@ class Pipeline:
         self.hooks.pause(delay, self.sleep)
 
     def _search_page(self, portal, period, page: int) -> PageResult:
+        if self.hooks.budget is not None:
+            self.hooks.budget.page()
         for attempt in range(1, self.settings.search_attempts + 1):
             self.hooks.check()
             result = portal.search(period, page)

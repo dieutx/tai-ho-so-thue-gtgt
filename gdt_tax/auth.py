@@ -36,6 +36,8 @@ def login(
 
     hooks = getattr(http, "hooks", RunHooks())
     for attempt in range(1, settings.login_attempts + 1):
+        if hooks.budget is not None:
+            hooks.budget.authenticate()
         logger.info("ĐĂNG NHẬP %s/%s", attempt, settings.login_attempts)
         page = http.get(
             LOGIN_PAGE,

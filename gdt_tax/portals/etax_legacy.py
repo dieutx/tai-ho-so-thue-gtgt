@@ -278,6 +278,9 @@ class EtaxLegacyPortal(Portal):
         """Gửi tên đăng nhập/mật khẩu/CAPTCHA, thử lại khi đọc sai mã."""
         last_message = "không rõ"
         for attempt in range(1, self.login_attempts + 1):
+            hooks = getattr(self.http, "hooks", None)
+            if hooks is not None and hooks.budget is not None:
+                hooks.budget.authenticate()
             image = self._legacy_captcha_image(login_page.url)
             code = self.captcha.solve(image) if image else ""
             if not code:

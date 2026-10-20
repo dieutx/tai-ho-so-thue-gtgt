@@ -13,7 +13,7 @@ from collections.abc import Callable
 
 from ..errors import NetworkError, SearchError
 from ..http import HttpClient
-from ..run_hooks import RunHooks
+from ..run_hooks import RunBudget, RunHooks
 from .models import TbPageResult, TbSummary, ThongBao, tb_periods
 from .portal import TbPortal
 from .storage import TbStore, write_tb_metadata
@@ -46,7 +46,9 @@ class TbPipeline:
         self.portal_factory = portal_factory
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.sleep = sleep
-        self.hooks = hooks or RunHooks()
+        self.hooks: RunHooks = hooks or getattr(http, "hooks", None) or RunHooks()
+        if self.hooks.budget is None:
+            self.hooks.budget = RunBudget()
         self.persist_metadata = persist_metadata
         self.target_ids = target_ids
         self.record_errors: dict[str, str] = {}
@@ -166,6 +168,8 @@ class TbPipeline:
         self.hooks.pause(delay, self.sleep)
 
     def _search_page(self, portal: TbPortal, period, page: int) -> TbPageResult:
+        if self.hooks.budget is not None:
+            self.hooks.budget.page()
         for attempt in range(1, self.settings.search_attempts + 1):
             self.hooks.check()
             result = portal.search_tb(period, page)
