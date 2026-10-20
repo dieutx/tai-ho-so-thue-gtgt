@@ -10,7 +10,6 @@ import unittest
 from pathlib import Path
 
 from openpyxl import load_workbook
-from test_export import CLASSIFICATION, MANIFEST, PARSED
 
 from gdt_tax.artifact_contracts import lineage, validate_payload
 from gdt_tax.errors import GdtError
@@ -18,6 +17,7 @@ from gdt_tax.export import build_rows, build_workbook, load_inputs, main, write_
 from gdt_tax.outcomes import quality_summary
 from gdt_tax.parser.cli import write_parsed
 from gdt_tax.spreadsheet_values import numeric_cell
+from tests.test_export import CLASSIFICATION, MANIFEST, PARSED
 
 
 def bundle():
