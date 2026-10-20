@@ -90,29 +90,7 @@ def find_first(root: etree._Element, paths, ns: dict[str, str]) -> tuple[str | N
     return None, None
 
 
-def _split_decimal(text: str) -> str:
-    """Chuẩn hóa dấu phân cách của một chuỗi số về dạng ``1234567.89``."""
-    has_comma = "," in text
-    has_dot = "." in text
-    if has_comma and has_dot:
-        # Dấu xuất hiện sau cùng là dấu thập phân (1.234,56 hoặc 1,234.56).
-        if text.rfind(",") > text.rfind("."):
-            return text.replace(".", "").replace(",", ".")
-        return text.replace(",", "")
-    if has_comma or has_dot:
-        separator = "," if has_comma else "."
-        parts = text.split(separator)
-        if len(parts) > 2:
-            # Xuất hiện nhiều lần ⇒ toàn là dấu phân cách nghìn.
-            return "".join(parts)
-        # Một lần: theo sau đúng 3 chữ số ⇒ phân cách nghìn (1.234 / 1,234).
-        if len(parts[1]) == 3 and len(parts[0]) >= 1:
-            return "".join(parts)
-        return f"{parts[0]}.{parts[1]}" if parts[1] else parts[0]
-    return text
-
-
-def normalize_number(raw: str | None) -> tuple[str | None, str | None]:
+def normalize_number(raw: str | None, numeric_format: str = 'auto') -> tuple[str | None, str | None]:
     """Chuẩn hóa số: bỏ dấu phân cách nghìn, giữ dấu trừ và phần thập phân.
 
     Trả ``(value, warning)``. Không biến giá trị lỗi thành 0 — trả ``None`` kèm
@@ -128,12 +106,40 @@ def normalize_number(raw: str | None) -> tuple[str | None, str | None]:
         sign, text = text[0], text[1:]
     if not text or not text.replace(",", "").replace(".", "").isdigit():
         return None, "PARSE_VALUE_ERROR"
-    cleaned = sign + _split_decimal(text)
+    formats = {'xml_decimal', 'vi', 'en', 'auto'}
+    if numeric_format not in formats:
+        return None, 'UNSUPPORTED_NUMBER_FORMAT'
+    if numeric_format == 'auto':
+        if '.' in text and ',' in text:
+            numeric_format = 'vi' if text.rfind(',') > text.rfind('.') else 'en'
+        elif any(text.count(separator) > 1 for separator in ('.', ',')):
+            numeric_format = 'vi' if '.' in text else 'en'
+        elif re.fullmatch(r'\d+[.,]\d{3}', text):
+            return None, 'AMBIGUOUS_NUMBER_FORMAT'
+        else:
+            numeric_format = 'vi' if ',' in text else 'xml_decimal'
+    if numeric_format == 'xml_decimal':
+        if not re.fullmatch(r'(?:\d+(?:\.\d*)?|\.\d+)', text):
+            return None, 'PARSE_VALUE_ERROR'
+        cleaned = text
+    else:
+        group, decimal = ('.', ',') if numeric_format == 'vi' else (',', '.')
+        integer, separator, fraction = text.partition(decimal)
+        if separator and (decimal in fraction or (fraction and not fraction.isdigit())):
+            return None, 'PARSE_VALUE_ERROR'
+        if group in integer:
+            pattern = r'\d{1,3}(?:' + re.escape(group) + r'\d{3})+'
+            if not re.fullmatch(pattern, integer):
+                return None, 'PARSE_VALUE_ERROR'
+        elif not integer.isdigit():
+            return None, 'PARSE_VALUE_ERROR'
+        cleaned = integer.replace(group, '') + ('.'+fraction if separator and fraction else '')
+    cleaned = sign + cleaned
     try:
-        Decimal(cleaned)
+        number = Decimal(cleaned)
     except InvalidOperation:
         return None, "PARSE_VALUE_ERROR"
-    return cleaned, None
+    return format(number, 'f'), None
 
 
 def is_zero(value: str | None) -> bool:

@@ -16,9 +16,12 @@ có tên dạng mã chỉ tiêu, không lấy cấp sâu hơn.
 from __future__ import annotations
 
 import re
+from datetime import date
+from decimal import Decimal
 
 from lxml import etree
 
+from ..dates import parse_date
 from .models import Indicator, ParsedDeclaration, Period, Taxpayer
 from .registry import FormMapping, MappingRegistry
 from .xml_reader import (
@@ -33,7 +36,7 @@ from .xml_reader import (
     parse_xml,
 )
 
-PARSER_VERSION = "declaration-parser-v3"
+PARSER_VERSION = "declaration-parser-v4"
 SCHEMA_VERSION = "parsed-declaration-v1"
 
 #: Node chứa chỉ tiêu tổng hợp trên tờ khai chính (không phải bảng kê chi tiết).
@@ -83,12 +86,15 @@ def _ns_path(path: str, has_ns: bool) -> str:
                      for segment in path.split("/"))
 
 
-def _normalize_mapped_value(raw: str, datatype: str) -> tuple[str | None, str | None]:
+def _normalize_mapped_value(raw: str, datatype: str, numeric_format: str = 'auto') -> tuple[str | None, str | None]:
     """Chuẩn hóa theo kiểu khai trong mapping, không ép nhãn text thành số."""
     if datatype == "string":
-        value = raw.strip()
-        return (value or None), None
-    return normalize_number(raw)
+        text = raw.strip()
+        return (text or None), None
+    value, warning = normalize_number(raw, numeric_format)
+    if value is not None and datatype == 'integer' and Decimal(value) != Decimal(value).to_integral_value():
+        return None, 'INTEGER_VALUE_REQUIRED'
+    return value, warning
 
 
 def _period_parts(raw: str | None, period_type: str | None) -> tuple[int | None, int | None, int | None]:
@@ -145,7 +151,7 @@ def _collect_indicators(
                 )
                 seen.add(code)
                 continue
-            value, warning = _normalize_mapped_value(raw, field.datatype)
+            value, warning = _normalize_mapped_value(raw, field.datatype, field.numeric_format)
             indicators.append(
                 Indicator(
                     code=code,
@@ -263,14 +269,32 @@ def extract_declaration(
     period_to, _ = find_first(metadata, (".//n:kyKKhaiDenNgay",), ns)
     period_year, period_month, period_quarter = _period_parts(period_raw, period_type)
 
-    mapping = registry.lookup(form_code, form_version) if registry is not None else None
-    indicators = _collect_indicators(root, mapping, ns)
     warnings: list[str] = []
+    mapping = registry.lookup(form_code, form_version) if registry is not None else None
+    as_of = None
+    if period_from:
+        try:
+            as_of = date.fromisoformat(period_from) if re.fullmatch(r'\d{4}-\d{2}-\d{2}', period_from) else parse_date(period_from)
+        except ValueError:
+            warnings.append('INVALID_PERIOD_START')
+    if mapping is not None and not mapping.matches_document(root, as_of):
+        mapping = None
+        warnings.append('MAPPING_DOCUMENT_OR_DATE_MISMATCH')
+    if registry is not None and registry.diagnostics:
+        warnings.append('MAPPING_REGISTRY_WARNINGS')
+    indicators = _collect_indicators(root, mapping, ns)
     status = "MAPPED" if mapping is not None else "NEED_MAPPING"
     if mapping is None and (form_code or form_name):
         warnings.append("MAPPING_NOT_FOUND")
     if not form_code:
         warnings.append("MISSING_FORM_CODE")
+    required_codes = {f.indicator_code for f in mapping.fields.values() if f.required} if mapping else set()
+    incomplete = any(item.warnings and (item.code in required_codes or 'MISSING_IN_XML' not in item.warnings)
+                     for item in indicators)
+    if required_codes and any(item.code in required_codes and item.value is None for item in indicators):
+        incomplete = True
+    if incomplete:
+        warnings.append('EXTRACTION_INCOMPLETE')
 
     return ParsedDeclaration(
         schema_version=SCHEMA_VERSION,
@@ -300,6 +324,10 @@ def extract_declaration(
         mapping_id=mapping.mapping_id if mapping else None,
         mapping_version=mapping.mapping_version if mapping else None,
         warnings=warnings,
+        mapping_sha256=mapping.fingerprint if mapping else None,
+        registry_sha256=registry.fingerprint if registry is not None else None,
+        extraction_complete=not incomplete if mapping else None,
+        validation_status='PARTIAL' if incomplete else 'EXTRACTED' if mapping else 'UNVERIFIED',
     )
 
 

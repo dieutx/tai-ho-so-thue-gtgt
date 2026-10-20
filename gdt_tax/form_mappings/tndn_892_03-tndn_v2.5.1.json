@@ -1,6 +1,6 @@
 {
   "mapping_id": "TNDN_892_03-TNDN_v2.5.1",
-  "mapping_version": "1",
+  "mapping_version": "2",
   "tax_type": "TNDN",
   "form_code": "892",
   "form_version": "2.5.1",
@@ -514,5 +514,6 @@
       "datatype": "decimal",
       "xpath": "CTieuTKhaiChinh/ctI2"
     }
-  }
+  },
+  "numeric_format": "xml_decimal"
 }

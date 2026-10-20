@@ -1,6 +1,6 @@
 {
   "mapping_id": "TNCN_864_05KK-TT80",
-  "mapping_version": "1",
+  "mapping_version": "2",
   "tax_type": "TNCN",
   "form_code": "864",
   "form_version": null,
@@ -146,5 +146,11 @@
       "datatype": "decimal",
       "xpath": "CTieuTKhaiChinh/ct32"
     }
-  }
+  },
+  "numeric_format": "xml_decimal",
+  "supported_versions": [
+    "2.5.1",
+    "2.8.3",
+    "2.9.3"
+  ]
 }

@@ -116,6 +116,9 @@ def classify_artifact(
 
     # Nhóm thuế: ưu tiên mapping đã đăng ký (bằng chứng mạnh), sau đó tên mẫu.
     mapping = registry.lookup(form_code, form_version) if registry is not None else None
+    if mapping is not None and not mapping.matches_profile(root, profile.get('namespace')):
+        evidence.append('mapping rejected: document schema/date not verified')
+        mapping = None
     tax_group = "UNKNOWN"
     reason: str | None = None
     if mapping is not None and mapping.tax_type:

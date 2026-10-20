@@ -1,6 +1,6 @@
 {
   "mapping_id": "TNCN_394_05KK-TT92",
-  "mapping_version": "1",
+  "mapping_version": "2",
   "tax_type": "TNCN",
   "form_code": "394",
   "form_version": null,
@@ -138,5 +138,9 @@
       "datatype": "decimal",
       "xpath": "CTieuTKhaiChinh/ct36"
     }
-  }
+  },
+  "numeric_format": "xml_decimal",
+  "supported_versions": [
+    "2.1.6"
+  ]
 }
