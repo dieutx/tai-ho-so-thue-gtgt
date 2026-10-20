@@ -68,6 +68,8 @@ class ArtifactClassification:
     acceptance_raw: str | None = None
     acceptance_source: str | None = None
     acceptance_verified_at: str | None = None
+    namespace: str | None = None
+    mapping_coverage: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -161,6 +163,16 @@ def classify_artifact(
     elif tax_group == "UNKNOWN" or role == "UNKNOWN":
         status = "UNKNOWN"
 
+    present = set(profile.get("indicator_codes") or [])
+    expected = {item.indicator_code for item in mapping.fields.values()} if mapping else set()
+    coverage = {"status": "MAPPED" if mapping else "NEED_MAPPING",
+                "mapping_id": mapping.mapping_id if mapping else None,
+                "mapping_version": mapping.mapping_version if mapping else None,
+                "present_codes": sorted(present), "expected_codes": sorted(expected),
+                "missing_codes": sorted(expected - present),
+                "unmapped_codes": sorted(present - expected),
+                "present_count": len(present), "expected_count": len(expected),
+                "missing_count": len(expected - present)}
     return ArtifactClassification(
         artifact_id=artifact_id,
         source_zip=source_zip,
@@ -174,6 +186,8 @@ def classify_artifact(
         evidence=evidence,
         conflicts=conflicts,
         reason=reason,
+        namespace=profile.get("namespace"),
+        mapping_coverage=coverage,
     )
 
 

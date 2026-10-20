@@ -58,6 +58,12 @@ INDEX_COLUMNS = (
     ("filing_type", "Loại nộp"),
     ("supplement_number", "Lần bổ sung"),
     ("status", "Trạng thái parse"),
+    ("document_role", "Vai trò tài liệu"),
+    ("file_integrity", "Toàn vẹn tệp"),
+    ("acceptance_status", "Trạng thái tiếp nhận đã kiểm chứng"),
+    ("acceptance_raw", "Trạng thái tiếp nhận nguồn"),
+    ("acceptance_source", "Nguồn trạng thái tiếp nhận"),
+    ("acceptance_verified_at", "Ngày kiểm chứng tiếp nhận"),
     ("mapping_id", "Mapping"),
     ("source_zip", "File ZIP nguồn"),
     ("source_inner_file", "File trong ZIP"),
@@ -149,6 +155,11 @@ def build_rows(
                     "parser_version", "validation_status", "extraction_complete"):
             row[key] = declaration.get(key)
         row["classification_reason"] = cls.get("reason")
+        for key in ("file_integrity", "acceptance_status"):
+            row[key] = cls.get(key) or "UNKNOWN"
+        for key in ("acceptance_raw", "acceptance_source", "acceptance_verified_at",
+                    "namespace", "mapping_coverage"):
+            row[key] = cls.get(key)
         row["rule_version"] = cls.get("rule_version") or (classification or {}).get("rule_version")
         rows.append(row)
     return rows
@@ -323,6 +334,15 @@ def build_workbook(
     _write_rows_sheet(workbook, "11_QUALITY", quality_columns,
                       [["; ".join(row.get(key) or []) if key == "warnings" else row.get(key)
                         for key in quality_columns] for row in rows])
+    coverage_columns = ["record_id", "form_code", "form_version", "namespace", "status",
+                        "mapping_id", "mapping_version", "present_count", "expected_count",
+                        "missing_count", "missing_codes", "unmapped_codes"]
+    coverage_rows = []
+    for row in rows:
+        values = {**row, **(row.get("mapping_coverage") or {})}
+        coverage_rows.append([", ".join(values.get(key) or []) if key.endswith("_codes")
+                              else values.get(key) for key in coverage_columns])
+    _write_rows_sheet(workbook, "12_MAPPING_COVERAGE", coverage_columns, coverage_rows)
     return workbook
 
 

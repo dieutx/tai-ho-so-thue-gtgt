@@ -63,7 +63,7 @@ LOGGER_NAME = "gdt_tax.inventory"
 
 #: Phiên bản schema manifest và thuật toán profile. Đổi khi thêm/bớt trường.
 INVENTORY_SCHEMA_VERSION = "artifact-inventory-v2"
-PROFILE_VERSION = "xml-profile-v4"
+PROFILE_VERSION = "xml-profile-v5"
 
 MANIFEST_NAME = "manifest_artifact.json"
 DISCOVERY_JSON = "bao_cao_discovery.json"
@@ -146,6 +146,7 @@ class XmlProfile:
     error: str | None = None
     document_root: str | None = None
     structural_markers: list[str] = field(default_factory=list)
+    indicator_codes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -307,8 +308,8 @@ def profile_xml(data: bytes) -> XmlProfile:
         return XmlProfile(status="error", error=str(error))
 
     root_name = _localname(root)
-    default_ns = etree.QName(root).namespace
-    namespaces = sorted({uri for uri in root.nsmap.values() if uri})
+    namespaces = sorted({etree.QName(node).namespace for node in root.iter()
+                         if isinstance(node.tag, str) and etree.QName(node).namespace})
 
     try:
         primary, metadata = main_scope(root)
@@ -355,7 +356,7 @@ def profile_xml(data: bytes) -> XmlProfile:
     basis_text = "\n".join(
         [
             root_name or "",
-            default_ns or "",
+            uri or "",
             _text(form_code_el) or "",
             _text(version_el) or "",
             "\n".join(signature_paths),
@@ -392,6 +393,10 @@ def profile_xml(data: bytes) -> XmlProfile:
         structure_skeleton=skeleton,
         document_root=_localname(document),
         structural_markers=structural_markers,
+        indicator_codes=sorted({_localname(node) or "" for node in primary.iter()
+                                if isinstance(node.tag, str) and etree.QName(node).namespace == uri
+                                and not in_appendix(node)
+                                and re.fullmatch(r"ct[A-Za-z]?\d+[a-z]?", _localname(node) or "")}),
     )
 
 
@@ -586,25 +591,25 @@ def scan_directory(
         raise GdtError("Tệp được chọn nằm ngoài thư mục nguồn")
     candidates = base.rglob("*") if selected_paths is None else iter(dict.fromkeys(
         base / path.resolve().relative_to(base.resolve()) for path in selected_paths))
-    files = sorted(
-        path
-        for path in candidates
-        if path.is_file() and path.name not in _DERIVED_NAMES
-    )
+    files = sorted(path for path in candidates if path.name not in _DERIVED_NAMES
+                   and _candidate_file(path))
     for path in files:
         (hooks or RunHooks()).check()
         rel_path = path.relative_to(base).as_posix()
-        stat = path.stat()
-        cached = cache.get(rel_path) if valid_cache and cache is not None else None
-        if (
-            not force
-            and cached is not None
-            and cached.size == stat.st_size
-            and abs(cached.mtime - stat.st_mtime) < 1e-6
-        ):
-            container = deepcopy(cached)
-        else:
-            container = _scan_one(path, rel_path, log)
+        try:
+            if path.is_symlink() or not path.resolve().is_relative_to(base.resolve()):
+                raise OSError("SYMLINK_OR_OUTSIDE_ROOT")
+            stat = path.stat()
+            cached = cache.get(rel_path) if valid_cache and cache is not None else None
+            if (not force and cached is not None and cached.status == "ok"
+                    and cached.size == stat.st_size
+                    and abs(cached.mtime - stat.st_mtime) < 1e-6):
+                container = deepcopy(cached)
+            else:
+                container = _scan_one(path, rel_path, log)
+        except OSError as error:
+            container = Container("", rel_path, 0, 0, None, "unknown", "error",
+                                  error=f"READ_ERROR: {error}")
         container.case = _case_view(cases[path.name]) if len(cases.get(path.name, [])) == 1 else None
         containers.append(container)
         if container.status == "error":
@@ -622,56 +627,69 @@ def scan_directory(
     )
 
 
-def _scan_one(path: Path, rel_path: str, log: logging.Logger) -> Container:
+def _candidate_file(path: Path) -> bool:
     try:
-        head = path.read_bytes()[:8] if path.stat().st_size < 8 else _read_head(path)
+        return path.is_symlink() or path.is_file()
+    except OSError:
+        # Retain the path so the per-file scan records the failed stat.
+        return True
+
+
+def _scan_one(path: Path, rel_path: str, log: logging.Logger) -> Container:
+    stat = path.stat()
+    try:
+        head = _read_head(path)
+        fmt = detect_format(head)
+        limit = MAX_XML_BYTES if fmt == "xml" else MAX_MEMBER_BYTES
+        if fmt != "zip" and stat.st_size > limit:
+            return Container("", rel_path, stat.st_size, stat.st_mtime, None, fmt,
+                             "error", error="SOURCE_TOO_LARGE")
+        digest = sha256_file(path)
     except OSError as error:
         return Container(
             container_id="",
             rel_path=rel_path,
-            size=path.stat().st_size,
-            mtime=path.stat().st_mtime,
+            size=stat.st_size,
+            mtime=stat.st_mtime,
             sha256=None,
             format="unknown",
             status="error",
             error=f"READ_ERROR: {error}",
         )
-    digest = sha256_file(path)
     if detect_format(head) == "zip":
         log.debug("Kiểm kê ZIP %s", rel_path)
         return scan_zip(path, rel_path, digest)
     try:
-        limit = MAX_XML_BYTES if detect_format(head) == "xml" else MAX_MEMBER_BYTES
-        if path.stat().st_size > limit:
-            return Container(container_id=digest, rel_path=rel_path, size=path.stat().st_size,
-                             mtime=path.stat().st_mtime, sha256=digest, format=detect_format(head),
-                             status="error", error="SOURCE_TOO_LARGE")
         with path.open("rb") as stream:
             data = stream.read(limit + 1)
         if len(data) > limit:
             return Container(container_id=digest, rel_path=rel_path, size=len(data),
-                             mtime=path.stat().st_mtime, sha256=digest, format=detect_format(head),
+                             mtime=stat.st_mtime, sha256=digest, format=detect_format(head),
                              status="error", error="SOURCE_TOO_LARGE")
     except OSError as error:
         return Container(
             container_id=digest,
             rel_path=rel_path,
-            size=path.stat().st_size,
-            mtime=path.stat().st_mtime,
+            size=stat.st_size,
+            mtime=stat.st_mtime,
             sha256=digest,
             format=detect_format(head),
             status="error",
             error=f"READ_ERROR: {error}",
         )
+    if sha256_bytes(data) != digest:
+        return Container(digest, rel_path, stat.st_size, stat.st_mtime, digest, fmt,
+                         "error", error="SOURCE_CHANGED_DURING_SCAN")
     artifact = _artifact_from_bytes(None, path.name, data)
     return Container(
         container_id=digest,
         rel_path=rel_path,
-        size=path.stat().st_size,
-        mtime=path.stat().st_mtime,
+        size=stat.st_size,
+        mtime=stat.st_mtime,
         sha256=digest,
         format=artifact.format,
         status="ok" if artifact.status == "ok" else "error",
+        error=artifact.error,
         members=[artifact],
     )
 
