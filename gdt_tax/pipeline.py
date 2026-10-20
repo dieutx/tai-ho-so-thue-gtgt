@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 
 from .auth import login, open_landing
+from .catalog import CatalogCheckpoint, flush_on_error
 from .classification import classify_record
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX, SOURCE_ETAX_LEGACY
 from .csrf import csrf_token
@@ -47,6 +48,8 @@ class Pipeline:
         if self.hooks.budget is None:
             self.hooks.budget = RunBudget()
         self.persist_metadata = persist_metadata
+        self.checkpoint = CatalogCheckpoint(write_metadata, settings.download_dir,
+                                            enabled=persist_metadata and not settings.dry_run)
         self.target_ids = target_ids
         self.account_key = account_fingerprint(settings.username)
         self.case_targets: set[str] | None = None
@@ -57,8 +60,8 @@ class Pipeline:
         self.failed_ids: set[str] = set()
         self.reused_ids: set[str] = set()
 
-    def _persist(self, records):
-        return write_metadata(self.settings.download_dir, records) if self.persist_metadata and not self.settings.dry_run else None
+    def _persist(self, records, **kwargs):
+        return self.checkpoint.persist(records, **kwargs)
 
     def _attempt_download(self, portal, record, succeeded):
         try:
@@ -70,6 +73,7 @@ class Pipeline:
             self.logger.error("Không tải được hồ sơ %s: %s", record.ma_ho_so, error)
             return False
 
+    @flush_on_error
     def run(self) -> RunSummary:
         self.record_errors = {}
         self.active_record_id = ""
@@ -123,7 +127,7 @@ class Pipeline:
             if self._search_and_download(portals[period.source], period, records, succeeded):
                 break
 
-        if self._persist(records):
+        if self._persist(records, materialize=True):
             self.logger.info(
                 "Metadata: %s, %s và %s; danh mục nhóm: phan_loai_ho_so.json",
                 METADATA_CSV, METADATA_JSON, METADATA_XLSX,
@@ -182,6 +186,7 @@ class Pipeline:
                     if result.diagnostics is None or result.diagnostics.complete:
                         return True
                 self._pause(self.settings.pause_between_records)
+            self._persist(records, force=True)
             if result.diagnostics is not None and not result.diagnostics.complete:
                 raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
             if total_pages is None and not new_ids:

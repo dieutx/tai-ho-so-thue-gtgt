@@ -39,6 +39,7 @@ from .archive_limits import (
     MAX_TOTAL_UNCOMPRESSED,
 )
 from .atomic import replace_with_retry
+from .catalog import generation, serialized_catalog
 from .classification import TAX_GROUPS
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX
 from .errors import StorageError
@@ -181,9 +182,11 @@ class ZipStore:
         return self.save(record, data)
 
 
+@serialized_catalog
 def write_metadata(
     directory: str | Path,
     records: Mapping[str, CaseRecord] | Iterable[CaseRecord],
+    *, materialize: bool = True,
 ) -> tuple[Path, Path] | None:
     """Gộp hồ sơ với JSON cũ, xuất CSV/JSON/Excel/nhóm; không ghi khi input rỗng."""
     if isinstance(records, Mapping):
@@ -206,6 +209,10 @@ def write_metadata(
             row["tep_zip"] = merged[key].get("tep_zip", "")
         merged[key] = row
     rows = [merged[key] for key in sorted(merged)]
+    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
+    generation(json_path, [], ready=False)
+    if not materialize:
+        return directory / METADATA_CSV, json_path
     fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     csv_path = directory / METADATA_CSV
     with StringIO(newline="") as stream:
@@ -220,12 +227,12 @@ def write_metadata(
             groups[group if group in groups else "UNKNOWN"].append(row)
     # JSON là danh mục chính. Mỗi file được thay thế nguyên tử; chưa có
     # transaction chung cho cả bốn danh mục (xem roadmap storage).
-    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
     _atomic_write(csv_path, csv_bytes)
     write_excel_report(directory / METADATA_XLSX, rows)
     grouped = {"schema_version": 1, "groups": groups}
     _atomic_write(directory / "phan_loai_ho_so.json",
                   json.dumps(grouped, ensure_ascii=False, indent=2).encode("utf-8"))
+    generation(json_path, [csv_path, directory / METADATA_XLSX, directory / "phan_loai_ho_so.json"], ready=True)
     return csv_path, json_path
 
 

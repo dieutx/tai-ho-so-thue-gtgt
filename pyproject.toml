@@ -56,6 +56,7 @@ gdt-parse = "gdt_tax.parser.cli:main"
 gdt-classify = "gdt_tax.classify:main"
 gdt-export = "gdt_tax.export:main"
 gdt-migrate-identity = "gdt_tax.migrate_identity:main"
+gdt-rebuild-reports = "gdt_tax.rebuild_reports:main"
 
 [tool.setuptools.packages.find]
 include = ["gdt_tax*", "desktop*"]

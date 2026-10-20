@@ -29,6 +29,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from gdt_tax.spreadsheet_values import append_row, csv_value
 
 from ..atomic import replace_with_retry
+from ..catalog import generation, serialized_catalog
 from ..constants import GNT_METADATA_CSV, GNT_METADATA_JSON, GNT_METADATA_XLSX
 from ..errors import StorageError
 from ..identity import key_from_row
@@ -114,9 +115,11 @@ class GntStore:
         return path
 
 
+@serialized_catalog
 def write_gnt_metadata(
     directory: str | Path,
     records: Mapping[str, GiayNopTien] | Iterable[GiayNopTien],
+    *, materialize: bool = True,
 ) -> tuple[Path, Path] | None:
     """Gộp GNT với JSON cũ, xuất CSV/JSON/Excel; không ghi khi input rỗng."""
     if isinstance(records, Mapping):
@@ -139,6 +142,10 @@ def write_gnt_metadata(
             row["tep_xml"] = merged[key].get("tep_xml", "")
         merged[key] = row
     rows = [merged[key] for key in sorted(merged)]
+    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
+    generation(json_path, [], ready=False)
+    if not materialize:
+        return directory / GNT_METADATA_CSV, json_path
     fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     csv_path = directory / GNT_METADATA_CSV
     with StringIO(newline="") as stream:
@@ -146,9 +153,9 @@ def write_gnt_metadata(
         writer.writeheader()
         writer.writerows({key: csv_value(value) for key, value in row.items()} for row in rows)
         csv_bytes = stream.getvalue().encode("utf-8-sig")
-    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
     _atomic_write(csv_path, csv_bytes)
     write_gnt_excel_report(directory / GNT_METADATA_XLSX, rows)
+    generation(json_path, [csv_path, directory / GNT_METADATA_XLSX], ready=True)
     return csv_path, json_path
 
 

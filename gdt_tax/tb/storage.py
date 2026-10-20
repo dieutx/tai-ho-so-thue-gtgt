@@ -28,6 +28,7 @@ from gdt_tax.spreadsheet_values import append_row, csv_value
 
 from ..archive_limits import MAX_MEMBER_BYTES
 from ..atomic import replace_with_retry
+from ..catalog import generation, serialized_catalog
 from ..constants import TB_METADATA_CSV, TB_METADATA_JSON, TB_METADATA_XLSX
 from ..errors import StorageError
 from ..identity import key_from_row
@@ -102,9 +103,11 @@ class TbStore:
         return path
 
 
+@serialized_catalog
 def write_tb_metadata(
     directory: str | Path,
     records: Mapping[str, ThongBao] | Iterable[ThongBao],
+    *, materialize: bool = True,
 ) -> tuple[Path, Path] | None:
     """Gộp thông báo với JSON cũ, xuất CSV/JSON/Excel; không ghi khi input rỗng."""
     if isinstance(records, Mapping):
@@ -127,6 +130,10 @@ def write_tb_metadata(
             row["tep_pdf"] = merged[key].get("tep_pdf", "")
         merged[key] = row
     rows = [merged[key] for key in sorted(merged)]
+    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
+    generation(json_path, [], ready=False)
+    if not materialize:
+        return directory / TB_METADATA_CSV, json_path
     fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     csv_path = directory / TB_METADATA_CSV
     with StringIO(newline="") as stream:
@@ -134,9 +141,9 @@ def write_tb_metadata(
         writer.writeheader()
         writer.writerows({key: csv_value(value) for key, value in row.items()} for row in rows)
         csv_bytes = stream.getvalue().encode("utf-8-sig")
-    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
     _atomic_write(csv_path, csv_bytes)
     write_tb_excel_report(directory / TB_METADATA_XLSX, rows)
+    generation(json_path, [csv_path, directory / TB_METADATA_XLSX], ready=True)
     return csv_path, json_path
 
 

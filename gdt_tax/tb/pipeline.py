@@ -11,6 +11,7 @@ import random
 import time
 from collections.abc import Callable
 
+from ..catalog import CatalogCheckpoint, flush_on_error
 from ..errors import NetworkError, SchemaChangedError, SearchError
 from ..http import HttpClient
 from ..identity import account_fingerprint, scope_targets
@@ -52,6 +53,8 @@ class TbPipeline:
         if self.hooks.budget is None:
             self.hooks.budget = RunBudget()
         self.persist_metadata = persist_metadata
+        self.checkpoint = CatalogCheckpoint(write_tb_metadata, settings.download_dir,
+                                            enabled=persist_metadata and not settings.dry_run)
         self.target_ids = target_ids
         self.account_key = account_fingerprint(settings.username)
         self.record_errors: dict[str, str] = {}
@@ -61,8 +64,8 @@ class TbPipeline:
         self.failed_ids: set[str] = set()
         self.reused_ids: set[str] = set()
 
-    def _persist(self, records):
-        return write_tb_metadata(self.settings.download_dir, records) if self.persist_metadata and not self.settings.dry_run else None
+    def _persist(self, records, **kwargs):
+        return self.checkpoint.persist(records, **kwargs)
 
     def _attempt_download(self, portal, record, downloaded):
         try:
@@ -73,6 +76,7 @@ class TbPipeline:
             self.record_errors[record.record_key] = str(error)
             self.logger.error("Không tải được thông báo %s: %s", record.message_id, error)
 
+    @flush_on_error
     def run(self) -> TbSummary:
         self.record_errors = {}
         self.active_record_id = ""
@@ -105,11 +109,10 @@ class TbPipeline:
             summary.periods += 1
             self.logger.info("=== Thông báo: %s ===", period.label)
             self._search_period(portal, period, records, downloaded)
-            self._persist(records)
             if self.target_ids and self.target_ids.issubset(downloaded):
                 break
 
-        if self._persist(records):
+        if self._persist(records, materialize=True):
             self.logger.info("Thông báo: đã ghi danh sách (CSV/JSON/Excel)")
         summary.discovered = len(records)
         summary.downloaded = len(downloaded)
@@ -168,6 +171,7 @@ class TbPipeline:
                     if result.diagnostics is None or result.diagnostics.complete:
                         return
                 self._pause(self.settings.pause_between_records)
+            self._persist(records, force=True)
             if result.diagnostics is not None and not result.diagnostics.complete:
                 raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
             if total_pages is None and not new_ids:
