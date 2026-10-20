@@ -26,7 +26,7 @@ from .parser.registry import MappingRegistry, load_registry
 from .run_hooks import RunHooks
 
 LOGGER_NAME = "gdt_tax.classify"
-CLASSIFY_VERSION = "content-classify-v1"
+CLASSIFY_VERSION = "content-classify-v2"
 CLASSIFICATION_NAME = "phan_loai_artifact.json"
 
 TAX_GROUPS = ("GTGT", "TNCN", "TNDN", "FCT", "MON_BAI", "TAI_NGUYEN", "OTHER", "UNKNOWN")
@@ -63,6 +63,11 @@ class ArtifactClassification:
     evidence: list[str] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
+    file_integrity: str = "UNKNOWN"
+    acceptance_status: str = "UNKNOWN"
+    acceptance_raw: str | None = None
+    acceptance_source: str | None = None
+    acceptance_verified_at: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -102,7 +107,7 @@ def classify_artifact(
 ) -> ArtifactClassification:
     """Phân loại một artifact từ profile XML (không cần đọc lại bytes)."""
     profile = xml_profile or {}
-    root = profile.get("root_element")
+    root = profile.get("document_root") or profile.get("root_element")
     form_code = profile.get("possible_form_code")
     form_version = profile.get("possible_form_version")
     form_name = profile.get("possible_form_name")
@@ -138,10 +143,17 @@ def classify_artifact(
 
     # Vai trò tài liệu từ cấu trúc: dùng các marker đã thấy trong XML thật.
     # `possible_*` không có sẵn marker node, nên suy từ root + có chỉ tiêu tổng hợp.
-    has_declaration = root in {"HSoThueDTu", "TKhai"} and form_code is not None
-    has_appendix = False
+    markers = profile.get("structural_markers")
+    has_declaration = ("CTieuTKhaiChinh" in markers or "HSoKhaiThue" in markers) if isinstance(markers, list) else root in {"HSoThueDTu", "TKhai"} and form_code is not None
+    has_appendix = any(str(marker).startswith(("PLuc", "BangKe")) for marker in (markers or [])) or str(root).startswith(("PLuc", "BangKe"))
     role = _document_role(root, has_declaration, has_appendix)
-    evidence.append(f"role từ root={root}")
+    evidence.append(f"role từ root={root}; markers={markers}")
+    if root in _NOTICE_ROOTS and has_declaration:
+        role = "UNKNOWN"
+        conflicts.append("notice root contains declaration markers")
+    if profile.get("status") == "error":
+        role = "UNKNOWN"
+        conflicts.append("XML profile invalid: " + str(profile.get("error")))
 
     status = "OK"
     if conflicts:
@@ -188,6 +200,10 @@ def classify_manifest(
                 xml_profile=artifact.get("xml"),
                 registry=registry,
             )
+            classification.file_integrity = "ERROR" if artifact.get("status") == "error" or (artifact.get("xml") or {}).get("status") == "error" else "OK" if artifact.get("status") == "ok" else "UNKNOWN"
+            classification.acceptance_raw = (container.get("case") or {}).get("trang_thai")
+            if classification.acceptance_raw:
+                classification.acceptance_source = "inventory.case.trang_thai (unverified metadata)"
             results.append(classification.to_dict())
     return results
 

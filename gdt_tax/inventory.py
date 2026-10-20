@@ -31,6 +31,7 @@ import sys
 import tempfile
 import zipfile
 from collections.abc import Iterable
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +48,7 @@ from .atomic import replace_with_retry
 from .errors import GdtError
 from .logging_setup import configure_streams
 from .outcomes import quality_summary, write_summary
+from .parser.xml_reader import in_appendix, main_scope
 from .run_hooks import RunHooks
 from .xml_policy import (
     MAX_XML_BYTES,
@@ -61,7 +63,7 @@ LOGGER_NAME = "gdt_tax.inventory"
 
 #: Phiên bản schema manifest và thuật toán profile. Đổi khi thêm/bớt trường.
 INVENTORY_SCHEMA_VERSION = "artifact-inventory-v2"
-PROFILE_VERSION = "xml-profile-v3"
+PROFILE_VERSION = "xml-profile-v4"
 
 MANIFEST_NAME = "manifest_artifact.json"
 DISCOVERY_JSON = "bao_cao_discovery.json"
@@ -142,6 +144,8 @@ class XmlProfile:
     #: Băm của tập tên phần tử (bỏ path) — ổn định hơn khi thiếu bảng tùy chọn.
     structure_skeleton: str | None = None
     error: str | None = None
+    document_root: str | None = None
+    structural_markers: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -195,6 +199,7 @@ class Manifest:
     summary: dict
     containers: list[Container]
     errors: list[dict]
+    cache_policy: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -305,6 +310,21 @@ def profile_xml(data: bytes) -> XmlProfile:
     default_ns = etree.QName(root).namespace
     namespaces = sorted({uri for uri in root.nsmap.values() if uri})
 
+    try:
+        primary, metadata = main_scope(root)
+    except XmlReadError as error:
+        return XmlProfile(status="error", error=str(error))
+    uri = etree.QName(primary).namespace
+    full_names = set(first_by_name)
+    first_by_name = {}
+    for node in metadata.iter():
+        if isinstance(node.tag, str) and etree.QName(node).namespace == uri and not in_appendix(node):
+            first_by_name.setdefault(_localname(node) or "", node)
+    document = next((node for node in (primary, *primary.iterancestors()) if _localname(node) in {"HSoThueDTu", "TBao", "TKhai"}), primary)
+    structural_markers = sorted({_localname(node) or "" for node in primary.iter()
+                                 if isinstance(node.tag, str) and etree.QName(node).namespace == uri
+                                 and (_localname(node) in {"CTieuTKhaiChinh", "HSoKhaiThue", "TBao"}
+                                      or (_localname(node) or "").startswith(("PLuc", "BangKe")))})
     form_code_el = _pick(first_by_name, ("maTKhai", "MSo", "maMauBieu"))
     form_name_el = _pick(first_by_name, ("tenTKhai", "Ten", "tenMauBieu"))
     version_el = _pick(first_by_name, ("pbanTKhaiXML", "PBan", "phienBan"))
@@ -344,12 +364,12 @@ def profile_xml(data: bytes) -> XmlProfile:
     signature = sha256_bytes(basis_text.encode("utf-8"))
     # Skeleton = tập tên phần tử (không theo path), dùng để phát hiện thay đổi
     # cấu trúc thật thay vì chỉ khác do có/không bảng tùy chọn.
-    skeleton = sha256_bytes("\n".join(sorted(first_by_name)).encode("utf-8"))
+    skeleton = sha256_bytes("\n".join(sorted(full_names)).encode("utf-8"))
 
     return XmlProfile(
         status="ok",
         root_element=root_name,
-        namespace=default_ns,
+        namespace=uri,
         namespaces=namespaces,
         possible_form_code=_text(form_code_el),
         possible_form_name=form_name,
@@ -370,6 +390,8 @@ def profile_xml(data: bytes) -> XmlProfile:
         node_count=node_count,
         structure_signature=signature,
         structure_skeleton=skeleton,
+        document_root=_localname(document),
+        structural_markers=structural_markers,
     )
 
 
@@ -557,6 +579,7 @@ def scan_directory(
     if not base.is_dir():
         raise GdtError(f"Thư mục nguồn không tồn tại hoặc không phải thư mục: {base}")
     cases = _load_cases(metadata_path) if metadata_path is not None else {}
+    valid_cache = isinstance(cache, InventoryCache) and cache.root == str(base.resolve()) and cache.policy == cache_policy()
     containers: list[Container] = []
     errors: list[dict] = []
     if selected_paths is not None and any(not path.resolve().is_relative_to(base.resolve()) for path in selected_paths):
@@ -572,17 +595,17 @@ def scan_directory(
         (hooks or RunHooks()).check()
         rel_path = path.relative_to(base).as_posix()
         stat = path.stat()
-        cached = (cache or {}).get(rel_path)
+        cached = cache.get(rel_path) if valid_cache and cache is not None else None
         if (
             not force
             and cached is not None
             and cached.size == stat.st_size
             and abs(cached.mtime - stat.st_mtime) < 1e-6
         ):
-            container = cached
+            container = deepcopy(cached)
         else:
             container = _scan_one(path, rel_path, log)
-        container.case = _case_view(cases[path.name]) if path.name in cases else None
+        container.case = _case_view(cases[path.name]) if len(cases.get(path.name, [])) == 1 else None
         containers.append(container)
         if container.status == "error":
             errors.append({"rel_path": rel_path, "error": container.error})
@@ -595,6 +618,7 @@ def scan_directory(
         summary=summary,
         containers=containers,
         errors=errors,
+        cache_policy=cache_policy(),
     )
 
 
@@ -617,7 +641,17 @@ def _scan_one(path: Path, rel_path: str, log: logging.Logger) -> Container:
         log.debug("Kiểm kê ZIP %s", rel_path)
         return scan_zip(path, rel_path, digest)
     try:
-        data = path.read_bytes()
+        limit = MAX_XML_BYTES if detect_format(head) == "xml" else MAX_MEMBER_BYTES
+        if path.stat().st_size > limit:
+            return Container(container_id=digest, rel_path=rel_path, size=path.stat().st_size,
+                             mtime=path.stat().st_mtime, sha256=digest, format=detect_format(head),
+                             status="error", error="SOURCE_TOO_LARGE")
+        with path.open("rb") as stream:
+            data = stream.read(limit + 1)
+        if len(data) > limit:
+            return Container(container_id=digest, rel_path=rel_path, size=len(data),
+                             mtime=path.stat().st_mtime, sha256=digest, format=detect_format(head),
+                             status="error", error="SOURCE_TOO_LARGE")
     except OSError as error:
         return Container(
             container_id=digest,
@@ -712,6 +746,19 @@ def write_manifest(manifest: Manifest, output_dir: str | Path, name: str = MANIF
     return target
 
 
+class InventoryCache(dict[str, Container]):
+    def __init__(self, root: str, policy: str):
+        super().__init__()
+        self.root, self.policy = root, policy
+
+
+def cache_policy() -> str:
+    values = [PROFILE_VERSION, MAX_XML_BYTES, MAX_XML_DEPTH, MAX_XML_NODES,
+              MAX_MEMBER_BYTES, MAX_MEMBERS, MAX_TOTAL_UNCOMPRESSED, MAX_COMPRESSION_RATIO,
+              MAX_STRUCTURE_PATHS, MAX_SIGNATURE_PATHS]
+    return sha256_bytes(json.dumps(values).encode("utf-8"))
+
+
 def load_cache(path: str | Path) -> dict[str, Container]:
     """Nạp manifest cũ để tái sử dụng kết quả (incremental theo path+size+mtime)."""
     source = Path(path)
@@ -723,7 +770,11 @@ def load_cache(path: str | Path) -> dict[str, Container]:
         return {}
     if not isinstance(payload, dict) or payload.get("schema_version") != INVENTORY_SCHEMA_VERSION:
         return {}
-    cache: dict[str, Container] = {}
+    if payload.get("profile_version") != PROFILE_VERSION or payload.get("cache_policy") != cache_policy() or not isinstance(payload.get("root"), str):
+        return {}
+    if not isinstance(payload.get("containers"), list):
+        return {}
+    cache = InventoryCache(payload["root"], payload["cache_policy"])
     for raw in payload.get("containers", []):
         if not isinstance(raw, dict) or not isinstance(raw.get("rel_path"), str):
             continue
@@ -834,7 +885,8 @@ def build_discovery(manifest: Manifest) -> dict:
             }
         )
     acceptance_values = summary.get("acceptance_status_values", {})
-    has_acceptance = any("chấp nhận" in key.lower() for key in acceptance_values)
+    # Portal metadata is an unverified hint, not linked legal acceptance evidence.
+    has_acceptance = False
     report = {
         "schema_version": manifest.schema_version,
         "profile_version": manifest.profile_version,
@@ -844,6 +896,8 @@ def build_discovery(manifest: Manifest) -> dict:
         "structure_signatures": representatives,
         "ambiguities": ambiguities,
         "acceptance_evidence_available": has_acceptance,
+        "metadata_status_available": bool(acceptance_values),
+        "acceptance_policy": "UNKNOWN until independently verified evidence is linked to artifact",
         "open_questions": _open_questions(),
     }
     return report
