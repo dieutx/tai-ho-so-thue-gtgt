@@ -13,6 +13,7 @@ from gdt_tax.constants import LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from gdt_tax.errors import LegacyPageError
 from gdt_tax.gnt.portal import GntPortal
 from gdt_tax.http import HttpClient
+from gdt_tax.identity import RecordKey, account_fingerprint
 from gdt_tax.legacy_session import LegacySessionState, SessionExpired
 from gdt_tax.portals import build_portals
 from gdt_tax.portals.etax_legacy import EtaxLegacyPortal
@@ -172,6 +173,7 @@ class ETaxSessionManager:
         logger = logger or logging.getLogger("gdt_tax.desktop")
         with self.lock:
             hooks.check()
+            config = config.normalized_selection()
             self.set_account(config.username, config.password)
             settings = config.settings()
             if config.mode == "tax" and config.dvc and settings.from_date < settings.etax_cutoff <= settings.to_date:
@@ -233,12 +235,16 @@ class ETaxSessionManager:
                  replace(config, from_date=settings.etax_cutoff.strftime("%d/%m/%Y"))]
         if config.target_ids is not None:
             selected = set(config.target_ids)
-            legacy_ids = {str(row.get("ma_ho_so")) for row in config.input_rows
-                          if row.get("nguon") == SOURCE_ETAX_LEGACY and row.get("ma_ho_so") in selected}
+            legacy_ids = {token for token in selected if RecordKey.parse(token).source == SOURCE_ETAX_LEGACY}
             dvc_ids = selected - legacy_ids
             parts = [replace(part, target_ids=tuple(sorted(legacy_ids if not part.dvc else dvc_ids)))
                      for part in parts if (legacy_ids if not part.dvc else dvc_ids)]
+        if config.case_id:
+            source = RecordKey.parse(config.case_id).source
+            parts = [part for part in parts if (source == SOURCE_ETAX_LEGACY) == (not part.dvc)]
         result = JobResult("SUCCESS", "Chỉ tra cứu" if config.dry_run else "Đã hoàn tất", config.output)
+        result.account_key = account_fingerprint(config.username)
+        result.date_range = (config.from_date, config.to_date)
         outcomes = []
         for part in parts:
             try:

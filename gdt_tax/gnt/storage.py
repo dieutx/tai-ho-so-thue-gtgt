@@ -31,6 +31,7 @@ from gdt_tax.spreadsheet_values import append_row, csv_value
 from ..atomic import replace_with_retry
 from ..constants import GNT_METADATA_CSV, GNT_METADATA_JSON, GNT_METADATA_XLSX
 from ..errors import StorageError
+from ..identity import key_from_row
 from ..integrity import (
     candidate_paths,
     matches_evidence,
@@ -129,9 +130,9 @@ def write_gnt_metadata(
     directory.mkdir(parents=True, exist_ok=True)
     json_path = directory / GNT_METADATA_JSON
     previous = _metadata_rows(json_path)
-    merged = {row["ctu_id"]: row for row in previous}
+    merged = {key_from_row(row, "GNT").serialize(): row for row in previous}
     for record in ordered:
-        key = record.ctu_id
+        key = record.record_key
         row = {**merged.get(key, {}), **record.to_dict()}
         # Tra cứu/dry-run không được xoá tham chiếu file đã tải lần trước.
         if not record.tep_xml and key in merged:

@@ -29,7 +29,7 @@ from gdt_tax.constants import (
 )
 from gdt_tax.errors import LoginError, SearchError
 from gdt_tax.headers import PROFILE_BROWSER, PROFILE_MINIMAL
-from gdt_tax.naming import zip_filename
+from gdt_tax.identity import account_fingerprint
 from gdt_tax.parsing import parse_records
 from gdt_tax.pipeline import Pipeline
 from gdt_tax.storage import ZipStore
@@ -198,7 +198,8 @@ class EtaxFlowTests(PipelineTestCase):
 
     def test_bo_qua_zip_da_tai(self):
         for record in parse_records(fixture("etax_results.html"), "ETAX"):
-            (self.directory / zip_filename(record)).write_bytes(sample_zip())
+            record.account_key = account_fingerprint(self.settings_for().username)
+            ZipStore(self.directory).save(record, sample_zip())
 
         summary, http = self.run_pipeline(make_handler(search=etax_search))
         self.assertEqual(summary.downloaded, 2)
@@ -212,7 +213,7 @@ class EtaxFlowTests(PipelineTestCase):
         self.assertEqual(summary.downloaded, 0)
         self.assertFalse(summary.complete)
         self.assertEqual(list(self.directory.glob("*.zip")), [])
-        self.assertTrue((self.directory / "danh_sach_ho_so.json").is_file())
+        self.assertFalse((self.directory / "danh_sach_ho_so.json").is_file())
 
     def test_case_id_chi_tai_mot_ho_so(self):
         settings = self.settings_for(case_id="11320250292528963")

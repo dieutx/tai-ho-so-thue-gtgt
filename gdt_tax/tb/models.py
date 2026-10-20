@@ -11,6 +11,7 @@ from datetime import timedelta
 
 from ..constants import SOURCE_TB
 from ..dates import parse_date
+from ..identity import IDENTITY_VERSION, UNKNOWN, RecordKey
 from ..models import SearchPeriod
 from ..table_contracts import ParseDiagnostics
 
@@ -33,10 +34,19 @@ class ThongBao:
     co_phan_hoi_ra_soat: str = ""
     #: Tên file PDF đã tải (rỗng nếu chưa tải).
     tep_pdf: str = ""
+    account_key: str = UNKNOWN
+
+    @property
+    def key(self) -> RecordKey:
+        return RecordKey(self.account_key, SOURCE_TB, "NOTICE", self.message_id)
+
+    @property
+    def record_key(self) -> str:
+        return self.key.serialize()
 
     def to_dict(self) -> dict[str, str]:
         """Chuyển sang ``dict`` để ghi CSV/JSON/Excel."""
-        return asdict(self)
+        return {**asdict(self), "record_key": self.record_key, "identity_version": IDENTITY_VERSION}
 
 
 @dataclass
@@ -57,10 +67,11 @@ class TbSummary:
     downloaded: int = 0
     periods: int = 0
     dry_run: bool = False
+    expected: int | None = None
 
     @property
     def complete(self) -> bool:
-        return self.downloaded == self.discovered
+        return self.downloaded == (self.discovered if self.expected is None else self.expected)
 
 
 def tb_periods(start, end, max_days: int) -> list[SearchPeriod]:

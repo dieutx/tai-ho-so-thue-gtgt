@@ -1,10 +1,9 @@
 """Adapters call the same pipelines/functions as the seven CLI entrypoints."""
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +13,7 @@ from gdt_tax.errors import LegacyPageError, SchemaChangedError, StorageError
 from gdt_tax.gnt.pipeline import GntPipeline
 from gdt_tax.gnt.storage import write_gnt_metadata
 from gdt_tax.http import HttpClient
+from gdt_tax.identity import account_fingerprint, scope_targets
 from gdt_tax.legacy_session import SessionExpired
 from gdt_tax.parser.cli import PARSED_NAME, parse_manifest, write_parsed
 from gdt_tax.parser.registry import load_registry
@@ -24,7 +24,7 @@ from gdt_tax.storage import write_metadata
 from gdt_tax.tb.pipeline import TbPipeline
 from gdt_tax.tb.storage import write_tb_metadata
 
-from .documents import KINDS, verify_rows
+from .documents import KINDS, document_id, verify_rows
 from .errors import storage_message
 from .file_store import DesktopZipStore
 from .settings_store import Preferences, check_writable_directory
@@ -75,6 +75,20 @@ class RunConfig:
             log_file="", http_dump_dir="", captcha_plugins="", captcha_options={},
         )
 
+    def normalized_selection(self) -> RunConfig:
+        if self.mode not in ONLINE or self.target_ids is None and not self.case_id:
+            return self
+        settings = self.settings()
+        sources = ({period.source for period in settings.periods() if settings.source_enabled(period.source)}
+                   if self.mode == "tax" else {"GNT"} if self.mode == "gnt" else {"TB"})
+        kind = {"tax": "DECLARATION", "gnt": "GNT", "notice": "NOTICE"}[self.mode]
+        account = account_fingerprint(self.username)
+        targets = (tuple(sorted(scope_targets(self.target_ids, account_key=account, sources=sources,
+                                              document_kind=kind))) if self.target_ids is not None else None)
+        case_id = (next(iter(scope_targets([self.case_id], account_key=account, sources=sources,
+                                           document_kind=kind))) if self.case_id else "")
+        return replace(self, target_ids=targets, case_id=case_id)
+
     def validate(self) -> None:
         if self.mode not in {"tax", "gnt", "notice", "offline", "login", "batch", "import", "saved"}:
             raise ValueError("Chế độ không hợp lệ")
@@ -102,6 +116,7 @@ class RunConfig:
                 raise ValueError("Thư mục mapping tùy chỉnh không tồn tại")
         elif self.mode != "saved":
             self.settings()
+            self.normalized_selection()
         if self.mode in {"login", "saved"}:
             return
         if self.dry_run and self.mode in ONLINE:
@@ -161,7 +176,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
         summary = pipeline.run()
         complete = summary.search_complete if config.mode == "tax" and config.dry_run else (True if config.dry_run else summary.complete)
         if config.target_ids is not None:
-            complete = set(config.target_ids).issubset(pipeline.downloaded_ids)
+            complete = set(pipeline.target_ids or ()).issubset(pipeline.downloaded_ids)
         result.skipped = getattr(summary, "skipped_periods", 0)
         result.state = "SUCCESS" if complete else "PARTIAL"
         result.message = "Tra cứu hoàn tất" if config.dry_run else "Thành công"
@@ -205,7 +220,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
                     reused_ids=pipeline.reused_ids)
                 _, id_field, file_field, *_ = KINDS[config.mode]
                 for row in verified_rows:
-                    setattr(pipeline.records[row[id_field]], file_field, row.get(file_field, ""))
+                    setattr(pipeline.records[document_id(config.mode, row)], file_field, row.get(file_field, ""))
                 try:
                     if not config.dry_run:
                         writer(config.output, pipeline.records)
@@ -221,14 +236,14 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     result.rows = verified_rows
     result.discovered = len(result.rows)
     result.downloaded = len(pipeline.downloaded_ids)
-    missing = set(config.target_ids or ()) - pipeline.records.keys()
+    missing = set(pipeline.target_ids or ()) - pipeline.records.keys()
     result.errors = max(result.errors, len(pipeline.failed_ids), int(result.state == "ERROR")) + len(missing)
     result.reused = len(pipeline.reused_ids)
-    result.account_key = hashlib.sha256(config.username.encode()).hexdigest()
+    result.account_key = account_fingerprint(config.username)
     result.date_range = (config.from_date, config.to_date)
     result.operation = config.action or ('query' if config.dry_run else 'query_and_download')
     result.requested = len(config.target_ids) if config.target_ids is not None else (0 if config.dry_run else result.discovered)
-    result.issues = [{"document_id": str(row.get(KINDS[config.mode][1], "")), "message": row["_error_message"]}
+    result.issues = [{"document_id": document_id(config.mode, row), "message": row["_error_message"]}
                      for row in result.rows if row.get("_error_message")]
     result.issues.extend({"document_id": key, "message": "Hồ sơ không còn trong kết quả tra cứu của kỳ đã chọn; chưa tải tệp."} for key in sorted(missing))
     if result.state in {"ERROR", "PARTIAL"} and not result.issues:

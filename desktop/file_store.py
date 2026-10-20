@@ -11,7 +11,7 @@ class DesktopZipStore(ZipStore):
 
     def find_existing(self, record):
         row = record.to_dict()
-        prior = self.known.get(record.ma_ho_so, {})
+        prior = self.known.get(record.record_key, {})
         field = KINDS['tax'][2]
         if prior.get(field):
             row[field] = prior[field]

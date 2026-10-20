@@ -111,6 +111,8 @@ def key_from_row(row: Mapping[str, Any], document_kind: str) -> RecordKey:
     """Read old metadata as UNKNOWN ownership, never assign the active account."""
     if document_kind not in _FIELDS:
         raise IdentityError("RECORD_KIND_UNSUPPORTED")
+    if row.get("identity_version") not in (None, IDENTITY_VERSION):
+        raise IdentityError("IDENTITY_SCHEMA_UNSUPPORTED")
     id_field, default_source = _FIELDS[document_kind]
     key = RecordKey.parse(row["record_key"]) if row.get("record_key") else None
     account = row.get("account_key", key.account_key if key else UNKNOWN)

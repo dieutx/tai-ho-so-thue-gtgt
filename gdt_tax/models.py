@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import date
 
+from .identity import IDENTITY_VERSION, UNKNOWN, RecordKey
 from .table_contracts import ParseDiagnostics
 
 
@@ -34,10 +35,19 @@ class CaseRecord:
     loai_tai_lieu: str = "UNKNOWN"
     quy_tac_phan_loai: str = ""
     ly_do_phan_loai: str = ""
+    account_key: str = UNKNOWN
+
+    @property
+    def key(self) -> RecordKey:
+        return RecordKey(self.account_key, self.nguon, "DECLARATION", self.ma_ho_so)
+
+    @property
+    def record_key(self) -> str:
+        return self.key.serialize()
 
     def to_dict(self) -> dict[str, str]:
         """Chuyển sang ``dict`` để ghi CSV/JSON."""
-        return asdict(self)
+        return {**asdict(self), "record_key": self.record_key, "identity_version": IDENTITY_VERSION}
 
 
 @dataclass(frozen=True)

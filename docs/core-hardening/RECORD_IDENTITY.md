@@ -1,8 +1,8 @@
 # Record identity contract (CORE-03 A)
 
-This contract-only increment is separate from pipeline/storage/GUI integration
-and migration. **CORE-03 is not complete.** No existing runtime behavior changes
-until those consumers adopt it.
+The contract increment (A) defines identity; integration (B) applies it to online
+pipelines, catalogs, attachments and desktop selection. **CORE-03 is not complete**
+until directory ownership and explicit legacy migration (C) are implemented.
 
 RecordKey consists of account_key, source, document_kind and remote_id. Canonical
 UTF-8 JSON arrays are encoded as URL-safe base64 with the version prefix `rk1.`;
@@ -30,9 +30,18 @@ loai_tra_cuu/loai_tbao dimensions, with prefix `ak1.`. Human title and sent time
 are not identity, so a title change does not create a new attachment. Each
 dimension is kept even when two routes happen to return equal bytes.
 
-Next increments: bind authenticated records and pipeline/result/GUI/catalog keys;
-enforce directory ownership and full source/hash resume evidence; add explicit
-legacy catalog migration with unknown ownership and rollback instructions. Until
-then the legacy content-only primary resume limitation documented in !11 remains.
+Online records are bound to the authenticated username fingerprint. Pipeline and
+GUI maps, success/failure sets, targets and catalog merges use serialized RecordKey;
+portal requests and human labels keep the remote ID. Known-account resume requires
+matching source/account/key and validated size/hash evidence; unowned legacy files
+are preserved and are never adopted as a successful authenticated download. A
+selected GUI row with UNKNOWN or another account requires a new query. Dry-run
+does not write catalogs or ownership evidence.
+
+Next increment: enforce directory ownership and add explicit legacy catalog
+migration with unknown ownership and rollback instructions. Existing metadata
+continues to read as UNKNOWN; it is retained separately when new owned rows are
+merged. Directory isolation is still pending, so do not treat this as closure of
+CORE-03 or CORE-13.
 Synthetic tests cover roundtrip, delimiter/Unicode preservation, collisions,
 malformed versions, migration idempotency/conflicts and target scoping.

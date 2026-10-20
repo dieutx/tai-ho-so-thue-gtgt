@@ -14,6 +14,7 @@ from .csrf import csrf_token
 from .dates import format_date
 from .errors import LoginError, NetworkError, SchemaChangedError, SearchError
 from .http import HttpClient
+from .identity import account_fingerprint, scope_targets
 from .models import CaseRecord, PageResult, RunSummary
 from .portals import build_portals
 from .run_hooks import RunBudget, RunHooks
@@ -46,6 +47,8 @@ class Pipeline:
             self.hooks.budget = RunBudget()
         self.persist_metadata = persist_metadata
         self.target_ids = target_ids
+        self.account_key = account_fingerprint(settings.username)
+        self.case_targets: set[str] | None = None
         self.record_errors: dict[str, str] = {}
         self.active_record_id = ""
         self.records: dict = {}
@@ -54,7 +57,7 @@ class Pipeline:
         self.reused_ids: set[str] = set()
 
     def _persist(self, records):
-        return write_metadata(self.settings.download_dir, records) if self.persist_metadata else None
+        return write_metadata(self.settings.download_dir, records) if self.persist_metadata and not self.settings.dry_run else None
 
     def _attempt_download(self, portal, record, succeeded):
         try:
@@ -62,11 +65,14 @@ class Pipeline:
         except NetworkError as error:
             if self.target_ids is None:
                 raise
-            self.record_errors[record.ma_ho_so] = str(error)
+            self.record_errors[record.record_key] = str(error)
             self.logger.error("Không tải được hồ sơ %s: %s", record.ma_ho_so, error)
             return False
 
     def run(self) -> RunSummary:
+        self.record_errors = {}
+        self.active_record_id = ""
+        self.case_targets = None
         self.records = {}
         self.downloaded_ids = set()
         self.failed_ids = set()
@@ -89,6 +95,13 @@ class Pipeline:
                     period.source, period.label,
                 )
 
+        sources = {period.source for period in active}
+        if self.target_ids is not None:
+            self.target_ids = scope_targets(self.target_ids, account_key=self.account_key,
+                                           sources=sources, document_kind="DECLARATION")
+        if self.settings.case_id and sources:
+            self.case_targets = scope_targets([self.settings.case_id], account_key=self.account_key,
+                                             sources=sources, document_kind="DECLARATION")
         # Legacy có phiên DSE riêng. Không phụ thuộc đăng nhập hay CSRF của DVC.
         csrf = ""
         if any(period.source != SOURCE_ETAX_LEGACY for period in active):
@@ -114,7 +127,7 @@ class Pipeline:
             )
         summary.downloaded = len(succeeded)
         summary.discovered = len(records)
-        summary.expected = 1 if self.settings.case_id else len(records)
+        summary.expected = len(self.target_ids) if self.target_ids is not None else 1 if self.settings.case_id else len(records)
         return summary
 
     def _search_and_download(self, portal, period, records, succeeded) -> bool:
@@ -142,20 +155,23 @@ class Pipeline:
             seen_ids.update(page_ids)
             for index, found in enumerate(result.records, start=1):
                 self.hooks.check()
-                if self.settings.case_id and found.ma_ho_so != self.settings.case_id:
+                if found.nguon != period.source:
+                    raise SchemaChangedError("RECORD_SOURCE_OUTSIDE_PLAN")
+                found.account_key = self.account_key
+                if self.case_targets is not None and found.record_key not in self.case_targets:
                     continue
-                record = records.setdefault(found.ma_ho_so, classify_record(found))
+                record = records.setdefault(found.record_key, classify_record(found))
                 self.logger.info("TẢI trang=%s mục=%s/%s: %s", page, index, len(result.records), record.ma_ho_so)
-                self.active_record_id = record.ma_ho_so
-                targeted = self.target_ids is None or record.ma_ho_so in self.target_ids
+                self.active_record_id = record.record_key
+                targeted = self.target_ids is None or record.record_key in self.target_ids
                 success = self._attempt_download(portal, record, succeeded) if targeted else False
                 if not self.settings.dry_run and targeted:
-                    if record.ma_ho_so in succeeded:
-                        self.failed_ids.discard(record.ma_ho_so)
+                    if record.record_key in succeeded:
+                        self.failed_ids.discard(record.record_key)
                     else:
-                        self.failed_ids.add(record.ma_ho_so)
+                        self.failed_ids.add(record.record_key)
                 self._persist(records)
-                self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(succeeded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.ma_ho_so in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.ma_ho_so in succeeded else "Lỗi tải" if targeted else "Chưa tải")
+                self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(succeeded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.record_key in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.record_key in succeeded else "Lỗi tải" if targeted else "Chưa tải")
                 if self.settings.case_id and (success or self.settings.dry_run):
                     if result.diagnostics is None or result.diagnostics.complete:
                         return True
@@ -205,26 +221,26 @@ class Pipeline:
         if self.settings.dry_run:
             self.logger.info("Dry-run: bỏ qua tải %s", record.ma_ho_so)
             return False
-        if record.ma_ho_so in succeeded:
+        if record.record_key in succeeded:
             return True
         if self.store.find_existing(record):
-            self.reused_ids.add(record.ma_ho_so)
-            succeeded.add(record.ma_ho_so)
+            self.reused_ids.add(record.record_key)
+            succeeded.add(record.record_key)
             return True
         detail_url, csrf = portal.fetch_detail_csrf(record)
         if not csrf and not getattr(portal, "csrf_optional", False):
-            self.record_errors[record.ma_ho_so] = "Cổng không trả mã xác thực CSRF cho tệp. Kiểm tra phiên đăng nhập rồi thử lại."
+            self.record_errors[record.record_key] = "Cổng không trả mã xác thực CSRF cho tệp. Kiểm tra phiên đăng nhập rồi thử lại."
             self.logger.error("LỖI TẢI: không lấy được CSRF token cho %s", record.ma_ho_so)
             return False
         response = portal.download(record, detail_url, csrf)
         if response is None or response.status_code != 200:
-            self.record_errors[record.ma_ho_so] = f"Cổng trả HTTP {getattr(response, 'status_code', 'không có phản hồi')} khi tải tệp. Kiểm tra kết nối/phiên rồi thử lại."
+            self.record_errors[record.record_key] = f"Cổng trả HTTP {getattr(response, 'status_code', 'không có phản hồi')} khi tải tệp. Kiểm tra kết nối/phiên rồi thử lại."
             self.logger.error("LỖI TẢI: %s HTTP=%s", record.ma_ho_so, getattr(response, "status_code", "-"))
             return False
         if self.store.save_from_response(record, response) is None:
-            self.record_errors[record.ma_ho_so] = "Dữ liệu trả về không phải ZIP hoàn chỉnh/hợp lệ. Tệp chưa được lưu; có thể phiên đã hết hạn."
+            self.record_errors[record.record_key] = "Dữ liệu trả về không phải ZIP hoàn chỉnh/hợp lệ. Tệp chưa được lưu; có thể phiên đã hết hạn."
             return False
-        succeeded.add(record.ma_ho_so)
+        succeeded.add(record.record_key)
         return True
 
 

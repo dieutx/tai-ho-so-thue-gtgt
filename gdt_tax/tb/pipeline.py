@@ -13,6 +13,7 @@ from collections.abc import Callable
 
 from ..errors import NetworkError, SchemaChangedError, SearchError
 from ..http import HttpClient
+from ..identity import account_fingerprint, scope_targets
 from ..run_hooks import RunBudget, RunHooks
 from .models import TbPageResult, TbSummary, ThongBao, tb_periods
 from .portal import TbPortal
@@ -51,6 +52,7 @@ class TbPipeline:
             self.hooks.budget = RunBudget()
         self.persist_metadata = persist_metadata
         self.target_ids = target_ids
+        self.account_key = account_fingerprint(settings.username)
         self.record_errors: dict[str, str] = {}
         self.active_record_id = ""
         self.records: dict = {}
@@ -59,7 +61,7 @@ class TbPipeline:
         self.reused_ids: set[str] = set()
 
     def _persist(self, records):
-        return write_tb_metadata(self.settings.download_dir, records) if self.persist_metadata else None
+        return write_tb_metadata(self.settings.download_dir, records) if self.persist_metadata and not self.settings.dry_run else None
 
     def _attempt_download(self, portal, record, downloaded):
         try:
@@ -67,14 +69,19 @@ class TbPipeline:
         except NetworkError as error:
             if self.target_ids is None:
                 raise
-            self.record_errors[record.message_id] = str(error)
+            self.record_errors[record.record_key] = str(error)
             self.logger.error("Không tải được thông báo %s: %s", record.message_id, error)
 
     def run(self) -> TbSummary:
+        self.record_errors = {}
+        self.active_record_id = ""
         self.records = {}
         self.downloaded_ids = set()
         self.failed_ids = set()
         self.reused_ids = set()
+        if self.target_ids is not None:
+            self.target_ids = scope_targets(self.target_ids, account_key=self.account_key,
+                                           sources=["TB"], document_kind="NOTICE")
         summary = TbSummary(dry_run=self.settings.dry_run)
         periods = tb_periods(
             self.settings.from_date, self.settings.to_date, self.settings.max_days_per_search
@@ -104,6 +111,7 @@ class TbPipeline:
             self.logger.info("Thông báo: đã ghi danh sách (CSV/JSON/Excel)")
         summary.discovered = len(records)
         summary.downloaded = len(downloaded)
+        summary.expected = len(self.target_ids) if self.target_ids is not None else len(records)
         return summary
 
     def _search_period(
@@ -137,22 +145,23 @@ class TbPipeline:
             seen_ids.update(page_ids)
             for index, found in enumerate(result.records, start=1):
                 self.hooks.check()
-                record = records.setdefault(found.message_id, found)
+                found.account_key = self.account_key
+                record = records.setdefault(found.record_key, found)
                 self.logger.info(
                     "TẢI trang=%s mục=%s/%s: %s",
                     page, index, len(result.records), found.so_thong_bao or found.message_id,
                 )
-                self.active_record_id = record.message_id
-                targeted = self.target_ids is None or record.message_id in self.target_ids
+                self.active_record_id = record.record_key
+                targeted = self.target_ids is None or record.record_key in self.target_ids
                 if targeted:
                     self._attempt_download(portal, record, downloaded)
                 if not self.settings.dry_run and targeted:
-                    if record.message_id in downloaded:
-                        self.failed_ids.discard(record.message_id)
+                    if record.record_key in downloaded:
+                        self.failed_ids.discard(record.record_key)
                     else:
-                        self.failed_ids.add(record.message_id)
+                        self.failed_ids.add(record.record_key)
                 self._persist(records)
-                self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(downloaded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.message_id in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.message_id in downloaded else "Lỗi tải" if targeted else "Chưa tải")
+                self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(downloaded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.record_key in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.record_key in downloaded else "Lỗi tải" if targeted else "Chưa tải")
                 if self.target_ids and self.target_ids.issubset(downloaded):
                     if result.diagnostics is None or result.diagnostics.complete:
                         return
@@ -199,21 +208,21 @@ class TbPipeline:
         if self.settings.dry_run:
             self.logger.info("Dry-run: bỏ qua tải thông báo %s", record.so_thong_bao or record.message_id)
             return
-        if record.message_id in downloaded:
+        if record.record_key in downloaded:
             return
         if self.store.find_existing(record):
-            self.reused_ids.add(record.message_id)
-            downloaded.add(record.message_id)
+            self.reused_ids.add(record.record_key)
+            downloaded.add(record.record_key)
             return
         data = portal.download_tb(record)
         if data is None:
-            self.record_errors[record.message_id] = getattr(portal, "last_download_error", "") or "Cổng không trả PDF hoàn chỉnh. Kiểm tra kết nối/phiên đăng nhập rồi thử lại."
+            self.record_errors[record.record_key] = getattr(portal, "last_download_error", "") or "Cổng không trả PDF hoàn chỉnh. Kiểm tra kết nối/phiên đăng nhập rồi thử lại."
             self.logger.error("LỖI TẢI thông báo: %s", record.so_thong_bao or record.message_id)
             return
         if self.store.save(record, data) is not None:
-            downloaded.add(record.message_id)
+            downloaded.add(record.record_key)
         else:
-            self.record_errors[record.message_id] = "Dữ liệu nhận được không phải PDF hoàn chỉnh/hợp lệ; tệp chưa được lưu."
+            self.record_errors[record.record_key] = "Dữ liệu nhận được không phải PDF hoàn chỉnh/hợp lệ; tệp chưa được lưu."
 
 
 __all__ = ["TbPipeline"]

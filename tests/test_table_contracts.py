@@ -59,7 +59,10 @@ class TableContractTests(unittest.TestCase):
         for name, expected in GOLDEN["cases"].items():
             with self.subTest(name=name):
                 parsed = read(expected["source"], fixture(name))
-                self.assertEqual([row.to_dict() for row in parsed.records], expected["rows"])
+                self.assertEqual(len(parsed.records), len(expected["rows"]))
+                # New identity metadata is additive; every pre-contract field stays exact.
+                self.assertEqual([{key: row.to_dict()[key] for key in old}
+                                  for row, old in zip(parsed.records, expected["rows"], strict=True)], expected["rows"])
 
     def test_named_column_permutations_and_added_columns_preserve_fields(self):
         for source in CASES:

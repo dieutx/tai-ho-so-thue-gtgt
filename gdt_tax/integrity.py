@@ -147,6 +147,7 @@ def safe_destination(path: Path, data: bytes, source: dict) -> Path:
 
 def matches_evidence(path: Path, data: bytes, source: dict, *, require: bool = False) -> bool:
     evidence = evidence_path(path)
+    require = require or source.get("account_key", "UNKNOWN") != "UNKNOWN"
     if not evidence.exists():
         # Compatibility for legacy files: still require content validation by caller.
         # Account/source ownership is migrated separately by CORE-03.
@@ -175,7 +176,8 @@ def candidate_paths(preferred: Path, recorded_name: str = "") -> list[Path]:
 def source_reference(record, kind: str) -> dict:
     remote_id = getattr(record, "ma_ho_so", None) or getattr(record, "ctu_id", None) or getattr(record, "message_id", "")
     return {"source": getattr(record, "nguon", {"gnt": "GNT", "pdf": "TB"}.get(kind, "UNKNOWN")),
-            "kind": kind, "remote_id": remote_id, "account_key": getattr(record, "account_key", "UNKNOWN")}
+            "kind": kind, "remote_id": remote_id, "account_key": getattr(record, "account_key", "UNKNOWN"),
+            "record_key": getattr(record, "record_key", "")}
 
 
 def document_limit(kind: str) -> int:

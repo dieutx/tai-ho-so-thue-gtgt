@@ -28,6 +28,7 @@ from bs4 import BeautifulSoup, Tag
 
 from .atomic import replace_with_retry
 from .errors import StorageError
+from .identity import UNKNOWN, AttachmentKey, RecordKey
 from .integrity import (
     matches_evidence,
     read_bounded,
@@ -63,6 +64,10 @@ class DvcNotice:
     is_tdt: bool = False
     loai_tra_cuu: str = ""
     loai_tbao: str = ""
+
+    def key(self, parent: RecordKey) -> AttachmentKey:
+        return AttachmentKey(parent, "tdt" if self.is_tdt else "dvc", self.id,
+                             self.loai_tra_cuu, self.loai_tbao)
 
     @property
     def loai(self) -> str:
@@ -162,12 +167,12 @@ def _notice_text(row) -> tuple[str, str]:
     return re.sub(r"(?i)^v/v\s*:\s*", "", title).strip(), sent_at
 
 
-def notice_filename(case_id: str, notice: DvcNotice, extension: str) -> str:
+def notice_filename(case_id: str | RecordKey, notice: DvcNotice, extension: str) -> str:
     """Tên tệp ổn định, bắt đầu bằng ``messageId`` để lần sau bỏ qua tệp đã có."""
     parts = [
         safe_filename_part(notice.id, 50),
         safe_filename_part(notice.loai, 30),
-        safe_filename_part(case_id, 40),
+        safe_filename_part(_parent_key(case_id).remote_id, 40),
     ]
     if notice.title:
         parts.append(safe_filename_part(notice.title, 60))
@@ -223,11 +228,17 @@ def validate_notice(data: bytes):
     return validate_xml(data, "notice")
 
 
-def notice_source(case_id: str, notice: DvcNotice) -> dict:
-    return {"parent_remote_id": case_id, "source": "tdt" if notice.is_tdt else "dvc",
+def _parent_key(case_id: str | RecordKey) -> RecordKey:
+    return case_id if isinstance(case_id, RecordKey) else RecordKey(UNKNOWN, UNKNOWN, "DECLARATION", case_id)
+
+
+def notice_source(case_id: str | RecordKey, notice: DvcNotice) -> dict:
+    parent = _parent_key(case_id)
+    return {"parent_remote_id": parent.remote_id, "parent_record_key": parent.serialize(),
+            "record_key": notice.key(parent).serialize(), "source": "tdt" if notice.is_tdt else "dvc",
             "kind": "attachment", "remote_id": notice.id,
             "loai_tra_cuu": notice.loai_tra_cuu, "loai_tbao": notice.loai_tbao,
-            "account_key": "UNKNOWN"}
+            "account_key": parent.account_key}
 
 
 class NoticeStore:
@@ -237,10 +248,10 @@ class NoticeStore:
         self.root = Path(root)
         self.logger = logger or logging.getLogger(LOGGER_NAME)
 
-    def directory_for(self, case_id: str) -> Path:
-        return self.root / safe_filename_part(case_id, 60)
+    def directory_for(self, case_id: str | RecordKey) -> Path:
+        return self.root / safe_filename_part(_parent_key(case_id).remote_id, 60)
 
-    def find_existing(self, case_id: str, notice_id: str | DvcNotice) -> Path | None:
+    def find_existing(self, case_id: str | RecordKey, notice_id: str | DvcNotice) -> Path | None:
         # A bare ID has no route provenance; it cannot safely select an attachment.
         if isinstance(notice_id, str):
             return None
@@ -260,7 +271,7 @@ class NoticeStore:
                 continue
         return None
 
-    def save(self, case_id: str, notice: DvcNotice, payload: NoticeFile) -> Path | None:
+    def save(self, case_id: str | RecordKey, notice: DvcNotice, payload: NoticeFile) -> Path | None:
         result = validate_notice(payload.data)
         if not result.ok:
             self.logger.error("ATTACHMENT_%s: %s", result.code, notice.id)

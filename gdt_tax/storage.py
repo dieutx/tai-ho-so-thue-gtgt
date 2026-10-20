@@ -42,6 +42,7 @@ from .atomic import replace_with_retry
 from .classification import TAX_GROUPS
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX
 from .errors import StorageError
+from .identity import key_from_row
 from .integrity import (
     matches_evidence,
     read_bounded,
@@ -196,9 +197,9 @@ def write_metadata(
     directory.mkdir(parents=True, exist_ok=True)
     json_path = directory / METADATA_JSON
     previous = _metadata_rows(json_path)
-    merged = {(row["nguon"], row["ma_ho_so"]): row for row in previous}
+    merged = {key_from_row(row, "DECLARATION").serialize(): row for row in previous}
     for record in ordered:
-        key = (record.nguon, record.ma_ho_so)
+        key = record.record_key
         row = {**merged.get(key, {}), **record.to_dict()}
         # Tra cứu/dry-run không được xoá tham chiếu của file đã tải lần trước.
         if not record.tep_zip and key in merged:
@@ -295,7 +296,7 @@ def _metadata_rows(path: Path) -> list[dict]:
         rows = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(rows, list) or any(
             not isinstance(row, dict) or not isinstance(row.get("ma_ho_so"), str)
-            or not isinstance(row.get("nguon"), str) for row in rows
+            or ("nguon" in row and not isinstance(row["nguon"], str)) for row in rows
         ):
             raise ValueError("metadata phải là danh sách hồ sơ có ma_ho_so và nguon")
         return rows

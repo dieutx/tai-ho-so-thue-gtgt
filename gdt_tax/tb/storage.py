@@ -30,6 +30,7 @@ from ..archive_limits import MAX_MEMBER_BYTES
 from ..atomic import replace_with_retry
 from ..constants import TB_METADATA_CSV, TB_METADATA_JSON, TB_METADATA_XLSX
 from ..errors import StorageError
+from ..identity import key_from_row
 from ..integrity import (
     candidate_paths,
     matches_evidence,
@@ -117,9 +118,9 @@ def write_tb_metadata(
     directory.mkdir(parents=True, exist_ok=True)
     json_path = directory / TB_METADATA_JSON
     previous = _metadata_rows(json_path)
-    merged = {row["message_id"]: row for row in previous}
+    merged = {key_from_row(row, "NOTICE").serialize(): row for row in previous}
     for record in ordered:
-        key = record.message_id
+        key = record.record_key
         row = {**merged.get(key, {}), **record.to_dict()}
         # Tra cứu/dry-run không được xoá tham chiếu file đã tải lần trước.
         if not record.tep_pdf and key in merged:
