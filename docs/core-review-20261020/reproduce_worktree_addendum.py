@@ -26,9 +26,10 @@ args = parser.parse_args()
 source_root = args.source_root.resolve()
 sys.path.insert(0, str(source_root))
 
+from gdt_tax.dvc_notices import DvcNotice, NoticeFile, NoticeStore, decode_notice_response
+
 from gdt_tax.config import Settings
 from gdt_tax.constants import DVC_NOTICE_DOWNLOAD
-from gdt_tax.dvc_notices import DvcNotice, NoticeFile, NoticeStore, decode_notice_response
 from gdt_tax.pipeline import Pipeline
 from tests.support import FakeHttp, FakeResponse, StubCaptcha, route_of
 from tests.test_pipeline import dvc_search, make_handler
