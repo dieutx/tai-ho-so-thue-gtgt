@@ -2,9 +2,12 @@
 from types import SimpleNamespace
 
 from gdt_tax.auth_outcomes import AuthOutcome, classify_response
-from gdt_tax.gnt.parsing import parse_gnt_table
+from gdt_tax.gnt.parsing import gnt_page_count, parse_gnt_table
+from gdt_tax.legacy_notices import parse_legacy_notice_list
 from gdt_tax.parsing import parse_record_table
+from gdt_tax.portals.etax import EtaxPortal
 from gdt_tax.table_contracts import SCHEMAS
+from gdt_tax.tb.parsing import tb_page_count
 
 
 def portal_regression_check() -> bool:
@@ -40,4 +43,38 @@ def portal_regression_check() -> bool:
             or parsed.records[0].ma_ho_so != 'SYNTHETIC-DVC-1'
             or parsed.records[0].lan_nop != '3' or parsed.records[0].lan_bo_sung != '2'):
         raise AssertionError('DVC submission/file heading regression failed')
+    labels = SCHEMAS['ETAX'].labels
+    cells = ['1', 'SYNTHETIC-ETAX-1', 'synthetic-declaration', '06/2025', 'synthetic-type',
+             '3', '2', '22/06/2025', 'synthetic-office', 'synthetic-status',
+             '<i data-ma-ho-so="SYNTHETIC-ETAX-1"></i>']
+    html = '<div class="bangKetQuaTraCuu_tdt"></div><div class="bangKetQuaTraCuu_tdt"><table><thead><tr>'
+    html += ''.join('<th>' + label + '</th>' for label in labels)
+    html += '</tr></thead><tbody><tr>' + ''.join('<td>' + value + '</td>' for value in cells)
+    html += '</tr></tbody></table></div>'
+    parsed = parse_record_table(html, 'ETAX')
+    if parsed.diagnostics.status != 'PARSED' or len(parsed.records) != 1 or parsed.records[0].lan_nop != '3':
+        raise AssertionError('ETAX repeated result container regression failed')
+    empty = '<div class="bangKetQuaTraCuu_tdt"><span hidden>Không có dữ liệu</span></div>'
+    if parse_record_table(empty, 'ETAX').diagnostics.complete:
+        raise AssertionError('Hidden empty placeholder was accepted')
+    labels = ['STT', 'Số thông báo/Mã giao dịch VAN', 'Thông báo', 'Ngày gửi', 'Người gửi']
+    cells = ['1', '<a onclick="downloadFile(\'900000001\')">synthetic-reference</a>',
+             'synthetic-title', '22/06/2025', 'synthetic-sender']
+    html = '<table id="tbl_tracuu"><thead><tr>' + ''.join('<td>' + label + '</td>' for label in reversed(labels))
+    html += '</tr></thead><tbody><tr>' + ''.join('<td>' + value + '</td>' for value in reversed(cells))
+    html += '</tr></tbody></table>'
+    notices = parse_legacy_notice_list(html)
+    if notices.status != 'PARSED' or len(notices.notices) != 1 or notices.notices[0].sent_at != '22/06/2025':
+        raise AssertionError('Legacy notice named heading regression failed')
+    paging = '<div hidden>Trang 1/999</div><div>Trang 1/2</div>'
+    if gnt_page_count(paging) != 2 or tb_page_count(paging) != 2:
+        raise AssertionError('Hidden pagination regression failed')
+    feedback = []
+    solver = SimpleNamespace(rejected=lambda: feedback.append('rejected'))
+    portal = EtaxPortal(None, solver, SimpleNamespace(header_profile='minimal'))
+    html = '<table><tr><td>Mã xác thực không chính xác</td></tr></table>'
+    response = SimpleNamespace(content=html.encode(), text=html, status_code=200, headers={})
+    parsed_page = portal._page_result(response)
+    if parsed_page.diagnostics.status != 'CAPTCHA_INVALID' or feedback != ['rejected']:
+        raise AssertionError('CAPTCHA layout table regression failed')
     return True

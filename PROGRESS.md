@@ -7,6 +7,11 @@ hàng thiếu ô đính kèm tùy chọn ở cuối. Source kiểm tra DVC 09/20
 01–22/10/2026 (10 hồ sơ), legacy 06/2025 (2 hồ sơ), đều SUCCESS. Build EXE
 chỉ được bàn giao sau gate và kiểm thử frozen riêng.
 Chi tiết và giới hạn: [DVC_SCHEMA_FIX_20261022.md](docs/DVC_SCHEMA_FIX_20261022.md).
+Theo yêu cầu review toàn bộ nhóm lỗi tương tự, đã sửa thêm lỗi scope ETAX thật
+và các lỗi tổng hợp về thông báo, HTML ẩn, CAPTCHA, phân trang, ID GNT.
+Source ETAX 06/2025 đọc 2 hồ sơ; GNT 09/2026 đọc 12 và TB đọc 7 thành công.
+12 phương thức regression mới: 11 thất bại trên snapshot trước review, cả 12
+đạt sau sửa. Xem [báo cáo review](docs/SCHEMA_REVIEW_20261022.md).
 
 ## Lịch sử tích hợp
 

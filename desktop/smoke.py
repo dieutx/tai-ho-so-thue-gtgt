@@ -127,6 +127,8 @@ def self_test(source: Path, output: Path, report: Path) -> int:
             result['captcha_fallback_bounded'] = captcha_retry_check()
             from .portal_checks import portal_regression_check
             result['portal_regressions'] = portal_regression_check()
+            from gdt_tax.table_contracts import TABLE_CONTRACT_VERSION
+            result['schema_contract_version'] = TABLE_CONTRACT_VERSION
             if os.name == 'nt':
                 result['saved_accounts_native'] = saved_accounts_check()
             challenge = ('<apm_do_not_touch></apm_do_not_touch><body>human visitor'

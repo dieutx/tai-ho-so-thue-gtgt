@@ -28,6 +28,7 @@ from bs4 import BeautifulSoup
 
 from .atomic import replace_with_retry
 from .errors import StorageError
+from .html_text import visible_text
 from .identity import UNKNOWN, AttachmentKey, RecordKey
 from .integrity import (
     matches_evidence,
@@ -160,7 +161,7 @@ def parse_notice_list(html: str) -> NoticeList:
                 loai_tbao=str(anchor.get("data-loai-tbao") or anchor.get("data-loaibao") or "").strip(),
             )
         )
-    empty = ('khong co thong bao' in _fold(scope.get_text(' ', strip=True))
+    empty = ('khong co thong bao' in _fold(visible_text(scope, include_hidden_root=True))
              or scope.get('data-empty') == 'true')
     return NoticeList(notices, 'PARSED' if notices and not malformed and not empty
                       else 'EMPTY_CONFIRMED' if empty and not notices and not malformed else 'SCHEMA_UNKNOWN')

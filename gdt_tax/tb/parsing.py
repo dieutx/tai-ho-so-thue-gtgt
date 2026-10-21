@@ -24,6 +24,7 @@ import re
 from bs4 import BeautifulSoup, Tag
 
 from ..constants import TB_RESULT_TABLE_ID
+from ..html_text import visible_text
 from ..table_contracts import SCHEMAS, TableParse, parse_table
 from .models import ThongBao
 
@@ -71,7 +72,7 @@ def parse_tb_table(html: str, *, schema=None) -> TableParse:
 
 def tb_page_count(html: str, *, table_id: str = TB_RESULT_TABLE_ID) -> int | None:
     """Tổng số trang theo dòng ``Trang 1/ 14``; ``None`` nếu trang không cho biết."""
-    text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
+    text = visible_text(BeautifulSoup(html, 'html.parser'))
     match = re.search(r"Trang\s*\d+\s*/\s*(\d+)", text, re.I)
     if match:
         return int(match.group(1))

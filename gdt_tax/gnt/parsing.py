@@ -34,6 +34,7 @@ import re
 from bs4 import BeautifulSoup, Tag
 
 from ..constants import GNT_RESULT_TABLE_ID
+from ..html_text import visible_text
 from ..table_contracts import SCHEMAS, TableParse, parse_table
 from .models import GiayNopTien
 
@@ -44,8 +45,8 @@ _CTU_RE = re.compile(r"(?:downloadGNT|chiTietCT)\(\s*['\"]?(\d+)", re.I)
 
 def gnt_ctu_id(row: Tag) -> str:
     """Mã nội bộ ``ctuId`` của một hàng, dùng cho lệnh tải XML."""
-    match = _CTU_RE.search(str(row))
-    return match.group(1) if match else ""
+    ids = set(_CTU_RE.findall(str(row)))
+    return next(iter(ids)) if len(ids) == 1 else ""
 
 
 def gnt_record(cells: list[str], row: Tag) -> GiayNopTien | None:
@@ -88,7 +89,7 @@ def parse_gnt_table(html: str, *, schema=None) -> TableParse:
 
 def gnt_page_count(html: str, *, table_id: str = GNT_RESULT_TABLE_ID) -> int | None:
     """Tổng số trang theo dòng ``Trang 1/ 2``; ``None`` nếu trang không cho biết."""
-    text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
+    text = visible_text(BeautifulSoup(html, 'html.parser'))
     match = re.search(r"Trang\s*\d+\s*/\s*(\d+)", text, re.I)
     if match:
         return int(match.group(1))

@@ -6,9 +6,12 @@ import re
 from bs4 import BeautifulSoup
 
 from .dvc_notices import DvcNotice, NoticeList, _fold
-from .table_contracts import normalize_label
+from .html_text import visible_text
+from .table_contracts import TableSchema, _header_map
 
 DOWNLOAD = re.compile(r"\bdownloadFile\(\s*['\"]([0-9]+)['\"]\s*\)", re.I)
+NOTICE_SCHEMA = TableSchema('LEGACY_NOTICES', ('stt', 'reference', 'title', 'sent_at', 'sender'),
+    ('STT', 'Số thông báo/Mã giao dịch VAN', 'Thông báo', 'Ngày gửi', 'Người gửi'))
 
 
 def parse_legacy_notice_list(html: str) -> NoticeList:
@@ -17,14 +20,13 @@ def parse_legacy_notice_list(html: str) -> NoticeList:
     if len(tables) != 1:
         return NoticeList()
     table = tables[0]
-    headers = [normalize_label(cell.get_text(' ', strip=True)) for cell in table.select('thead th')]
-    expected = [normalize_label(label) for label in ('STT', 'Số thông báo/Mã giao dịch VAN', 'Thông báo', 'Ngày gửi', 'Người gửi')]
-    if headers != expected:
+    mapping, headers, width = _header_map(table, NOTICE_SCHEMA)
+    if width < 0 or not set(NOTICE_SCHEMA.fields).issubset(mapping):
         return NoticeList()
     notices = []
     seen = set()
     malformed = False
-    rows = (table.find('tbody') or table).find_all('tr', recursive=False)
+    rows = [row for row in table.find_all('tr') if row.find_parent('table') is table and row not in headers]
     for row in rows:
         cells = row.find_all('td', recursive=False)
         if not cells:
@@ -32,7 +34,8 @@ def parse_legacy_notice_list(html: str) -> NoticeList:
         if len(cells) == 1 and ('khong co thong bao' in _fold(row.get_text(' ', strip=True))):
             continue
         matches = DOWNLOAD.findall(str(row))
-        if len(cells) != 5 or len(matches) != 1:
+        if (len(cells) != width or len(matches) != 1
+                or any(str(cell.get('colspan', '1')) != '1' or str(cell.get('rowspan', '1')) != '1' for cell in cells)):
             malformed = True
             continue
         notice_id = matches[0]
@@ -42,9 +45,9 @@ def parse_legacy_notice_list(html: str) -> NoticeList:
             malformed = True
             continue
         seen.add(notice_id)
-        title = re.sub(r'(?i)^v/v\s*:\s*', '', cells[2].get_text(' ', strip=True))
-        notices.append(DvcNotice(id=notice_id, title=title, sent_at=cells[3].get_text(' ', strip=True)))
-    text = _fold(soup.get_text(' ', strip=True))
+        title = re.sub(r'(?i)^v/v\s*:\s*', '', cells[mapping['title']].get_text(' ', strip=True))
+        notices.append(DvcNotice(id=notice_id, title=title, sent_at=cells[mapping['sent_at']].get_text(' ', strip=True)))
+    text = _fold(visible_text(soup))
     count = re.search(r'co\s+(\d+)\s+ban ghi', text)
     pagination = re.search(r'trang\s*\d+\s*/\s*(\d+)', text)
     if count and int(count[1]) != len(notices) or pagination and int(pagination[1]) > 1:

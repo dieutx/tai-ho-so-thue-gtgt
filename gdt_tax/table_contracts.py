@@ -10,7 +10,9 @@ from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
-TABLE_CONTRACT_VERSION = "portal-table-v4"
+from .html_text import visible_text
+
+TABLE_CONTRACT_VERSION = "portal-table-v5"
 
 
 def normalize_label(value: str) -> str:
@@ -114,7 +116,7 @@ SCHEMAS = {
 
 def _header_map(table: Tag, schema: TableSchema) -> tuple[dict[str, int], list[Tag], int]:
     thead = table.find("thead", recursive=False)
-    rows = thead.find_all("tr") if thead else [row for row in table.find_all("tr")
+    rows = [row for row in thead.find_all('tr') if row.find_parent('table') is table] if thead else [row for row in table.find_all("tr")
              if row.find_parent("table") is table and row.find("th", recursive=False)]
     if not rows:
         return {}, [], 0
@@ -152,15 +154,11 @@ def _header_map(table: Tag, schema: TableSchema) -> tuple[dict[str, int], list[T
 
 
 def _known_empty(soup: BeautifulSoup, schema: TableSchema) -> bool:
-    scope = soup.select_one(schema.container) if schema.container else soup
-    if scope is None:
-        return False
     if schema.empty_form and not _has_form(soup, schema):
         return False
-    for script in scope.find_all(["script", "style"]):
-        script.decompose()
-    text = normalize_label(scope.get_text(" ", strip=True))
-    return any(normalize_label(marker) in text for marker in schema.empty_markers)
+    scopes = soup.select(schema.container) if schema.container else [soup]
+    return any(normalize_label(marker) in normalize_label(visible_text(scope))
+               for scope in scopes for marker in schema.empty_markers)
 
 
 def _has_form(soup: BeautifulSoup, schema: TableSchema) -> bool:
@@ -231,9 +229,7 @@ def parse_table(html: str, schema: TableSchema, decoder: Callable[[Tag, list[str
     result.diagnostics.schema_fingerprint = safe_schema_evidence(html).get('fingerprint', '')
     diagnostics = result.diagnostics
     if soup.find("table") is None:
-        for node in soup.find_all(["script", "style"]):
-            node.decompose()
-        visible = normalize_label(soup.get_text(" ", strip=True))
+        visible = normalize_label(visible_text(soup))
         if any(normalize_label(marker) in visible for marker in (
                 "CAPTCHA rejected", "CAPTCHA không đúng", "Mã xác nhận không đúng", "Mã xác thực không đúng")):
             diagnostics.status = "CAPTCHA_INVALID"
@@ -243,11 +239,17 @@ def parse_table(html: str, schema: TableSchema, decoder: Callable[[Tag, list[str
     if schema.table_id:
         tables = list(soup.find_all("table", id=schema.table_id))
     else:
-        scope = soup.select_one(schema.container) if schema.container else None
-        candidates = (scope or soup).find_all("table")
+        scopes = soup.select(schema.container) if schema.container else []
+        candidates = []
+        seen_tables: set[int] = set()
+        for scope in scopes or [soup]:
+            for table in ([scope] if scope.name == 'table' else []) + list(scope.find_all('table')):
+                if id(table) not in seen_tables:
+                    seen_tables.add(id(table))
+                    candidates.append(table)
         tables = [table for table in candidates if len(_header_map(table, schema)[0]) >= 3
                   or table.find(None, attrs={"data-ma-ho-so": True}) is not None]
-        if not tables and scope is not None:
+        if not tables and scopes:
             tables = candidates
     if len(tables) != 1:
         if not tables and _known_empty(soup, schema):

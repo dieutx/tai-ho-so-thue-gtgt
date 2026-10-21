@@ -7,6 +7,7 @@ from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
+from desktop import __version__ as desktop_version
 from scripts.build_provenance import build_receipt
 from scripts.dependency_inventory import inventory, verify
 from scripts.run_test_gate import gate_payload
@@ -51,7 +52,7 @@ class BuildProvenanceTests(unittest.TestCase):
             (root / 'dist/TaiHoSoThue-Windows.exe').write_bytes(b'synthetic-artifact-not-executable')
             receipt = build_receipt(root)
             self.assertEqual(receipt['core_version'], '1.0.0')
-            self.assertEqual(receipt['version'], '2.0.3')
+            self.assertEqual(receipt['version'], desktop_version)
             self.assertEqual(set(receipt['assets']), {'TaiHoSoThue-Windows.exe', 'SHA256SUMS.txt'})
             self.assertEqual(receipt['source_sha'], 'a' * 40)
             (root / '.cache/ci/desktop.json').write_text(json.dumps({'pass': True, 'source_sha': 'b' * 40}))

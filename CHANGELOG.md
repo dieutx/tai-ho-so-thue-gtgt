@@ -9,6 +9,10 @@
   thiếu cột tùy chọn ở cuối hàng; thiếu cột giữa hoặc cột bắt buộc vẫn báo lỗi.
 - Smoke Python/EXE thêm bảng DVC tổng hợp với tiêu đề thực tế. Chẩn đoán online
   nhận tùy chọn `dvc` rõ ràng và ghi nguồn hồ sơ để phân biệt DVC với legacy.
+- Review các parser còn lại: sửa ETAX bỏ sót bảng khi có nhiều khối cùng CSS,
+  ánh xạ thông báo legacy theo tên cột, bỏ text ẩn khi đọc rỗng/phân trang,
+  nhận CAPTCHA qua classifier chung và chặn ID GNT xung đột.
+  Chi tiết: [SCHEMA_REVIEW_20261022.md](docs/SCHEMA_REVIEW_20261022.md).
 
 ## [2.0.3] — 2026-10-21
 

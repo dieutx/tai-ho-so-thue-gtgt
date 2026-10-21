@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import replace
 
-from ..auth_outcomes import raise_terminal
+from ..auth_outcomes import AuthOutcome, classify_response, raise_terminal
 from ..captcha import fetch_captcha
 from ..constants import CASE_DETAIL, LANDING
 from ..contracts import Solver, Transport
@@ -101,6 +101,10 @@ class Portal(ABC):
         scope = ('#' if self.capabilities.scope_kind == 'id' else '.') + self.capabilities.result_container
         schema = replace(self.capabilities.response_contract, container=scope)
         parsed = parse_record_table(response.text, self.source, schema=schema)
+        if (not parsed.records and not parsed.diagnostics.complete
+                and classify_response(response, 'DVC', phase='operation', authenticated=True) == AuthOutcome.CAPTCHA_INVALID):
+            parsed.diagnostics.status = 'CAPTCHA_INVALID'
+            parsed.diagnostics.reasons = ['CAPTCHA_INVALID']
         result = PageResult(
             records=parsed.records,
             total_pages=page_count(response.text, self.source),
