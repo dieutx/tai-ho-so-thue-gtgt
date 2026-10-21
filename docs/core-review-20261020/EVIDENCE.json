@@ -1,0 +1,163 @@
+{
+  "baseline_commit": "559892f1ff22f3e68d2fbea7be0608fd0ac597c9",
+  "offline": true,
+  "real_credentials_or_tax_data_used": false,
+  "case_count": 18,
+  "observations": [
+    {
+      "case": "R01",
+      "ticket": "CORE-01",
+      "observation": {
+        "rows_before": 2,
+        "rows_after_action_rename": 0,
+        "reported_total_pages": 1
+      }
+    },
+    {
+      "case": "R02",
+      "ticket": "CORE-02",
+      "observation": {
+        "records_retained": true,
+        "date_field_now_contains_office": true
+      }
+    },
+    {
+      "case": "R03",
+      "ticket": "CORE-03",
+      "observation": {
+        "source_records_returned": 2,
+        "records_retained": 1,
+        "search_marked_complete": true
+      }
+    },
+    {
+      "case": "R04",
+      "ticket": "CORE-04",
+      "observation": {
+        "old_artifact_exported_against_new_manifest": true,
+        "exported_source_sha": "old-sha"
+      }
+    },
+    {
+      "case": "R05",
+      "ticket": "CORE-05",
+      "observation": {
+        "index_form_code_type": "s",
+        "indicator_form_code_type": "f",
+        "unmapped_form_code_type": "f"
+      }
+    },
+    {
+      "case": "R06",
+      "ticket": "CORE-05",
+      "observation": {
+        "csv_retains_formula_prefix": true
+      }
+    },
+    {
+      "case": "R07",
+      "ticket": "CORE-06",
+      "observation": {
+        "normalized_number_cell_type": "s",
+        "normalized_number_cell_value": "-100",
+        "error_preserved_in_row": false,
+        "mapping_version_preserved_in_row": false
+      }
+    },
+    {
+      "case": "R08",
+      "ticket": "CORE-09",
+      "observation": {
+        "same_key_mapping_count": 1,
+        "silently_selected_mapping": "second"
+      }
+    },
+    {
+      "case": "R09",
+      "ticket": "CORE-09",
+      "observation": {
+        "malformed_mapping_exception": "AttributeError"
+      }
+    },
+    {
+      "case": "R10",
+      "ticket": "CORE-10",
+      "observation": {
+        "actual_second_xml_root": "b",
+        "cached_second_xml_root": "a"
+      }
+    },
+    {
+      "case": "R11",
+      "ticket": "CORE-11",
+      "observation": {
+        "parse_exit_code_with_only_errors": 0,
+        "declaration_status": "error"
+      }
+    },
+    {
+      "case": "R12",
+      "ticket": "CORE-07",
+      "observation": {
+        "default_namespace_form_code": "842",
+        "equivalent_prefixed_namespace_form_code": null
+      }
+    },
+    {
+      "case": "R13",
+      "ticket": "CORE-08",
+      "observation": {
+        "0.125": [
+          "0125",
+          null
+        ],
+        "1.234": [
+          "1234",
+          null
+        ],
+        "12.34.56": [
+          "123456",
+          null
+        ]
+      }
+    },
+    {
+      "case": "R14",
+      "ticket": "CORE-12",
+      "observation": {
+        "declared_depth_limit": 100,
+        "depth_110_accepted_by_parser": true
+      }
+    },
+    {
+      "case": "R15",
+      "ticket": "CORE-13",
+      "observation": {
+        "unrelated_xml_accepted_as_gnt": true,
+        "truncated_pdf_accepted": true
+      }
+    },
+    {
+      "case": "R16",
+      "ticket": "CORE-14",
+      "observation": {
+        "external_form_action_accepted": true
+      }
+    },
+    {
+      "case": "R17",
+      "ticket": "CORE-15",
+      "observation": {
+        "infinite_retry_after_accepted": true
+      }
+    },
+    {
+      "case": "R18",
+      "ticket": "CORE-16",
+      "observation": {
+        "json_string_secret_retained": true,
+        "referer_session_retained": true
+      }
+    }
+  ]
+}

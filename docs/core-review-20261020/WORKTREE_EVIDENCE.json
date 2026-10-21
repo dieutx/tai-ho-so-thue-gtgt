@@ -1,0 +1,146 @@
+{
+  "scope": "supplementary uncommitted source snapshot; not baseline commit",
+  "offline": true,
+  "real_credentials_or_tax_data_used": false,
+  "case_count": 4,
+  "sources": [
+    {
+      "path": "gdt_tax/dvc_notices.py",
+      "sha256": "6740b7b1323430b676679b46602da9cb4aa3df013cce24f3268af1d56ca688d2",
+      "definitions": {
+        "DvcNotice": 47,
+        "NoticeFile": 72,
+        "_fold": 95,
+        "_truthy": 101,
+        "parse_notices": 105,
+        "_notice_text": 136,
+        "notice_filename": 156,
+        "decode_notice_response": 169,
+        "NoticeStore": 201,
+        "_atomic_write": 237,
+        "loai": 59,
+        "extension": 80,
+        "__init__": 204,
+        "directory_for": 208,
+        "find_existing": 211,
+        "save": 224
+      }
+    },
+    {
+      "path": "gdt_tax/pipeline.py",
+      "sha256": "0af1382cb0c89653ce1634804dc31df0065ff6306cf327b265df2607dfd434f7",
+      "definitions": {
+        "Pipeline": 28,
+        "__init__": 29,
+        "_persist": 62,
+        "_attempt_download": 65,
+        "run": 75,
+        "_search_and_download": 126,
+        "_pause": 177,
+        "_search_page": 182,
+        "_download": 199,
+        "_download_notices": 228
+      }
+    },
+    {
+      "path": "gdt_tax/portals/dvc.py",
+      "sha256": "bfeb08b433c764c888cc64e62833d0e85d62afb1e40a93583859e2e9e98ddd8f",
+      "definitions": {
+        "DvcPortal": 26,
+        "search": 32,
+        "fetch_notices": 60,
+        "download_notice": 64,
+        "download": 93
+      }
+    },
+    {
+      "path": "gdt_tax/portals/base.py",
+      "sha256": "85f9960ae6ad9b4aeb535b57306231b7fa73cae6e69d4a8a82add9ac09b61c32",
+      "definitions": {
+        "Portal": 26,
+        "__init__": 34,
+        "profile": 43,
+        "search": 49,
+        "download": 53,
+        "landing_url": 58,
+        "page_headers": 61,
+        "xhr_headers": 67,
+        "captcha_text": 73,
+        "detail_url": 78,
+        "fetch_detail_csrf": 83,
+        "_page_result": 92
+      }
+    },
+    {
+      "path": "desktop/main.py",
+      "sha256": "26a2d7e3551fd81123fb4678600f71f4c3ce48f40c325a936265d63c937289ed",
+      "definitions": {
+        "_install_crash_log": 14,
+        "main": 40,
+        "excepthook": 26
+      }
+    },
+    {
+      "path": "tests/test_dvc_notices.py",
+      "sha256": "bf1be5c0955bf9e020d929572d44aef0df479228f29ac685843eb5f553a70e2e",
+      "definitions": {
+        "NoticeParsingTests": 85,
+        "NoticeDecodeTests": 106,
+        "NoticeStoreTests": 123,
+        "NoticePortalTests": 145,
+        "NoticePipelineTests": 177,
+        "test_reads_all_notifications_and_classifies_them": 86,
+        "test_ignores_pages_without_the_notification_modal": 95,
+        "test_filename_starts_with_notice_id_and_classification": 99,
+        "test_decodes_json_base64_payload": 107,
+        "test_rejects_error_and_empty_payloads": 117,
+        "setUp": 178,
+        "tearDown": 195,
+        "test_saves_per_case_and_reuses_by_notice_id": 131,
+        "test_posts_id_and_csrf_for_each_endpoint": 146,
+        "handler": 201,
+        "run_pipeline": 219,
+        "test_downloads_receipt_and_acceptance_notices_beside_each_case": 225,
+        "test_second_run_reuses_notice_files_without_downloading_again": 240
+      }
+    }
+  ],
+  "observations": [
+    {
+      "case": "W01",
+      "related_tickets": [
+        "CORE-13",
+        "CORE-15"
+      ],
+      "html_error_payload_accepted_as_notice": true,
+      "declared_extension": "xml"
+    },
+    {
+      "case": "W02",
+      "related_tickets": [
+        "CORE-13"
+      ],
+      "one_byte_xml_saved": true,
+      "one_byte_xml_reused": true
+    },
+    {
+      "case": "W03",
+      "related_tickets": [
+        "CORE-03"
+      ],
+      "different_source_notice_reuses_same_path": true
+    },
+    {
+      "case": "W04",
+      "related_tickets": [
+        "CORE-01",
+        "CORE-17"
+      ],
+      "failed_notice_download_requests": 2,
+      "primary_documents_downloaded": 2,
+      "primary_summary_complete": true,
+      "notice_failures_in_record_errors": false,
+      "notice_failure_field_in_summary": false
+    }
+  ]
+}

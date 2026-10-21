@@ -1,0 +1,269 @@
+{
+  "schema_version": "core-review-backlog-v1",
+  "review_date": "2026-10-20",
+  "baseline_commit": "559892f1ff22f3e68d2fbea7be0608fd0ac597c9",
+  "scope": "Review only; no production fixes, login, build, publication, issue or PR creation in this review",
+  "effort_legend": {"S": "Khoảng nửa đến một ngày", "M": "Khoảng một đến ba ngày", "L": "Nhiều PR, khoảng ba đến năm ngày hoặc hơn; cần chia nhỏ"},
+  "tickets": [
+    {
+      "id": "CORE-01", "priority": "P1", "category": "Portal và độ đầy đủ kết quả", "kind": "behavior_reproduced", "effort": "M", "depends_on": [],
+      "title": "Phân biệt kết quả rỗng thật với parser không còn hiểu trang",
+      "evidence": ["R01"], "sources": ["gdt_tax/parsing.py:parse_records", "gdt_tax/portals/etax_legacy.py:_total_pages", "gdt_tax/pipeline.py:Pipeline._search_page", "gdt_tax/gnt/pipeline.py:GntPipeline._search_page", "gdt_tax/tb/pipeline.py:TbPipeline._search_page"],
+      "problem": "Đổi downloadTkhai thành một tên handler khác trên fixture legacy: từ 2 hồ sơ còn 0, trong khi total_pages vẫn là 1. Pipeline chấp nhận HTTP 200 + total_pages>=0. Cổng đổi handler, thiếu cột hoặc parser bỏ tất cả hàng có thể bị báo không có kết quả thay vì báo thay đổi cấu trúc.",
+      "scope": ["Bổ sung kết quả parse có số hàng dữ liệu ứng viên, số hàng đọc được, số hàng bỏ và lý do; giữ API tương thích bằng adapter nếu cần.", "Xác nhận rỗng bằng cấu trúc/marker rỗng đã kiểm chứng, không chỉ dựa vào records=[] hoặc có bảng/pagination.", "Khi có hàng dữ liệu nhưng không đọc được hoặc chỉ đọc được một phần, trả lỗi cấu trúc hoặc kết quả PARTIAL kèm lý do; không reset bộ đếm OCR như thành công.", "Áp dụng cùng hợp đồng cho legacy, DVC, ETAX, GNT và TB; không retry cùng trang bất thường nhiều lần."],
+      "acceptance": ["Fixture cũ vẫn trả đủ hồ sơ; fixture rỗng thật vẫn thành công.", "Đổi handler, bỏ cột bắt buộc, một hàng lỗi trong hai hàng: không được báo SUCCESS đầy đủ.", "Phân biệt SCHEMA_CHANGED, EMPTY_CONFIRMED và PARSED; CLI có exit khác 0 cho kết quả chưa đủ, GUI giữ các hàng đã đọc."],
+      "non_goals": ["Không đoán ID từ cột bất kỳ để ép trang lạ thành thành công", "Không khẳng định cổng hiện tại đã đổi handler"],
+      "suggested_pr": "fix(core): distinguish confirmed empty results from schema drift"
+    },
+    {
+      "id": "CORE-02", "priority": "P1", "category": "Portal và độ đầy đủ kết quả", "kind": "behavior_reproduced", "effort": "M", "depends_on": ["CORE-01"],
+      "title": "Đọc cột theo hợp đồng có tên và phát hiện đổi thứ tự",
+      "evidence": ["R02"], "sources": ["gdt_tax/parsing.py:etax_record", "gdt_tax/parsing.py:dvc_record", "gdt_tax/parsing.py:etax_legacy_record", "gdt_tax/gnt/parsing.py:gnt_record", "gdt_tax/tb/parsing.py:tb_record"],
+      "problem": "Các parser dựa chủ yếu vào chỉ số cột và số cột tối thiểu. Hoán đổi cột ngày nộp và nơi nộp vẫn giữ nguyên số hồ sơ, nhưng trường ngày chứa tên cơ quan thuế mà không có cảnh báo.",
+      "scope": ["Tạo schema bảng theo adapter: nhãn cột/thuộc tính ổn định, alias tiếng Việt chuẩn hóa Unicode, cột bắt buộc và tùy chọn.", "Ưu tiên data attribute có nghĩa; fallback theo vị trí chỉ khi fingerprint schema cũ khớp rõ ràng.", "Kiểm tra hình dạng ID, ngày và giá trị tiền; giữ raw text cùng parse warning, không suy đoán quy tắc thuế từ dữ liệu thiếu.", "Cho phép thêm cột tùy chọn mà không vỡ parser; thiếu/đổi nghĩa cột bắt buộc phải báo lỗi có tên cột."],
+      "acceptance": ["Test hoán vị, thêm cột, đổi alias, colspan, dòng tiêu đề và bảng phụ; không đưa dữ liệu bảng phụ thành hồ sơ.", "Nếu không xác định chắc cột ngày/ID, trả schema mismatch thay vì điền sai trường.", "Snapshot trường của toàn bộ fixture hiện có không đổi ngoài bổ sung diagnostics."],
+      "non_goals": ["Không dùng NLP/LLM để tự đoán ý nghĩa cột", "Không sửa đồng thời logic tải và lưu tệp"],
+      "suggested_pr": "fix(parsing): validate table schemas and column mapping"
+    },
+    {
+      "id": "CORE-03", "priority": "P1", "category": "Định danh và cô lập dữ liệu", "kind": "behavior_reproduced", "effort": "L", "depends_on": [],
+      "title": "Định danh hồ sơ theo tài khoản, nguồn và loại tài liệu",
+      "evidence": ["R03"], "sources": ["gdt_tax/pipeline.py:Pipeline._search_and_download", "gdt_tax/storage.py:ZipStore.find_existing", "gdt_tax/storage.py:write_metadata", "desktop/file_store.py:DesktopZipStore", "desktop/sessions.py:ETaxSessionManager._mixed_tax", "desktop/documents.py:document_id"],
+      "problem": "records và các tập downloaded/failed/target_ids thường dùng ID trần. Hai nguồn trả cùng ID thì pipeline giữ một hồ sơ và vẫn báo tra cứu đủ trong phép thử. Metadata tờ khai đã dùng (nguon,ma_ho_so), nhưng pipeline và lựa chọn GUI chưa thống nhất. Cùng thư mục với tài khoản khác cũng chưa có chủ sở hữu dữ liệu được core cưỡng chế.",
+      "scope": ["PR A: định nghĩa RecordKey(account_key, source, document_kind, remote_id), serialization ổn định; không coi account_key là cơ chế mã hóa/anonymization.", "PR B: dùng key xuyên pipeline, target selection, kết quả, catalog và file resume; giữ remote_id riêng cho request tới cổng.", "PR C: migration metadata cũ với trạng thái ownership/source chưa xác định; không tự gán cho tài khoản đang mở và không tự đổi tên/xóa tệp cũ.", "Thêm manifest chủ sở hữu thư mục hoặc namespace theo tài khoản; fail rõ khi dùng nhầm thư mục. Không coi hai nguồn là cùng một lần nộp chỉ vì trùng ID."],
+      "acceptance": ["Hai nguồn cùng ID và hai loại tài liệu cùng ID đều được giữ riêng; tải đúng endpoint.", "Lựa chọn một hàng không tải nhầm hàng trùng ID ở nguồn khác; resume không nhận tệp của tài khoản khác.", "Metadata cũ vẫn đọc được hoặc có hướng dẫn chuyển đổi rõ; test migration lặp lại và rollback không mất dữ liệu."],
+      "non_goals": ["Không tự hợp nhất ETAX và DVC theo kỳ/tên tờ khai", "Không đổi mã hồ sơ gửi lên cổng", "Không gom cả migration vào một PR lớn"],
+      "suggested_pr": "refactor(identity): introduce account and source aware record keys"
+    },
+    {
+      "id": "CORE-04", "priority": "P1", "category": "Lineage và hợp đồng dữ liệu offline", "kind": "behavior_reproduced", "effort": "M", "depends_on": [],
+      "title": "Chặn ghép manifest, parsed và classification không cùng thế hệ",
+      "evidence": ["R04"], "sources": ["gdt_tax/export.py:build_rows", "gdt_tax/export.py:load_inputs", "gdt_tax/parser/cli.py:_read_manifest", "gdt_tax/classify.py:_read_manifest", "desktop/services.py:run_offline"],
+      "problem": "build_rows lặp toàn bộ parsed và không xác nhận artifact còn nằm trong manifest hiện hành. Manifest mới chỉ chứa artifact mới nhưng parsed cũ vẫn xuất được dòng cũ. Các kiểm tra root/hash vừa thêm ở bước parse không chứng minh đầu vào của bước export là cùng một lần inventory.",
+      "scope": ["Đặt run_id/manifest fingerprint, source root identity, schema/profile/parser/mapping/rule versions và hashes đầu vào vào output mỗi stage.", "Validator dùng chung cho CLI/desktop: kiểm tra kiểu trường, schema version được hỗ trợ, membership artifact, source hash và tính duy nhất của key.", "Chỉ export bundle tương thích; trường hợp cho phép dữ liệu thiếu phải là chế độ tường minh, có cảnh báo và trạng thái chưa đủ.", "Không đọc lỗi JSON thành None rồi tiếp tục âm thầm nếu file có tồn tại nhưng hỏng."],
+      "acceptance": ["Inventory A + parsed B, classification cũ, artifact bị xóa, duplicate key, schema mới chưa hỗ trợ: fail rõ trước khi ghi đè output tốt.", "Thay mapping/rule phải khiến output cũ được đánh dấu stale theo đúng stage.", "Chạy riêng export và chạy all cho cùng input cho cùng tập record và lineage, ngoại trừ timestamp."],
+      "non_goals": ["Không chỉ so số lượng dòng để kết luận tương thích", "Không bỏ âm thầm parsed không khớp"],
+      "suggested_pr": "fix(offline): validate lineage and stage input compatibility"
+    },
+    {
+      "id": "CORE-05", "priority": "P1", "category": "An toàn xuất báo cáo", "kind": "behavior_reproduced", "effort": "M", "depends_on": [],
+      "title": "Áp dụng xử lý text an toàn cho mọi sheet và CSV",
+      "evidence": ["R05", "R06"], "sources": ["gdt_tax/export.py:_write_indicators_sheet", "gdt_tax/export.py:_write_rows_sheet", "gdt_tax/export.py:write_csv", "gdt_tax/storage.py:write_metadata", "gdt_tax/gnt/storage.py:write_gnt_metadata", "gdt_tax/tb/storage.py:write_tb_metadata"],
+      "problem": "Cùng form_code tổng hợp '=1+1': sheet index ghi text, nhưng sheet indicators và unmapped ghi ô kiểu formula. CSV vẫn giữ prefix công thức. _excel_safe chưa được áp dụng ở mọi đường xuất. Đây là lỗi xử lý dữ liệu ngoài đã tái hiện; không phải bằng chứng có hồ sơ độc hại thực tế.",
+      "scope": ["Định nghĩa serializer theo loại cột: text phải luôn là text, số đã xác nhận phải là numeric; áp dụng tất cả sheet và các exporter.", "CSV dành cho Excel cần chính sách chống formula injection được tài liệu hóa; nếu cần CSV raw cho máy, tách chế độ rõ ràng.", "Xử lý prefix nguy hiểm sau ký tự trắng/tab/CR theo chính sách đã chọn, không làm hỏng dữ liệu số âm hoặc ID có số 0 đầu.", "Kiểm tra metadata export, báo cáo inventory/discovery và desktop/reports để không bỏ đường ghi khác."],
+      "acceptance": ["Dùng '=1+1' và các chuỗi +,-,@, tab-prefix trên mọi trường text; lưu rồi mở lại workbook để kiểm tra data_type.", "CSV Excel-safe không mở như công thức; raw export nếu có được đánh dấu rõ.", "Không mất dấu âm của số hợp lệ, không chuyển MST/ID thành số, không chạy Excel hoặc lệnh ngoài trong test."],
+      "non_goals": ["Không escape số bằng cách biến toàn bộ workbook thành text", "Không đưa payload gọi mạng hoặc lệnh hệ thống vào fixture"],
+      "suggested_pr": "fix(export): consistently serialize untrusted spreadsheet text"
+    },
+    {
+      "id": "CORE-06", "priority": "P2", "category": "Độ chính xác và tính hữu dụng của Excel", "kind": "behavior_reproduced", "effort": "M", "depends_on": ["CORE-05", "CORE-08"],
+      "title": "Xuất chỉ tiêu số dưới dạng numeric với chính sách độ chính xác",
+      "evidence": ["R07"], "sources": ["gdt_tax/export.py:_write_indicators_sheet", "gdt_tax/export.py:_excel_safe", "gdt_tax/parser/models.py:Indicator"],
+      "problem": "Indicator.value giữ chuỗi là hợp lý cho JSON, nhưng exporter ghi nguyên chuỗi '-100'; ô L2 có data_type='s', không phải numeric. Pivot/SUM có thể không hoạt động như người dùng kỳ vọng. Không được sửa bằng ép float không kiểm soát vì có thể mất độ chính xác.",
+      "scope": ["Phân biệt datatype string/integer/decimal và chuyển sang kiểu số phù hợp chỉ tại biên xuất Excel.", "Quy định giới hạn độ chính xác Excel; dữ liệu vượt khả năng biểu diễn giữ raw/normalized text và cảnh báo thay vì làm tròn âm thầm.", "Giữ NULL là ô trống, 0 là số 0, raw_value và ID/MST luôn là text."],
+      "acceptance": ["Save/reload workbook: số âm, 0 và số thập phân hợp lệ là numeric khi biểu diễn an toàn; NULL khác 0.", "Số rất lớn, nhiều chữ số thập phân, datatype string trông giống số có kết quả đúng theo chính sách, có cảnh báo khi cần.", "Giá trị JSON normalized không đổi vì yêu cầu Excel."],
+      "non_goals": ["Không tính lại hoặc tổng hợp nghĩa vụ thuế", "Không chọn bản nộp mới nhất để cộng vào báo cáo"],
+      "suggested_pr": "fix(export): preserve numeric types and explicit precision policy"
+    },
+    {
+      "id": "CORE-07", "priority": "P1", "category": "XML và thay đổi schema", "kind": "behavior_reproduced", "effort": "M", "depends_on": [],
+      "title": "Đọc XML theo namespace URI và đúng phạm vi tờ khai",
+      "evidence": ["R12"], "sources": ["gdt_tax/parser/xml_reader.py:namespace_map", "gdt_tax/parser/xml_reader.py:find_text", "gdt_tax/parser/extract.py:extract_declaration", "gdt_tax/parser/extract.py:_collect_indicators"],
+      "problem": "namespace_map chỉ lấy namespace mặc định của root. XML cùng namespace URI nhưng chuyển sang prefix p: làm form_code từ 842 thành None. Ngoài ra metadata dùng .// toàn cây; khi mẫu mới có node cùng tên ở phụ lục, cần kiểm soát phạm vi thay vì lấy node đầu tiên.",
+      "scope": ["Ràng buộc theo namespace URI thực của node, hỗ trợ default và prefix tương đương; không strip namespace mù quáng.", "Tách đường dẫn metadata declaration/notice và chọn đúng container tờ khai chính; phát hiện nhiều ứng viên mâu thuẫn.", "Giữ XPath có thể truy vết chính xác, bổ sung vị trí node lặp khi cần; hỗ trợ wrapper theo schema đã xác minh."],
+      "acceptance": ["Default namespace và prefix bất kỳ cho kết quả chuẩn hóa tương đương.", "Root không namespace, mixed namespace, chữ ký XML, wrapper và MST/mã mẫu lặp ở phụ lục không bị lấy nhầm.", "Namespace chưa hỗ trợ báo schema chưa biết; không áp mapping chỉ vì localname trùng."],
+      "non_goals": ["Không đổi ý nghĩa mapping hoặc suy ra chỉ tiêu thuế mới", "Không bỏ namespace khỏi toàn bộ XML"],
+      "suggested_pr": "fix(xml): resolve declaration metadata by namespace URI and scope"
+    },
+    {
+      "id": "CORE-08", "priority": "P1", "category": "XML và giá trị chỉ tiêu", "kind": "behavior_reproduced", "effort": "M", "depends_on": [],
+      "title": "Thay đoán dấu phân cách bằng chính sách số theo nguồn/mapping",
+      "evidence": ["R13"], "sources": ["gdt_tax/parser/xml_reader.py:_split_decimal", "gdt_tax/parser/xml_reader.py:normalize_number", "gdt_tax/parser/extract.py:_normalize_mapped_value", "gdt_tax/parser/registry.py:FieldMapping"],
+      "problem": "normalize_number('0.125') trả '0125' không cảnh báo; '12.34.56' được chấp nhận thành '123456'. Một dấu phân cách với 3 chữ số sau bị coi là hàng nghìn. '1.234' có thể thật sự là 1234 theo locale hoặc 1.234 theo XML decimal; chưa có dữ liệu để khẳng định mọi mẫu hiện dùng nghĩa nào.",
+      "scope": ["Mapping/nguồn khai numeric_format/locale/scale rõ: XML decimal chuẩn khác số hiển thị theo locale.", "Validate grouping trước khi bỏ dấu phân cách; trường hợp mơ hồ trả cảnh báo/giữ raw, không chọn số có thể sai hàng nghìn lần.", "Giữ Decimal hoặc normalized decimal string; tách parser số dùng cho UI hiển thị với parser nội dung XML."],
+      "acceptance": ["Bảng test số nguyên, thập phân 3 chữ số, số âm, grouping VN/US, malformed grouping và khoảng trắng.", "Fixture mapping hiện tại vẫn đúng; mapping chưa khai chính sách có migration/default được chứng minh, không đổi hàng loạt số âm thầm.", "Không biến lỗi thành 0; warning phải đi tới export/audit."],
+      "non_goals": ["Không tự thay toàn bộ dấu chấm thành dấu phân cách nghìn", "Không dùng float làm biểu diễn chuẩn nội bộ"],
+      "suggested_pr": "fix(parser): make numeric normalization explicit and ambiguity aware"
+    },
+    {
+      "id": "CORE-09", "priority": "P1", "category": "Mapping và mở rộng mẫu biểu", "kind": "behavior_reproduced", "effort": "M", "depends_on": [],
+      "title": "Kiểm tra schema, trùng mapping và phạm vi phiên bản",
+      "evidence": ["R08", "R09"], "sources": ["gdt_tax/parser/registry.py:MappingRegistry.add", "gdt_tax/parser/registry.py:MappingRegistry.lookup", "gdt_tax/parser/registry.py:_parse_mapping", "gdt_tax/parser/registry.py:load_registry", "gdt_tax/parser/extract.py:extract_declaration"],
+      "problem": "Hai mapping cùng key: mapping thêm sau đè mapping trước. fields dạng list không rỗng làm AttributeError lọt ra thay vì diagnostics có kiểm soát. effective_from/to, detect_root/namespace được nạp nhưng lookup chỉ xét code/version; wildcard version tường minh có thể tiếp tục áp khi cơ quan thuế đổi cấu trúc.",
+      "scope": ["Schema mapping có kiểu, datatype được hỗ trợ, XPath hợp lệ, ID/key duy nhất; strict mode cho registry đóng gói.", "Chính sách override custom registry phải tường minh và ghi audit, không phụ thuộc thứ tự tên file.", "Làm rõ trường detect/effective được thực thi thế nào hoặc bỏ khỏi hợp đồng; version mới/wildcard cần structural compatibility check.", "Tách mapping_status, extraction_completeness và validation_status: có mapping không có nghĩa mọi chỉ tiêu đã đọc đủ."],
+      "acceptance": ["Duplicate key, list thay dict, XPath lỗi, datatype lạ, missing file đều có lỗi có cấu trúc; không traceback thô hoặc bỏ qua âm thầm trong strict mode.", "Fixture phiên bản chưa biết và cấu trúc mới không tự được báo đầy đủ MAPPED.", "Mỗi mapping đóng gói có golden fixture + provenance/version hash; thiếu chỉ tiêu bắt buộc báo chưa đầy đủ."],
+      "non_goals": ["Không tự tạo mapping chỉ tiêu từ tên thẻ", "Không thay mapping đã kiểm chứng nếu không có fixture/nguồn đối chiếu"],
+      "suggested_pr": "fix(mapping): validate registry schemas and compatibility rules"
+    },
+    {
+      "id": "CORE-10", "priority": "P2", "category": "Inventory và cache", "kind": "behavior_reproduced", "effort": "M", "depends_on": [],
+      "title": "Ràng buộc cache với source root và phiên bản profiler",
+      "evidence": ["R10"], "sources": ["gdt_tax/inventory.py:scan_directory", "gdt_tax/inventory.py:load_cache", "gdt_tax/inventory.py:_scan_one", "desktop/services.py:run_offline"],
+      "problem": "Cache được tái sử dụng theo rel_path + size + mtime; load_cache kiểm tra schema nhưng không kiểm root/profile_version. Hai source root có file cùng tên, kích thước và mtime có thể nhận lại profile của root cũ. Parse mới có so hash nên bắt được một phần, nhưng classify/discovery vẫn có thể dùng profile stale.",
+      "scope": ["Cache envelope chứa root identity, inventory/profile version và policy; invalidate khi chuyển root hoặc đổi profiler.", "Phân biệt fast cache với verified cache; tùy chọn rehash hiện có phải đi xuyên desktop/CLI và thể hiện trong báo cáo.", "Không mutate object cache cũ khi gắn metadata case cho một lần scan mới; đánh giá symlink và file thay đổi trong lúc scan.", "Tệp không phải archive vẫn cần đọc có giới hạn; tránh path.read_bytes cho file lớn trước khi kiểm dung lượng."],
+      "acceptance": ["R10 không tái dùng profile khác root; profile_version mới buộc tính lại.", "Cùng root có mtime/size giữ nguyên nhưng nội dung đổi được phát hiện trong verified mode; fast mode nêu rõ giới hạn.", "Lỗi quyền/file biến mất trong lúc hash được ghi theo artifact, không làm hỏng manifest tốt trước đó."],
+      "non_goals": ["Không bắt buộc băm lại mọi tệp mỗi lần nếu chưa có số đo", "Không coi mtime là bằng chứng toàn vẹn nội dung"],
+      "suggested_pr": "fix(inventory): bind cache entries to root and profiler identity"
+    },
+    {
+      "id": "CORE-11", "priority": "P2", "category": "Hợp đồng CLI", "kind": "behavior_reproduced", "effort": "S", "depends_on": [],
+      "title": "Chuẩn hóa exit code cho parse/classify/export chưa đầy đủ",
+      "evidence": ["R11"], "sources": ["gdt_tax/parser/cli.py:main", "gdt_tax/classify.py:main", "gdt_tax/export.py:main", "gdt_tax/cli.py:_main", "desktop/services.py:run_offline"],
+      "problem": "gdt-parse vẫn trả exit 0 khi mọi declaration đều status=error. Desktop có PARTIAL, trong khi CLI offline chưa có hợp đồng tương đương. Đây là hành vi đã xác nhận; việc đổi exit code cần xử lý tương thích vì người dùng có thể đang dùng CLI trong automation.",
+      "scope": ["Định nghĩa exit success/config/input/partial/error và machine-readable summary cho bảy entrypoint.", "Có strict/allow-partial rõ hoặc kế hoạch migration; output lỗi vẫn được ghi để kiểm tra nhưng exit phản ánh chất lượng.", "Tách NEED_MAPPING hợp lệ có chủ đích với XML lỗi và dữ liệu stale."],
+      "acceptance": ["All-error, mixed-success, NEED_MAPPING-only, empty-confirmed và invalid-schema có exit/summary được tài liệu hóa.", "Tests gọi entrypoint thật bằng subprocess với fixture, không chỉ test hàm helper.", "README/CLI_GUIDE và desktop status mapping nhất quán."],
+      "non_goals": ["Không xóa output chỉ vì kết quả partial", "Không thay mã thoát online hiện có ngoài kế hoạch tương thích"],
+      "suggested_pr": "feat(cli): expose explicit partial and failed offline outcomes"
+    },
+    {
+      "id": "CORE-12", "priority": "P2", "category": "Giới hạn tài nguyên XML", "kind": "behavior_reproduced", "effort": "M", "depends_on": [],
+      "title": "Dùng chung giới hạn XML ở download, inventory và parse",
+      "evidence": ["R14"], "sources": ["gdt_tax/parser/xml_reader.py:parse_xml", "gdt_tax/inventory.py:profile_xml", "gdt_tax/gnt/portal.py:is_gnt_xml", "gdt_tax/portals/etax_legacy.py:EtaxLegacyPortal.download", "gdt_tax/archive_limits.py"],
+      "problem": "xml_reader khai MAX_XML_DEPTH=100 và MAX_XML_NODES=200000 nhưng parse_xml không áp hai giới hạn này; cây sâu 110 vẫn được nhận. Inventory có walk kiểm depth/node, còn validator download có parser riêng. huge_tree=False vẫn giữ giới hạn của libxml2, nên không được diễn giải phát hiện này thành không có bảo vệ XML nào.",
+      "scope": ["Một XmlPolicy/reader dùng chung có trần bytes, depth, nodes, DTD/entity policy và mã lỗi ổn định.", "Kiểm giới hạn theo cách có chi phí hữu hạn; nếu cần iterparse, giữ chính sách no-network và không bật huge_tree để chữa triệu chứng.", "Chuẩn hóa kết quả rejected/quarantined/unsupported và giữ source reference."],
+      "acceptance": ["Test ở biên mỗi limit và vượt 1 đơn vị; cùng input có quyết định nhất quán ở các đường đọc.", "Entity/DTD, cây sâu và nhiều node đều thất bại có kiểm soát, không truy cập mạng.", "Fixture bình thường không đổi kết quả, lỗi một artifact không làm dừng cả batch."],
+      "non_goals": ["Không tăng trần chỉ để làm test quá lớn chạy được", "Không coi no_network thay thế cho mọi kiểm tra tài nguyên"],
+      "suggested_pr": "fix(xml): enforce shared resource limits across readers"
+    },
+    {
+      "id": "CORE-13", "priority": "P1", "category": "Toàn vẹn tệp tải và resume", "kind": "behavior_reproduced", "effort": "M", "depends_on": ["CORE-12"],
+      "title": "Không nhận XML lạ hoặc PDF cụt là tệp tải hoàn chỉnh",
+      "evidence": ["R15"], "sources": ["gdt_tax/gnt/portal.py:is_gnt_xml", "gdt_tax/tb/portal.py:is_tb_pdf", "gdt_tax/gnt/storage.py:GntStore.find_existing", "gdt_tax/tb/storage.py:TbStore.find_existing", "gdt_tax/portals/etax_legacy.py:EtaxLegacyPortal.download", "desktop/documents.py:verify_rows"],
+      "problem": "is_gnt_xml nhận bất kỳ XML hợp lệ có root không phải html/error, kể cả <status><message>failed</message></status>. is_tb_pdf chỉ xét prefix %PDF-, nên PDF cụt vẫn được save/reuse và GUI đánh dấu downloaded. ZIP CRC hiện có là nền tốt nhưng không chứng minh nội dung ZIP đúng hồ sơ.",
+      "scope": ["Validator theo document kind và schema/root đã xác minh; root/format mới trả unsupported-format để điều tra thay vì tải thành công.", "PDF có kiểm tra cấu trúc phù hợp hoặc thư viện nhẹ được đánh giá; không chỉ thêm hậu tố %%EOF rồi coi là chứng minh toàn vẹn.", "Lưu size/hash/content kind cùng source record key; resume xác minh theo metadata, giữ riêng file nghi vấn, không tự xóa file cũ.", "Không đồng nhất tính toàn vẹn bytes với tính hợp lệ chữ ký hoặc chấp nhận về nghiệp vụ thuế."],
+      "acceptance": ["XML lỗi dạng SOAP/status/JSON và PDF chỉ có header không được đánh dấu downloaded.", "Tệp hợp lệ của fixture tải/save/reuse được; root mới có diagnostics rõ.", "GUI và CLI dùng cùng validator; không reuse nhầm file chỉ vì filename khớp."],
+      "non_goals": ["Không xây hệ thống xác minh pháp lý/chữ ký số trong PR này", "Không xóa file người dùng đang có"],
+      "suggested_pr": "fix(download): validate document kinds before save and reuse"
+    },
+    {
+      "id": "CORE-14", "priority": "P1", "category": "Ranh giới tin cậy HTTP", "kind": "boundary_reproduced_not_exploited", "effort": "M", "depends_on": [],
+      "title": "Kiểm soát origin, HTTPS và redirect cho form/operation",
+      "evidence": ["R16"], "sources": ["gdt_tax/http.py:HttpClient.url", "gdt_tax/http.py:HttpClient.request", "gdt_tax/portals/etax_legacy.py:_form_data", "gdt_tax/portals/etax_legacy.py:_operation_url", "desktop/sessions.py:RoutedHttpClient"],
+      "problem": "Form action từ HTML có thể là URL tuyệt đối ngoài cổng và helper chấp nhận. HttpClient cũng nhận URL tuyệt đối và chưa áp origin policy; requests xử lý redirect tự động. Probe chỉ xác nhận thiếu guard ở helper, không gửi dữ liệu hoặc chứng minh cổng đang chuyển tới host lạ.",
+      "scope": ["Origin policy theo adapter và mục đích request; yêu cầu HTTPS, chặn userinfo và host/port ngoài danh sách tin cậy.", "Kiểm tra từng redirect trước khi gửi lại body/header/cookie/token; xử lý riêng 301/302/303 và 307/308.", "Khi cơ quan thuế chuyển domain: báo cần cập nhật adapter/policy qua review; không âm thầm tin domain được HTML đề xuất.", "URL building dùng parser và chuẩn hóa origin, không dùng startswith để quyết định route."],
+      "acceptance": ["Mock form action external, scheme-relative, http downgrade, host gần giống, userinfo, redirect nhiều chặng: không gửi credential/token sang origin chưa cho phép.", "Redirect hợp lệ nội bộ và hai cổng đang hỗ trợ vẫn hoạt động với cookie tách đúng.", "Lỗi chỉ nêu origin đã làm sạch, không kèm session query."],
+      "non_goals": ["Không thêm host tùy ý qua cấu hình không kiểm soát", "Không tắt kiểm tra TLS hoặc bỏ qua interstitial"],
+      "suggested_pr": "fix(http): enforce per-portal origin and redirect policies"
+    },
+    {
+      "id": "CORE-15", "priority": "P1", "category": "HTTP, timeout và retry", "kind": "behavior_and_code_inspection", "effort": "L", "depends_on": [],
+      "title": "Giới hạn response, thời gian tác vụ và retry theo operation",
+      "evidence": ["R17"], "sources": ["gdt_tax/http.py:HttpClient.request", "gdt_tax/http.py:HttpClient._retry_delay", "gdt_tax/storage.py:decode_zip_bytes", "gdt_tax/run_hooks.py:RunHooks", "gdt_tax/pipeline.py:Pipeline._search_page", "gdt_tax/auth.py:login"],
+      "problem": "HTTP mặc định đọc toàn bộ response vào memory trước giới hạn ZIP/XML downstream; request timeout không phải deadline toàn tác vụ. Retry lồng ở HTTP/login/search/session. Retry-After='inf' được nhận thành vô hạn. Base64/ZIP/XML bọc nhiều lớp còn làm tăng bản sao memory.",
+      "scope": ["PR A: kiểm Retry-After hữu hạn, nonnegative, hỗ trợ HTTP-date và giới hạn max delay; backoff/jitter có clock/sleep inject được.", "PR B: đọc stream có trần bytes theo operation, tính cả bytes giải nén, đóng response khi dừng; tệp lớn dùng temporary spool rồi atomic commit.", "PR C: RunBudget gồm deadline, max requests/pages/bytes/auth retries; retry chỉ với loại lỗi và operation phù hợp, có idempotency policy cho POST.", "Progress/cancellation được kiểm tra giữa chunk; vẫn không hủy giữa atomic commit. Không hứa thread có thể ngắt ngay socket đang chờ."],
+      "acceptance": ["Test 429 date/inf/NaN/giá trị cực lớn, 503, disconnect giữa stream, thiếu/sai Content-Length, gzip lớn bằng local fake server hoặc stream stub.", "Không tốn toàn bộ memory cho response vượt trần; response luôn đóng.", "Có tổng số request/thời gian retry hữu hạn; dừng an toàn, không retry credential-invalid/schema-changed như lỗi mạng."],
+      "non_goals": ["Không retry mù mọi POST", "Không chuyển sang async/concurrency chỉ để né thiết kế budget", "Không dùng tải song song trong cùng phiên DSE"],
+      "suggested_pr": "feat(http): bound streaming responses and operation retry budgets"
+    },
+    {
+      "id": "CORE-16", "priority": "P1", "category": "Log và chẩn đoán có thể chia sẻ", "kind": "behavior_reproduced", "effort": "M", "depends_on": [],
+      "title": "Che URL, Referer và body dạng chuỗi; tách dump raw khỏi gói hỗ trợ",
+      "evidence": ["R18"], "sources": ["gdt_tax/traffic.py:body_as_text", "gdt_tax/traffic.py:mask_headers", "gdt_tax/traffic.py:TrafficDumper", "gdt_tax/http.py:HttpClient._log_response", "gdt_tax/auth.py:login", "desktop/jobs.py:Redactor", "gdt_tax/logging_setup.py"],
+      "problem": "Che dict theo tên trường không xử lý JSON/HTML/form-urlencoded dạng string, URL hoặc Referer có session query. R18 giữ nguyên fake password trong JSON string và fake session trong Referer. CLI SecretsFilter/GUI Redactor đã che thêm một số literal, nhưng không bảo vệ mọi token động trong dump. Traffic module docstring đang hứa có thể chia sẻ log mà không lộ phiên quá rộng.",
+      "scope": ["Redactor có cấu trúc theo URL/query, headers, JSON/form và HTML field; che cả token/CSRF/DSE và dữ liệu định danh khi xuất support bundle.", "Log mặc định chỉ event code, origin/path an toàn, kích thước/hash/fingerprint; không ghi raw body login ở INFO.", "Raw dump là lựa chọn chẩn đoán riêng có thời hạn/giới hạn và nhãn private; support bundle được sanitize trước khi ghi.", "Đồng bộ tài liệu với hành vi và test không phụ thuộc literal của tài khoản thật."],
+      "acceptance": ["Fake secret ở URL, Referer, hidden input, JSON string, nested array, exception, encoded form và response redirect không lọt ra shared output.", "Không hứa raw dump đã sạch nếu còn bytes gốc; test xác nhận mặc định không ghi raw tax data.", "Diagnostics vẫn đủ để nhận biết endpoint/operation/schema mismatch mà không có token thật."],
+      "non_goals": ["Không commit log/HTML/CAPTCHA thực để làm fixture", "Không dùng regex duy nhất và tuyên bố bảo đảm mọi dạng dữ liệu"],
+      "suggested_pr": "fix(diagnostics): separate private traffic from sanitized support output"
+    },
+    {
+      "id": "CORE-17", "priority": "P2", "category": "Audit và truy vết", "kind": "behavior_reproduced", "effort": "M", "depends_on": ["CORE-04"],
+      "title": "Giữ error, warning và mapping version xuyên suốt tới báo cáo",
+      "evidence": ["R07"], "sources": ["gdt_tax/export.py:build_rows", "gdt_tax/export.py:build_workbook", "gdt_tax/parser/models.py:ParsedDeclaration", "gdt_tax/parser/models.py:Indicator"],
+      "problem": "ParsedDeclaration có error/warnings/mapping_version, nhưng build_rows bỏ các trường này. Sheet 08_PARSE_ERRORS chỉ có nguồn/status, sheet 09_MAPPING_VERSIONS chỉ liệt kê mapping_id. Người nhận workbook không thấy chính xác vì sao parse lỗi hoặc mapping revision nào đã tạo số liệu.",
+      "scope": ["Mang declaration error, warning và indicator warning, mapping ID/version/hash, parser/rule version vào row/audit.", "Tách lỗi cú pháp, source changed, missing indicator và chưa có mapping; giữ khả năng truy ngược record/artifact/source hash/XPath.", "Đặt giới hạn text và escape nội dung khi xuất; không đưa raw hồ sơ vào audit."],
+      "acceptance": ["Workbook/JSON/CSV summary thể hiện được SOURCE_CHANGED, MISSING_IN_XML và PARSE_VALUE_ERROR.", "Hai mapping cùng ID khác version không bị báo là cùng một phiên bản.", "Audit có thể xác định output đến từ stage/input nào mà không cần log máy người dùng."],
+      "non_goals": ["Không coi MAPPED đồng nghĩa toàn bộ báo cáo hợp lệ", "Không thay error bằng thông báo chung làm mất mã nguyên nhân"],
+      "suggested_pr": "feat(audit): preserve parser diagnostics and mapping provenance"
+    },
+    {
+      "id": "CORE-18", "priority": "P2", "category": "Storage và khả năng mở rộng", "kind": "code_inspection", "effort": "L", "depends_on": ["CORE-03"],
+      "title": "Giảm ghi lại toàn catalog và tránh mất cập nhật giữa hai tiến trình",
+      "evidence": [], "sources": ["gdt_tax/pipeline.py:Pipeline._persist", "gdt_tax/gnt/pipeline.py:GntPipeline._persist", "gdt_tax/tb/pipeline.py:TbPipeline._persist", "gdt_tax/storage.py:write_metadata", "gdt_tax/atomic.py:replace_with_retry"],
+      "problem": "Mỗi hồ sơ gọi _persist, đọc/merge JSON rồi ghi lại JSON/CSV/XLSX; tổng lượng công việc có xu hướng bậc hai theo số hồ sơ. Atomic replace bảo vệ từng file nhưng không tạo transaction chung hoặc lock giữa hai EXE/CLI. Hai writer đọc cùng catalog có thể ghi đè cập nhật của nhau. Chưa chạy benchmark hoặc race stress trong lượt review này.",
+      "scope": ["PR đầu benchmark 100/1000/5000 record tổng hợp, đếm workbook saves/bytes/time; tách commit catalog khỏi materialize Excel/CSV.", "Chọn journal/checkpoint hoặc SQLite có migration sau khi so tradeoff; checkpoint theo page/time, flush khi kết thúc/cancel có kiểm soát.", "Có lock hoặc optimistic revision check cho catalog; có generation marker/recovery cho các derived report.", "Giao diện query vẫn không ghi output; bản tải đã commit phải khôi phục được sau crash."],
+      "acceptance": ["Test hai writer, crash giữa JSON và XLSX, disk full và file bị khóa; không mất catalog trước đó.", "Số lần build workbook không tuyến tính theo số record khi tải; benchmark so trước/sau và nêu môi trường.", "Resume sau crash không bỏ tệp đã hoàn tất và không gán thành công cho file chưa commit."],
+      "non_goals": ["Không tự chọn SQLite nếu chưa đo/thiết kế migration", "Không bỏ fsync/atomic write chỉ để tăng tốc"],
+      "suggested_pr": "perf(storage): checkpoint catalogs and serialize concurrent writers"
+    },
+    {
+      "id": "CORE-19", "priority": "P1", "category": "Xác thực và trạng thái phiên", "kind": "code_inspection", "effort": "M", "depends_on": ["CORE-01", "CORE-14"],
+      "title": "Phân loại phản hồi đăng nhập/phiên dùng chung cho DVC và legacy",
+      "evidence": [], "sources": ["gdt_tax/auth.py:login", "gdt_tax/verification.py:raise_for_portal_verification", "gdt_tax/portals/etax_legacy.py:EtaxLegacyPortal._submit_login", "desktop/sessions.py:is_auth_failure", "desktop/sessions.py:ETaxSessionManager.execute"],
+      "problem": "Legacy vừa được sửa để nhận một số lỗi cụ thể, nhưng DVC login vẫn coi JSON không status=200 là rejected CAPTCHA. is_auth_failure chỉ biết một tập HTTP/form/chuỗi. Maintenance, SSO, OTP, đổi giao thức hoặc lỗi tài khoản mới vẫn dễ rơi vào retry/fallback sai loại. Chưa tái hiện một lỗi DVC mới trong review này.",
+      "scope": ["AuthOutcome/PortalResponseKind: success, invalid credentials, captcha invalid, expired session, access verification, maintenance, interactive auth required, schema unknown.", "Classifier theo adapter và markup/JSON thực; giữ unknown thay vì đoán sai. Reauth một lần chỉ khi có bằng chứng hết phiên.", "Scope cookie/token/state theo nguồn; cập nhật token xoay vòng đúng response/operation.", "Nếu SSO/OTP bắt buộc, trả hành động cần người dùng hoặc luồng browser được thiết kế riêng, không tự thêm cơ chế vượt xác minh."],
+      "acceptance": ["Fixture matrix cho từng outcome, gồm HTTP 200 và redirect về login; không tính mọi lỗi thành CAPTCHA.", "Invalid credentials và maintenance không retry auth liên tục; expired retry hữu hạn; cancellation giữ đúng loại.", "CLI và desktop báo cùng error code; không lộ nội dung nhạy cảm trong thông báo."],
+      "non_goals": ["Không tự giải/bỏ qua lớp bảo vệ truy cập", "Không kết luận header giả trình duyệt bảo đảm truy cập", "Không đưa Playwright vào runtime chỉ để vá một trang lạ"],
+      "suggested_pr": "refactor(auth): classify portal outcomes and session recovery explicitly"
+    },
+    {
+      "id": "CORE-20", "priority": "P2", "category": "Khả năng thích ứng cổng", "kind": "architecture_proposal", "effort": "L", "depends_on": ["CORE-01", "CORE-19"],
+      "title": "Tách profile năng lực portal và chính sách định tuyến nguồn",
+      "evidence": [], "sources": ["gdt_tax/constants.py", "gdt_tax/config.py:Settings.periods", "gdt_tax/config.py:Settings.source_enabled", "gdt_tax/portals/__init__.py:build_portals", "gdt_tax/portals/etax_legacy.py:EtaxLegacyPortal", "gdt_tax/gnt/portal.py:GntPortal", "gdt_tax/tb/portal.py:TbPortal"],
+      "problem": "Một số endpoint ở constants, nhưng operation/selector/field/empty marker/pagination vẫn rải trong các adapter. Cutoff và thời đoạn là chính sách toàn cục; khi cơ quan thuế mở lại nguồn cũ, đổi ngày chuyển nguồn hoặc giới hạn khoảng tra cứu, sửa một hằng số có thể chưa đủ.",
+      "scope": ["Profile có version cho endpoint, operation/form descriptors, supported document kinds, pagination strategy, date limit và response contracts.", "RoutingPolicy có ngày hiệu lực và khả năng nguồn; in execution plan trước khi đăng nhập, báo coverage gap/overlap rõ.", "Profile là cấu hình đóng gói đã review và validate, không tải rồi thực thi tùy ý từ remote.", "Chia PR theo một adapter trước; giữ fixture baseline và option cũ qua compatibility adapter."],
+      "acceptance": ["Mô phỏng đổi form ID/operation/page parameter trong một profile mà không sửa generic pipeline.", "Test cutoff boundaries, gap/overlap, nguồn tắt, đổi max range; không tự báo đầy đủ khi một nguồn không truy cập được.", "Cho biết profile/routing version trong diagnostics và output lineage."],
+      "non_goals": ["Không xây DSL tổng quát cho mọi website", "Không cho cấu hình chèn Python/JS/XPath tùy ý ngoài chính sách", "Không gộp bản ghi ở vùng overlap nếu chưa có identity rule"],
+      "suggested_pr": "refactor(portals): version adapter capabilities and routing policies"
+    },
+    {
+      "id": "CORE-21", "priority": "P2", "category": "Kiến trúc và bảo trì", "kind": "architecture_proposal", "effort": "L", "depends_on": ["CORE-01", "CORE-03"],
+      "title": "Định nghĩa Protocol/Result rồi mới rút gọn ba pipeline lặp",
+      "evidence": [], "sources": ["gdt_tax/portals/base.py:Portal", "gdt_tax/pipeline.py:Pipeline", "gdt_tax/gnt/pipeline.py:GntPipeline", "gdt_tax/tb/pipeline.py:TbPipeline", "gdt_tax/portals/etax_legacy.py:_XmlZipResponse", "desktop/services.py:run_online"],
+      "problem": "Ba pipeline lặp retry/pagination/progress/target/download/persist, nên mỗi sửa dễ lệch giữa tờ khai/GNT/TB. GNT/TB kế thừa cả portal legacy và nhập private helper; response giả bọc XML thành ZIP rồi base64 để khớp requests-like API. settings/record/http dùng duck typing khá nhiều dù mypy core đang pass.",
+      "scope": ["PR A: Protocol cho transport, solver, record/store, query outcome và DownloadArtifact; explicit bytes/stream/kind/source provenance.", "PR B: orchestration chung cho page loop, budget, completeness và progress; pagination strategy vẫn thuộc adapter.", "PR C: tách LegacySessionNavigator khỏi nghiệp vụ tờ khai để GNT/TB dùng composition; bỏ dần fake response/base64 qua compatibility layer.", "Giữ invariant search rồi tải ngay trên trang hiện tại, tuần tự trong một phiên DSE."],
+      "acceptance": ["Contract tests chạy cùng bộ cho ba pipeline; behavior fixture cũ không đổi.", "Fake transport không phải giả cả requests.Response; type checker bắt thiếu capability/method trong adapter mới.", "Không đổi output filename/schema hoặc tăng memory khi refactor; PR nhỏ có rollback được."],
+      "non_goals": ["Không viết lại toàn bộ core trong một PR", "Không tải song song cùng phiên DSE", "Không chuyển framework/async nếu chưa có nhu cầu và benchmark"],
+      "suggested_pr": "refactor(core): introduce typed contracts before sharing orchestration"
+    },
+    {
+      "id": "CORE-22", "priority": "P2", "category": "Kiểm thử khi cổng thay đổi", "kind": "test_strategy_proposal", "effort": "M", "depends_on": ["CORE-01", "CORE-16"],
+      "title": "Fixture có nguồn gốc, contract tests và phép biến đổi cấu trúc",
+      "evidence": [], "sources": ["tests/fixtures", "tests/test_parsing.py", "tests/test_etax_legacy.py", "tests/test_gnt.py", "tests/test_tb.py", "tests/test_verification.py", "docs/core-review-20261020/reproduce_findings.py"],
+      "problem": "Bộ test hiện có nhiều tình huống hữu ích nhưng fixture chưa có manifest hợp đồng theo portal/date/profile/operation. Một parser và fixture cùng giữ vị trí cột cũ vẫn xanh khi portal có biến thể. 18 ca review cho thấy cần kiểm tra biến đổi đầu vào, không chỉ fixture một trạng thái.",
+      "scope": ["Fixture manifest: source, operation, sanitized_at, adapter version, content kind, expected row counts/outcomes và cách ẩn dữ liệu.", "Thêm metamorphic cases đổi namespace prefix, hoán vị/thêm cột, handler khác, token xoay, pagination thay đổi, lặp/thiếu hàng và HTML 200 maintenance.", "Chuyển từng repro đã fix thành regression test kỳ vọng hành vi đúng; không dùng script review làm green gate giữ nguyên lỗi.", "Replay trace bằng fake transport; live smoke chỉ opt-in, có account/quyền/scope/budget rõ, không chạy bằng secrets trong CI công khai."],
+      "acceptance": ["Fixture mới chạy cùng parser/adapter thật và assert completeness/error classification.", "Không có credential, CAPTCHA thật hoặc hồ sơ thuế trong repo/artifact CI; sanitizer có tests.", "Tài liệu nêu cách thêm một biến thể cổng và chạy test matrix liên quan."],
+      "non_goals": ["Không tự đăng nhập tài khoản thật từ pipeline CI", "Không snapshot nguyên HTML thực chưa sanitize", "Không chỉ assert độ dài list là đủ"],
+      "suggested_pr": "test(portals): version sanitized fixtures and drift contracts"
+    },
+    {
+      "id": "CORE-23", "priority": "P2", "category": "CI, dependency và tái lập build", "kind": "code_inspection", "effort": "M", "depends_on": [],
+      "title": "Tách test tối thiểu, desktop Windows và nâng dependency có kiểm chứng",
+      "evidence": [], "sources": [".gitlab-ci.yml", "requirements-desktop.txt", "pyproject.toml", "scripts/build_windows.ps1", "scripts/smoke_test_windows.ps1", "scripts/audit_bundle.py"],
+      "problem": "GitLab CI hiện test Linux Python 3.10/3.12 với package tối thiểu; GUI/OCR thực không được cài trong job đó. Windows build local đã có 18 UI checks + frozen OCR, nhưng chưa là một gate CI được lưu cùng source revision. Dependency desktop pin trực tiếp nhưng chưa khóa toàn bộ transitive/hash; package core còn version 1.0.0 khác desktop 2.0.0.",
+      "scope": ["Giữ job minimal để kiểm optional imports; thêm desktop/OCR unit và Windows frozen smoke trên runner phù hợp, lịch chạy theo cost.", "Lock runtime/build-tools/transitive theo platform/Python với hash hoặc inventory được kiểm soát; lưu source SHA và build-tool versions trong artifact provenance.", "Chu kỳ update dependency bằng PR nhỏ, không đổi ORT/model chỉ vì bản mới hơn; thử source/frozen parity và bundle size.", "Tách core package version, desktop version và build revision rõ trong UI/CLI; không tự tăng bản phát hành ở PR review."],
+      "acceptance": ["CI chỉ ra ca nào skip vì thiếu optional deps; có đường chạy không skip test desktop/OCR khi release.", "Build lại từ sạch không âm thầm lấy transitive khác; có SBOM/inventory và hash artifact.", "Source revision nhúng trong build/report khớp commit phát hành; kiểm version không mâu thuẫn chức năng update."],
+      "non_goals": ["Không cần bit-for-bit reproducible ngay nếu chưa kiểm timestamps/toolchain", "Không đưa dependency nặng ngoài profile Full đã chọn", "Không gọi live portal để CI pass"],
+      "suggested_pr": "ci: gate Windows desktop builds and capture dependency provenance"
+    },
+    {
+      "id": "CORE-24", "priority": "P2", "category": "Vận hành và phát hiện thay đổi", "kind": "operational_proposal", "effort": "M", "depends_on": ["CORE-01", "CORE-16", "CORE-19"],
+      "title": "Health report và playbook chẩn đoán thay đổi cổng",
+      "evidence": [], "sources": ["gdt_tax/http.py:HttpClient.request", "gdt_tax/run_hooks.py:RunHooks.emit", "desktop/jobs.py:LogBridge", "docs/ARCHITECTURE.md", "docs/development/REVIEW.md"],
+      "problem": "Hiện chủ yếu điều tra từ log và thử thật. Thiếu báo cáo fingerprint/outcome/coverage chuẩn để biết adapter nào lỗi, ở login/search/download hay offline mapping. Tài liệu kiến trúc còn một số khẳng định lịch sử như cổng không kiểm browser fingerprint, không còn đủ cơ sở để xem là bảo đảm hiện tại.",
+      "scope": ["Structured event có trace/run/operation ID, profile version, error code, timings, counts và safe schema fingerprint.", "Lệnh doctor/offline validate-inputs và opt-in portal healthcheck chỉ đọc, tách public reachability khỏi authenticated capability; không tự chạy khi mở app.", "Playbook: dừng retry, lấy diagnostics an toàn, tạo fixture, thêm failing contract test, sửa adapter nhỏ, chạy offline rồi smoke có quyền, theo dõi/rollback.", "Ghi last_verified_at/environment cho ghi chép live; cập nhật docs để tách quan sát lịch sử khỏi hợp đồng."],
+      "acceptance": ["Một báo cáo hỗ trợ chỉ rõ nguồn/operation/outcome/completeness mà không cần mật khẩu hoặc HTML thật.", "Healthcheck không tải/nộp hồ sơ, không thay đổi trạng thái nghiệp vụ và có budget.", "Runbook dẫn được từ symptom sang nhóm ticket/owner, có hướng rollback profile/build."],
+      "non_goals": ["Không thêm telemetry tự động gửi ra ngoài", "Không coi healthcheck thành công là bằng chứng mọi nghiệp vụ đều dùng được", "Không tự sửa cấu hình theo remote response"],
+      "suggested_pr": "feat(diagnostics): add safe health reports and portal change runbook"
+    },
+    {
+      "id": "CORE-25", "priority": "P2", "category": "Phát hành và phục hồi", "kind": "code_inspection", "effort": "M", "depends_on": [],
+      "title": "Preflight, verify đủ asset và rollback khi thay release",
+      "evidence": [], "sources": ["scripts/release_gitlab.py:main", "scripts/release_gitlab.py:request", "scripts/write_release_metadata.py", "desktop/updates.py"],
+      "problem": "Helper replace đã dùng URL có hash và giữ asset ID, nhưng đổi hai link riêng rồi notes; lỗi giữa chừng có thể để release không đồng bộ. Helper chỉ tự tải lại EXE, còn checksum/tag/ID đã được kiểm bằng script ad-hoc trong lần phát hành vừa rồi. Chưa có preflight buộc metadata/version/tag/source revision tương thích.",
+      "scope": ["Tích hợp preflight version/tag/build/source SHA/checksum và release/link IDs; snapshot trước mutation.", "Upload và xác minh cả hai package trước khi đổi link; commit link update có compensating rollback nếu API fail, ghi trạng thái recoverable.", "Verify EXE + checksum qua public/permalink URLs, tag không di chuyển và không sinh release mới trong replace.", "Lưu release manifest không chứa credential; tests API giả cho mọi vị trí thất bại và rerun idempotence."],
+      "acceptance": ["Mock lỗi upload thứ hai, đổi link đầu, notes update, verify mismatch: trả lỗi rõ và có rollback/recovery kiểm chứng.", "replace không gọi create-release/tag APIs; giữ ID/link download cũ.", "Không in token, không tạo token file để tiện tự động hóa; không cần publish thật trong unit test."],
+      "non_goals": ["Không đổi release/tag hiện có khi đang review", "Không xóa package cũ trước khi bản mới được xác minh", "Không hứa API update nhiều link là transaction nguyên tử"],
+      "suggested_pr": "fix(release): verify replacement bundles and recover partial updates"
+    },
+    {
+      "id": "CORE-26", "priority": "P2", "category": "Phạm vi nghiệp vụ và mở rộng phân loại", "kind": "known_capability_gap", "effort": "M", "depends_on": ["CORE-07", "CORE-09", "CORE-17"],
+      "title": "Phân biệt vai trò tài liệu, coverage mapping và trạng thái tiếp nhận",
+      "evidence": [], "sources": ["gdt_tax/classify.py:classify_artifact", "gdt_tax/classification.py:classify_record", "gdt_tax/parser/extract.py:extract_declaration", "gdt_tax/inventory.py:_case_view", "gdt_tax/export.py:build_rows", "gdt_tax/form_mappings"],
+      "problem": "Phân loại nội dung hiện đặt has_appendix=False; mapping mới chỉ phủ một số mẫu/phiên bản. Trạng thái parse MAPPED/NEED_MAPPING khác với vai trò phụ lục/thông báo và trạng thái được cơ quan thuế chấp nhận. Nếu mở rộng báo cáo mà trộn các khái niệm này, có thể trình bày dữ liệu chưa xác minh như kết quả thuế cuối cùng.",
+      "scope": ["DocumentRole từ cấu trúc có bằng chứng, giữ conflict/unknown khi tín hiệu khác nhau; hỗ trợ phụ lục theo fixture đã ẩn danh.", "Mapping coverage report theo form/version/namespace và số chỉ tiêu có/thiếu; thêm mapping từng mẫu bằng PR riêng với golden tests.", "AcceptanceStatus giữ raw status, nguồn/trích xuất và ngày kiểm chứng; unknown khi chưa có liên kết chắc với artifact.", "Giữ mọi lần nộp; declaration-family/latest selection là tính năng riêng có policy và người dùng chọn."],
+      "acceptance": ["Fixture declaration/appendix/notice/unknown/conflict không bị ép chung một loại.", "Mẫu chưa mapping vẫn đọc metadata và được đánh dấu đúng; không tự tính thuế hoặc cộng các bản bổ sung.", "Báo cáo hiển thị riêng parse quality, file integrity và acceptance status."],
+      "non_goals": ["Không suy đoán nghĩa chỉ tiêu từ mã ctXX", "Không tự kết luận tờ khai hợp lệ về pháp lý", "Không tự ẩn các lần nộp trước"],
+      "suggested_pr": "feat(classification): expose document roles and mapping coverage"
+    }
+  ]
+}
