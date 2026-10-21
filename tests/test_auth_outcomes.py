@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -15,7 +14,7 @@ from gdt_tax.auth_outcomes import AuthFailure, AuthOutcome, classify_response
 from gdt_tax.config import Settings
 from gdt_tax.portals.etax_legacy import EtaxLegacyPortal
 from gdt_tax.run_hooks import RunCancelled, RunHooks
-from tests.support import FakeResponse
+from tests.support import FakeResponse, temporary_directory
 from tests.test_etax_legacy import LOGIN_OK_HTML, LOGIN_PAGE_HTML
 from tests.test_verification import CHALLENGE
 
@@ -97,7 +96,7 @@ class AuthContractTests(unittest.TestCase):
 
     def test_cli_and_desktop_share_auth_code_before_pipeline_starts(self):
         failure = AuthFailure(AuthOutcome.INVALID_CREDENTIALS)
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             config = RunConfig('login', Path(directory), username='synthetic', password='fixture')
             manager = ETaxSessionManager()
             with patch.object(manager, 'ensure_authenticated', side_effect=failure):

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -12,6 +11,7 @@ from scripts.build_provenance import build_receipt
 from scripts.dependency_inventory import inventory, verify
 from scripts.run_test_gate import gate_payload
 from scripts.write_release_metadata import write_metadata
+from tests.support import temporary_directory
 
 
 class BuildProvenanceTests(unittest.TestCase):
@@ -33,7 +33,7 @@ class BuildProvenanceTests(unittest.TestCase):
         self.assertTrue(gate_payload(result, 'desktop', 'a' * 40)['pass'])
 
     def test_receipt_binds_source_frozen_gates_and_both_asset_hashes(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             root = Path(directory)
             for name in ('packaging', 'desktop/resources', '.cache/ci', '.cache/smoke-test', 'dist'):
                 (root / name).mkdir(parents=True)
@@ -56,6 +56,6 @@ class BuildProvenanceTests(unittest.TestCase):
                 build_receipt(root)
 
     def test_invalid_source_sha_rejected_before_metadata_write(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             with self.assertRaisesRegex(ValueError, 'SOURCE_SHA_INVALID'):
                 write_metadata(Path(directory), 'not-a-revision')

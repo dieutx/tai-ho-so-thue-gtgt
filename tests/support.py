@@ -11,6 +11,7 @@ import tempfile
 import time
 import zipfile
 from collections import namedtuple
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 
@@ -36,6 +37,16 @@ def cleanup_temporary_directory(directory: tempfile.TemporaryDirectory) -> None:
             if getattr(error, "winerror", None) != 145 or attempt == 9:
                 raise
             time.sleep(0.1)
+
+
+@contextmanager
+def temporary_directory():
+    """Apply the same bounded Windows cleanup policy to context-managed fixtures."""
+    directory = tempfile.TemporaryDirectory()
+    try:
+        yield directory.name
+    finally:
+        cleanup_temporary_directory(directory)
 
 PNG_HEADER = b"\x89PNG\r\n\x1a\n"
 FAKE_CAPTCHA_BYTES = PNG_HEADER + b"0" * 600

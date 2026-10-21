@@ -1,7 +1,6 @@
 """Profile mutations and routing coverage use real adapters without portal calls."""
 from __future__ import annotations
 
-import tempfile
 import unittest
 from dataclasses import replace
 from datetime import date
@@ -12,7 +11,7 @@ from gdt_tax.errors import ConfigError
 from gdt_tax.pipeline import Pipeline
 from gdt_tax.portal_profiles import DVC_PROFILE, RouteWindow, RoutingPolicy
 from gdt_tax.portals.dvc import DvcPortal
-from tests.support import FakeHttp, FakeResponse, StubCaptcha, fixture
+from tests.support import FakeHttp, FakeResponse, StubCaptcha, fixture, temporary_directory
 from tests.test_pipeline import make_handler
 
 
@@ -66,7 +65,7 @@ class PortalProfileTests(unittest.TestCase):
         self.assertEqual(result.total_pages, 2)
 
     def test_gap_does_not_authenticate_or_claim_complete(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             settings = replace(self.settings(Path(directory)), routing_policy=RoutingPolicy('gap', date.min, ()))
             http = FakeHttp(lambda *_: self.fail('Gap plan must not authenticate'))
             summary = Pipeline(settings, http, StubCaptcha()).run()
@@ -81,7 +80,7 @@ class PortalProfileTests(unittest.TestCase):
                 profile.validate()
 
     def test_execution_plan_is_logged_before_login_and_record_lineage_uses_versions(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             settings = replace(self.settings(Path(directory)), from_date=date(2026, 1, 1), to_date=date(2026, 1, 1))
             pipeline = Pipeline(settings, FakeHttp(make_handler(search=lambda _: fixture('dvc_results_page1.html').replace('>2<', '>1<'))), StubCaptcha())
             # A one-page trace is sufficient; default fixture page count is two.

@@ -4,7 +4,6 @@ from __future__ import annotations
 import io
 import json
 import logging
-import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,6 +12,7 @@ from unittest.mock import patch
 from gdt_tax.logging_setup import SecretsFilter
 from gdt_tax.redaction import exception_summary, redact_text, safe_url
 from gdt_tax.traffic import TrafficDumper, body_as_text, mask_headers
+from tests.support import temporary_directory
 from tests.test_http import FakeSession, StubResponse
 from tests.test_traffic import StubResponse as TrafficResponse
 
@@ -36,7 +36,7 @@ class RedactionContracts(unittest.TestCase):
         self.assertNotIn("fake-secret", redact_text("redirected to " + url))
 
     def test_shared_dump_contains_no_original_payload_or_tax_data(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             dumper = TrafficDumper(tmp)
             paths = dumper.record(method="POST", url="https://example.test/search?token=fake-secret",
                 body={"unrecognized_taxpayer_field": "synthetic-sensitive-taxpayer"},
@@ -50,7 +50,7 @@ class RedactionContracts(unittest.TestCase):
             self.assertEqual(list(Path(tmp).rglob("*.body")), [])
 
     def test_private_dump_is_separate_bounded_and_expires(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             now = [datetime(2026, 1, 1)]
             dumper = TrafficDumper(tmp, private=True, max_body_bytes=3,
                                    max_records=1, clock=lambda: now[0])
@@ -96,7 +96,7 @@ class RedactionContracts(unittest.TestCase):
 
         import desktop.crash_log as crash_log
         old_hook = sys.excepthook
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             target = Path(tmp) / "TaiHoSoThue" / "PRIVATE" / "crash.log"
             target.parent.mkdir(parents=True)
             target.write_text("x" * (1024 * 1024 + 1), encoding="utf-8")

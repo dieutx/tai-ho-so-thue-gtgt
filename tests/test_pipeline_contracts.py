@@ -1,7 +1,6 @@
 """One behavior matrix for tax/GNT/TB orchestration using minimal fake adapters."""
 from __future__ import annotations
 
-import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
@@ -18,7 +17,7 @@ from gdt_tax.pipeline import Pipeline
 from gdt_tax.table_contracts import ParseDiagnostics
 from gdt_tax.tb.models import TbPageResult, ThongBao
 from gdt_tax.tb.pipeline import TbPipeline
-from tests.support import StubCaptcha
+from tests.support import StubCaptcha, temporary_directory
 
 CASES = [(Pipeline, lambda key: CaseRecord(key, 'ETAX_LEGACY'), PageResult, 'search', 'ETAX_LEGACY'),
          (GntPipeline, GiayNopTien, GntPageResult, 'search_gnt', 'GNT'),
@@ -28,7 +27,7 @@ CASES = [(Pipeline, lambda key: CaseRecord(key, 'ETAX_LEGACY'), PageResult, 'sea
 class PipelineContractTests(unittest.TestCase):
     def exercise(self, variant):
         for cls, make_record, outcome, method, source in CASES:
-            with self.subTest(pipeline=cls.__name__), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(pipeline=cls.__name__), temporary_directory() as directory:
                 settings = Settings(username='synthetic', password='fixture', from_date=date(2025, 1, 1),
                     to_date=date(2025, 1, 2), download_dir=Path(directory), search_attempts=2,
                     pause_between_records=0, pause_between_pages=0)

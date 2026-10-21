@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from gdt_tax.export import (
     write_csv,
     write_workbook,
 )
+from tests.support import temporary_directory
 
 PARSED = {
     "schema_version": "parsed-declaration-v1",
@@ -108,7 +108,7 @@ class ExportTests(unittest.TestCase):
         workbook.close()
 
     def test_negative_money_kept_and_formula_escaped(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             rows = build_rows(MANIFEST, PARSED, CLASSIFICATION)
             workbook = build_workbook(rows, MANIFEST, PARSED, CLASSIFICATION)
             path = write_workbook(workbook, Path(tmp) / "out.xlsx")
@@ -126,7 +126,7 @@ class ExportTests(unittest.TestCase):
             loaded.close()
 
     def test_csv_written_utf8_bom(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             rows = build_rows(MANIFEST, PARSED, CLASSIFICATION)
             path = write_csv(Path(tmp) / "out.csv", rows)
             raw = path.read_bytes()

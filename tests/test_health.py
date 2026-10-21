@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
@@ -16,7 +15,7 @@ from gdt_tax.models import PageResult
 from gdt_tax.orchestration import search_page
 from gdt_tax.parsing import parse_record_table
 from gdt_tax.run_hooks import RunHooks
-from tests.support import FakeResponse, fixture
+from tests.support import FakeResponse, fixture, temporary_directory
 from tests.test_http import FakeSession, StubResponse
 
 
@@ -53,7 +52,7 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(report['verification_scope'], 'public_get_only')
 
     def test_doctor_and_invalid_input_validation_do_not_connect_or_rewrite(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             root = Path(directory)
             file = root / 'parsed_declarations.json'
             file.write_text('{"private-data":"fake-token"}')
@@ -82,7 +81,7 @@ class HealthTests(unittest.TestCase):
         self.assertNotIn(parsed.records[0].ma_ho_so, json.dumps(events))
 
     def test_cli_is_offline_by_default_and_uses_partial_exit_for_unverified_fixture(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             root = Path(directory)
             report = root / 'doctor.json'
             self.assertEqual(main(['--output', str(report)]), 0)

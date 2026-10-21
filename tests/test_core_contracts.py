@@ -1,7 +1,6 @@
 """Typed interfaces and scoped artifacts work without requests response objects."""
 from __future__ import annotations
 
-import tempfile
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -22,7 +21,7 @@ from gdt_tax.models import CaseRecord, PageResult
 from gdt_tax.storage import ZipStore
 from gdt_tax.tb.models import TbPageResult, ThongBao
 from gdt_tax.tb.storage import TbStore
-from tests.support import FakeHttp, FakeResponse, StubCaptcha, sample_zip
+from tests.support import FakeHttp, FakeResponse, StubCaptcha, sample_zip, temporary_directory
 
 if TYPE_CHECKING:
     # CI type checking verifies concrete structural compatibility as well.
@@ -69,7 +68,7 @@ class CoreContractTests(unittest.TestCase):
                 checked_artifact(artifact, other)
         self.assertFalse(hasattr(artifact, 'json'))
         self.assertFalse(hasattr(artifact, 'status_code'))
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             path = ZipStore(Path(directory)).save(record, checked_artifact(artifact, record))
             self.assertTrue(path.is_file())
 
