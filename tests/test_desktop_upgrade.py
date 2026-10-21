@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 from desktop.services import RunConfig
 from desktop.settings_store import Preferences, SettingsStore
 from gdt_tax.atomic import replace_with_retry
-from tests.support import cleanup_temporary_directory
+from tests.support import FakeResponse, cleanup_temporary_directory
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 HAS_QT = importlib.util.find_spec('PySide6') is not None
@@ -191,13 +191,13 @@ class AtomicRetryTests(unittest.TestCase):
                 config = RunConfig('login', Path('fixture-output'), username='fixture', password='fixture')
                 if portal_name == 'legacy':
                     portal = EtaxLegacyPortal(Mock(), solver, config.settings())
-                    with patch.object(portal, '_legacy_captcha_image', return_value=b'fixture'), patch.object(portal, '_post_form', return_value=Mock(text='loginForm')) as post:
+                    with patch.object(portal, '_legacy_captcha_image', return_value=b'fixture'), patch.object(portal, '_post_form', return_value=FakeResponse('<form id="loginForm"></form><div>invalid captcha</div>')) as post:
                         with self.assertRaisesRegex(CaptchaError, 'nhập tay'):
                             portal._submit_login(Mock(text='fixture', url='https://fixture.test'))
                 else:
                     http = Mock()
-                    http.get.return_value = Mock(status_code=200, text='fixture')
-                    http.post.return_value = Mock(status_code=200, text='fixture', json=Mock(return_value={'status': '401'}))
+                    http.get.return_value = FakeResponse(text='fixture')
+                    http.post.return_value = FakeResponse(json_payload={'status': '401', 'code': 'CAPTCHA_INVALID'})
                     with patch('gdt_tax.auth.token_from_meta', return_value='fixture'), patch('gdt_tax.auth.fetch_captcha', return_value=b'fixture'):
                         with self.assertRaisesRegex(CaptchaError, 'nhập tay'):
                             auth.login(http, solver, config.settings())
@@ -250,9 +250,9 @@ class AtomicRetryTests(unittest.TestCase):
         solver.ocr.solve.return_value = 'bad12'
         config = RunConfig('gnt', Path('fixture-output'), username='fixture', password='fixture', preferences=Preferences(login_attempts=1))
         portal = EtaxLegacyPortal(Mock(), solver, config.settings())
-        failures = [Mock(text='loginForm', url='https://fixture.test')] * 5
+        failures = [FakeResponse('<form id="loginForm"></form><div>invalid captcha</div>', url='https://fixture.test')] * 5
         from gdt_tax.portals import etax_legacy
-        success = Mock(text=etax_legacy._LOGIN_OK_MARKER, url='https://fixture.test')
+        success = FakeResponse(text=etax_legacy._LOGIN_OK_MARKER, url='https://fixture.test')
         with patch.object(portal, '_legacy_captcha_image', side_effect=[f'image-{n}'.encode() for n in range(6)]) as fetch, patch.object(portal, '_post_form', side_effect=failures + [success]) as post:
             self.assertIs(portal._submit_login(Mock(text='fixture', url='https://fixture.test')), success)
         self.assertEqual(fetch.call_count, 6)
@@ -298,8 +298,8 @@ class AtomicRetryTests(unittest.TestCase):
             solver.ocr.solve.return_value = 'abc12'
             config = RunConfig('tax', Path('fixture-output'), username='fixture', password='fixture', preferences=Preferences(login_attempts=1))
             http = Mock()
-            http.get.return_value = Mock(status_code=200, text='fixture')
-            http.post.side_effect = [Mock(status_code=200, text='fixture-rejected', json=Mock(return_value={'status': '401'})) for _ in range(success_at - 1)] + [Mock(status_code=200, text='fixture-accepted', json=Mock(return_value={'status': '200'}))]
+            http.get.return_value = FakeResponse(text='fixture')
+            http.post.side_effect = [FakeResponse(json_payload={'status': '401', 'code': 'CAPTCHA_INVALID'}) for _ in range(success_at - 1)] + [FakeResponse(json_payload={'status': '200'})]
             images = [f'captcha-{number}'.encode() for number in range(success_at)]
             with patch('gdt_tax.auth.token_from_meta', return_value='fixture-csrf'), patch('gdt_tax.auth.fetch_captcha', side_effect=images) as fetch:
                 self.assertTrue(auth.login(http, solver, config.settings()))

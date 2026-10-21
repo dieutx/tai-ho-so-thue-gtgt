@@ -34,7 +34,7 @@ class VerificationTests(unittest.TestCase):
     def test_static_credential_error_does_not_stop_captcha_retry(self):
         portal = EtaxLegacyPortal(Mock(), Mock(), Mock(login_attempts=2))
         portal.captcha.solve.return_value = 'abc12'
-        failure = FakeResponse(LOGIN_PAGE_HTML + '<script>function unused(){alert("Tên đăng nhập hoặc mật khẩu của bạn không chính xác!");}</script>')
+        failure = FakeResponse(LOGIN_PAGE_HTML + '<div>CAPTCHA không đúng</div><script>function unused(){alert("Tên đăng nhập hoặc mật khẩu của bạn không chính xác!");}</script>')
         success = FakeResponse(LOGIN_OK_HTML)
         with patch.object(portal, '_legacy_captcha_image', return_value=b'fixture'), patch.object(portal, '_post_form', side_effect=[failure, success]):
             self.assertIs(portal._submit_login(FakeResponse(LOGIN_PAGE_HTML)), success)
@@ -103,7 +103,7 @@ class VerificationTests(unittest.TestCase):
     def test_login_does_not_log_static_validators_or_misread_script_form_name(self):
         portal = EtaxLegacyPortal(Mock(), Mock(), Mock(login_attempts=2))
         portal.captcha.solve.return_value = 'abc12'
-        failure = FakeResponse(LOGIN_PAGE_HTML + '<script>function validate(){alert("Bạn chưa nhập Mật khẩu!");}</script>')
+        failure = FakeResponse(LOGIN_PAGE_HTML + '<div>CAPTCHA không đúng</div><script>function validate(){alert("Bạn chưa nhập Mật khẩu!");}</script>')
         success = FakeResponse(LOGIN_OK_HTML + '<script>var priorForm="loginForm";</script>')
         with patch.object(portal, '_legacy_captcha_image', return_value=b'fixture'), patch.object(portal, '_post_form', side_effect=[failure, success]):
             with self.assertLogs(portal.logger, level='INFO') as captured:

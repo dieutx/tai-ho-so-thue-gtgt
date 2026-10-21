@@ -33,6 +33,7 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
+from ..auth_outcomes import AuthFailure, AuthOutcome, classify_response, raise_terminal
 from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from ..errors import LegacyEtaxError, LegacyPageError
 from ..headers import build_image_headers, build_page_headers, build_xhr_headers
@@ -229,6 +230,7 @@ class EtaxLegacyPortal(Portal):
             },
             headers=build_page_headers(profile=self.profile, site="none"),
         )
+        raise_terminal(response, 'ETAX_LEGACY')
         if response.status_code != 200:
             raise LegacyEtaxError(f"Mở EstablishSession lỗi HTTP {response.status_code}")
         first_url = _js_redirect(response.text, "dse_sessionId=")
@@ -260,6 +262,7 @@ class EtaxLegacyPortal(Portal):
             login_url,
             headers=build_page_headers(profile=self.profile, headers={"Referer": response.url}),
         )
+        raise_terminal(response, 'ETAX_LEGACY')
         if response.status_code != 200 or _form_node(response.text, _LOGIN_FORM_ID) is None:
             raise LegacyEtaxError("Trang legacy không trả về form đăng nhập")
 
@@ -271,11 +274,12 @@ class EtaxLegacyPortal(Portal):
             self.session_state.home_page_id = self.home_page_id
             self.session_state.home_page_html = self.home_page_html
             self.session_state.authenticated = True
-        self.logger.info("ĐĂNG NHẬP legacy THÀNH CÔNG (dse_sessionId=%s...)", self.dse_session_id[:6])
+        self.logger.info("ĐĂNG NHẬP legacy THÀNH CÔNG")
 
     def _submit_login(self, login_page):
         """Gửi tên đăng nhập/mật khẩu/CAPTCHA, thử lại khi đọc sai mã."""
         last_message = "không rõ"
+        last_outcome = AuthOutcome.SCHEMA_UNKNOWN
         for attempt in range(1, self.login_attempts + 1):
             hooks = getattr(self.http, "hooks", None)
             if hooks is not None and hooks.budget is not None:
@@ -299,18 +303,17 @@ class EtaxLegacyPortal(Portal):
                     "_verifyCode": code,
                 },
             )
+            outcome = classify_response(response, 'ETAX_LEGACY')
+            last_outcome = outcome
             # Script alert strings include unexecuted empty-field validators.
             # They are not server-side authentication errors.
-            if _LOGIN_OK_MARKER in response.text and _form_node(response.text, _LOGIN_FORM_ID) is None:
+            if outcome == AuthOutcome.SUCCESS:
                 accepted = getattr(self.captcha, "accepted", None)
                 if callable(accepted):
                     accepted()
                 return response
-            if _credentials_rejected(response.text):
-                raise LegacyEtaxError(
-                    'Cổng Thuế báo tên đăng nhập hoặc mật khẩu không chính xác. '
-                    'Kiểm tra lại tài khoản và mật khẩu; đã dừng thử CAPTCHA.'
-                )
+            if outcome != AuthOutcome.CAPTCHA_INVALID:
+                raise AuthFailure(outcome)
             rejected = getattr(self.captcha, "rejected", None)
             if callable(rejected):
                 rejected()
@@ -320,7 +323,7 @@ class EtaxLegacyPortal(Portal):
             # The next image and POST must belong to the latest login page.
             if _form_node(response.text, _LOGIN_FORM_ID) is not None:
                 login_page = response
-        raise LegacyEtaxError(f"Không đăng nhập được trang legacy: {last_message}")
+        raise AuthFailure(last_outcome)
 
     def _open_home_page(self, login_result) -> None:
         """Đi qua ``corporateHomeProc`` để lấy ``dse_pageId`` của trang chủ."""
@@ -368,7 +371,7 @@ class EtaxLegacyPortal(Portal):
             'Origin': LEGACY_ETAX_ORIGIN,
             'Referer': referer,
         }
-        return self.http.post(
+        response = self.http.post(
             action,
             data={key: str(value) for key, value in fields.items()},
             headers=build_page_headers(profile=self.profile, headers=headers) if navigation else build_xhr_headers(
@@ -377,6 +380,9 @@ class EtaxLegacyPortal(Portal):
                 headers=headers,
             ),
         )
+        if self._logged_in:
+            raise_terminal(response, 'ETAX_LEGACY', authenticated=True)
+        return response
 
     # --- Mở trang nghiệp vụ (dùng chung cho tờ khai/GNT/thông báo) ---
     def _form_id_for_operation(self, html: str, operation: str, expected: str) -> str:
@@ -432,6 +438,7 @@ class EtaxLegacyPortal(Portal):
     def _settle_operation_page(self, response, operation: str, expected_form: str):
         """Đi qua tối đa hai bước chuyển tiếp cho tới khi thấy form nghiệp vụ."""
         for _ in range(3):
+            raise_terminal(response, 'ETAX_LEGACY', authenticated=True)
             if response.status_code == 200 and self._form_id_for_operation(response.text, operation, expected_form):
                 return response
             targets = self._transition_urls(response.text)

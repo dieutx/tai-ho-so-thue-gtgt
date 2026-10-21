@@ -1,142 +1,109 @@
-# Mốc tiếp tục sửa core — 20/10/2026
+# Tiến trình sửa 26 mục core — cập nhật 20/10/2026
 
-Người dùng đã chốt **sửa toàn bộ 26 mục, chia nhiều PR/MR, commit và tạo MR**.
-Ngày 20/10 người dùng yêu cầu lưu tiến trình để tiếp tục ở phiên sau.
-**Chưa hoàn thành cả 26 mục. Chưa merge, build lại EXE hay thay release trong đợt này.**
+**Chưa hoàn thành toàn bộ 26 mục. Đã mở các MR riêng; chưa merge/build EXE/release.**
 
-## Mở đúng checkout
+Người dùng đã cho phép sửa cả 26 mục, commit/push/tạo MR; không hỏi lại phạm vi.
+Không đăng nhập cổng thật hoặc dùng dữ liệu/tài khoản thuế để test.
 
-- Repo gốc: `C:/Users/dieut/tai-ho-so-thue-gtgt`.
-- Checkout đang sửa: `C:/Users/dieut/tai-ho-so-thue-gtgt/.cache/pr-worktrees/core-review`.
-- Nhánh hiện tại: `codex/core-inventory-profiles`, kế thừa MR !7.
-- Baseline main: `559892f1ff22f3e68d2fbea7be0608fd0ac597c9`.
-- Repo gốc có thay đổi UI/DVC và prompt cá nhân chưa commit: **không reset, clean,
-  stash hay gom những thay đổi đó vào nhánh sửa core**. Tiếp tục trong checkout trên.
-- Git metadata của worktree dùng chung repo gốc. Git mutation/push/API có thể cần
-  escalation do sandbox. Người dùng đã cho phép commit/push/tạo MR; không hỏi lại
-  phạm vi 26 mục. Không dùng tài khoản thuế, không đăng nhập thật để chạy test.
+## Checkout đang làm
 
-## Các MR đã tạo
+- Repo gốc: `C:/Users/dieut/tai-ho-so-thue-gtgt`; giữ nguyên UI/DVC/prompt chưa commit của người dùng.
+- Checkout cô lập: `C:/Users/dieut/tai-ho-so-thue-gtgt/.cache/pr-worktrees/core-review`.
+- Nhánh hiện tại: `codex/core-auth-outcomes`, kế thừa !16; CORE-19 lưu WIP, chưa tạo MR.
+- Người dùng yêu cầu lưu và dừng ngày 20/10/2026 để hôm sau tiếp tục; không tự tiếp tục khi chưa được yêu cầu.
+- Baseline review: `559892f1ff22f3e68d2fbea7be0608fd0ac597c9`.
 
-| MR | Nhánh và commit | Target | Phạm vi |
+## MR
+
+| MR | Source | Target | Commit |
 | --- | --- | --- | --- |
-| [!4](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/4) | `codex/core-review-20261020` / `c4d63d30973e06909dda0c2378452e9525b6ec60` | `main` | Báo cáo và 26 đầu việc, không đổi runtime |
-| [!5](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/5) | `codex/core-xml-policy` / `d83a842332b8fb4b7862916ca19723d78fc5a561` | `main` | XML URI/scoping, giới hạn parser/inventory |
-| [!6](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/6) | `codex/core-mapping-numbers` / `4179604289bd4aa645d17ec244d875e60318f7c2` | `codex/core-xml-policy` | Numeric formats, registry validation/compatibility |
-| [!7](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/7) | `codex/core-offline-reports` / `1f1b70207ae5adb10c0066af7d47ea1429bda1ff` | `codex/core-mapping-numbers` | Lineage, spreadsheet text/numbers, exit quality và audit |
+| [!4](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/4) | `codex/core-review-20261020` | `main` | `c4d63d30` |
+| [!5](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/5) | `codex/core-xml-policy` | `main` | `d83a8423` |
+| [!6](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/6) | `codex/core-mapping-numbers` | `codex/core-xml-policy` | `41796042` |
+| [!7](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/7) | `codex/core-offline-reports` | `codex/core-mapping-numbers` | `1f1b7020` |
+| [!8](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/8) | `codex/core-inventory-profiles` | `codex/core-offline-reports` | `b50ed6eb` |
+| [!9](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/9) | `codex/core-http-policy` | `codex/core-inventory-profiles` | `105396ce` |
+| [!10](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/10) | `codex/core-diagnostics-policy` | `codex/core-http-policy` | `c52ed71c` |
+| [!11](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/11) | `codex/core-download-integrity` | `codex/core-diagnostics-policy` | `35f2bc8d` |
+| [!12](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/12) | `codex/core-table-contracts` | `codex/core-download-integrity` | `8bccd2e0` |
+| [!13](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/13) | `codex/core-record-key-contract` | `codex/core-table-contracts` | `36184447` |
+| [!14](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/14) | `codex/core-record-key-integration` | `codex/core-record-key-contract` | `9c94161d` |
+| [!15](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/15) | `codex/core-directory-ownership` | `codex/core-record-key-integration` | `0950e80b` |
+| [!16](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/merge_requests/16) | `codex/core-catalog-checkpoints` | `codex/core-directory-ownership` | `b913e5d5` |
 
-Các MR runtime nối tiếp !5 → !6 → !7; !4 độc lập. Chưa kiểm tra trạng thái pipeline
-GitLab hoặc mergeability sau khi tạo: phiên sau cần kiểm tra bằng API, sửa nếu lỗi.
-
-MR !7 đã chạy **514 test: 508 đạt, 6 optional skip**; Ruff và mypy 70 module đạt.
-Log: `.cache/optimization/pr-offline-final-tests.log` ở repo gốc. Helper ghi log
-ban đầu lỗi decode ở bước đọc log; test subprocess trong log đã kết thúc OK.
-Helper đã sửa `errors='replace'`, không phải lỗi test.
+MR !4 được sửa CI import bằng commit `547eae5`; !7 bằng `3068ea9`.
+Ledger MR có thể còn SHA ban đầu của !4/!7. CI !4–!13 đã xác nhận xanh;
+cần kiểm tra CI !14–!16. Không coi mergeable là CI đã đạt.
 
 ## Trạng thái 26 mục
 
-`MR` nghĩa là đã triển khai trong MR, chưa merge; không phải mọi mục đã hoàn tất.
+| ID | Trạng thái | MR | Ghi chú |
+| --- | --- | --- | --- |
+| CORE-01 | implemented_mr | !12 | Named contracts/census/confirmed empty/partial results; CI green, unmerged |
+| CORE-02 | implemented_mr | !12 | Five adapters, header permutation and conservative fingerprints; unmerged |
+| CORE-03 | implemented_mr | !13, !14, !15 | A/B/C scoped identity, pre-auth folder owner and reversible UNKNOWN legacy migration; unmerged |
+| CORE-04 | implemented_mr | !7 | Lineage/schema/count/source/hash/coverage; unmerged |
+| CORE-05 | implemented_mr | !7 | Common literal XLSX text and safe CSV; unmerged |
+| CORE-06 | implemented_mr | !7 | Typed numeric cells and precision policy; unmerged |
+| CORE-07 | implemented_mr | !5, !6, !8 | Parser and inventory namespace/scope done; unmerged |
+| CORE-08 | implemented_mr | !6 | Explicit numeric formats and ambiguity handling; unmerged |
+| CORE-09 | implemented_mr | !6 | Registry schema/duplicates/version policy; unmerged |
+| CORE-10 | implemented_mr | !8 | Root/profile/policy cache binding and regression tests; unmerged |
+| CORE-11 | implemented_mr | !7 | Four offline CLI quality exits/summaries; unmerged |
+| CORE-12 | implemented_mr | !5, !11 | Shared XML reader also in download validators; unmerged |
+| CORE-13 | implemented_mr | !11, !14, !15 | Kinds/PDF/ZIP/source/hash evidence plus account ownership; unmerged |
+| CORE-14 | implemented_mr | !9 | Reviewed HTTPS origins, manual redirects and parsed routing; unmerged |
+| CORE-15 | implemented_mr | !9, !11 | Decoded streaming limits/spool/run budget/finite Retry-After/base64 bounds; unmerged |
+| CORE-16 | implemented_mr | !10 | Metadata-only support output; separate bounded PRIVATE capture; sanitized crash frames |
+| CORE-17 | partial | !7 | Offline provenance done; attachment quality pending |
+| CORE-18 | implemented_mr | !16 | OS writer lock, page/count/time checkpoints, generation/rebuild, process crash/race tests; measured benchmark with explicit modeled large legacy counts |
+| CORE-19 | implemented_local | pending | WIP checkpoint only: shared auth outcomes integrated; matrix fixtures, full acceptance and MR still pending |
+| CORE-20 | todo |  | Tách profile năng lực portal và chính sách định tuyến nguồn |
+| CORE-21 | todo |  | Định nghĩa Protocol/Result rồi mới rút gọn ba pipeline lặp |
+| CORE-22 | todo |  | Fixture có nguồn gốc, contract tests và phép biến đổi cấu trúc |
+| CORE-23 | todo |  | Tách test tối thiểu, desktop Windows và nâng dependency có kiểm chứng |
+| CORE-24 | todo |  | Health report và playbook chẩn đoán thay đổi cổng |
+| CORE-25 | todo |  | Preflight, verify đủ asset và rollback khi thay release |
+| CORE-26 | implemented_mr | !8 | Structural document roles, mapping coverage and independent UNKNOWN acceptance; unmerged |
 
-| ID | Trạng thái và việc còn lại |
-| --- | --- |
-| CORE-01 | Chưa làm: census, empty thật so với schema drift, mọi portal/pipeline |
-| CORE-02 | Chưa làm: đọc cột theo tên/hợp đồng, phát hiện thiếu/đổi thứ tự |
-| CORE-03 | Chưa làm: identity account/source/kind, catalog/resume/target/GUI migration |
-| CORE-04 | MR !7: schema/count/lineage/source/hash/coverage và strict export |
-| CORE-05 | MR !7: common literal XLSX text + safe CSV mọi writer hiện có |
-| CORE-06 | MR !7: typed numeric cells, 15-digit/range fallback/warnings, raw text |
-| CORE-07 | Parser trong !5/!6; inventory metadata scoping đang ở checkpoint, cần test mới |
-| CORE-08 | MR !6: xml_decimal/vi/en/auto, ambiguous/malformed explicit warnings |
-| CORE-09 | MR !6: strict registry schema, duplicate/version/date/namespace policy |
-| CORE-10 | Draft hiện tại: cache bind root/profile/policy, copy cache, bounded raw read; chưa đủ test/hoàn thiện |
-| CORE-11 | MR !7: 4 offline CLI exit 0/1/2 và optional quality JSON; online vốn có 0/1/2 |
-| CORE-12 | !5 parser/inventory shared limits; còn download GNT/XML validators |
-| CORE-13 | Chưa làm: XML kind, PDF integrity, reuse validation; DVC attachments WIP |
-| CORE-14 | Chưa làm: HTTPS/origin/form/operation/redirect policy |
-| CORE-15 | Chưa làm: bounded streaming/deadlines/retry budget; Retry-After inf |
-| CORE-16 | Chưa làm: structured string/URL/Referer redaction, private/support dump, crash log |
-| CORE-17 | !7 offline error/warnings/mapping/hash audit; còn attachment quality/counters |
-| CORE-18 | Chưa làm: catalog checkpoint/performance/concurrent writers/atomic recovery |
-| CORE-19 | Chưa làm: typed auth/session outcomes, maintenance khác captcha/credentials |
-| CORE-20 | Chưa làm: versioned portal capabilities/routing plans |
-| CORE-21 | Chưa làm: Protocol/Result, shared orchestration/session navigator; chia nhỏ |
-| CORE-22 | Chưa làm: fixture provenance + contract/metamorphic tests đầy đủ |
-| CORE-23 | Chưa làm: minimal/Windows/OCR CI, deps/build/source/version provenance |
-| CORE-24 | Chưa làm: safe health/doctor và runbook khi cổng thay đổi |
-| CORE-25 | Chưa làm: release replacement preflight/verify tất cả assets/rollback, mock only |
-| CORE-26 | Draft hiện tại: structural roles, raw acceptance UNKNOWN; còn coverage/export/tests |
+`implemented_mr` nghĩa đã triển khai trong MR, chưa merge; `partial` còn acceptance.
 
-Chi tiết đầy đủ và acceptance của từng mục nằm trong MR !4:
-`docs/core-review-20261020/{REPORT.md,TASKS.md,BACKLOG.json}`. Repo gốc cũng có
-bản các file này chưa tracked. Đừng coi bản rút gọn ở đây thay thế acceptance.
+## Kiểm chứng mới nhất
 
-## Draft hiện tại: tiếp tục từ đây
+- !8: 524 test (518 đạt/6 skip), Ruff/mypy 70 module đạt.
+- !9: 536 test (530 đạt/6 skip), Ruff/mypy 71 module đạt.
+- !10: 543 test (537 đạt/6 skip), Ruff/mypy 72 module đạt.
+- !11: 553 test (547 đạt/6 skip), Ruff/mypy 74 module đạt.
+- !12: 568 test (562 đạt/6 skip), Ruff/mypy 75 module đạt.
+- !13: 579 test (573 đạt/6 skip), Ruff/mypy 76 module đạt.
+- !14: 589 test (583 đạt/6 skip), Ruff/mypy 76 module đạt.
+- !15: 597 test (591 đạt/6 skip), Ruff/mypy 78 module đạt.
+- !16: 605 test (599 đạt/6 skip); Ruff/mypy 80 module đạt.
+- CORE-19 WIP: 63 test auth/legacy/session targeted đạt; Ruff/mypy 81 module đạt.
+- Full suite của checkpoint auth: `.cache/optimization/checkpoint-auth-wip-tests.log` (xem kết quả cuối log).
+- Logs: `.cache/optimization/pr-{inventory-final,http-final,diagnostics-verified,download-integrity}-tests.log`.
+- pypdf 6.21.1 đã cài vào `.venv-release-1.1`; dependency/pin/license packaging đã cập nhật trong !11.
+- Fixture PDF cũ chỉ là stub không có xref/pages; đã tạo fixture tổng hợp hợp lệ, đặt `*.pdf binary`.
 
-Checkpoint chỉ thay `gdt_tax/inventory.py`, `gdt_tax/classify.py` và tài liệu này.
-**Chưa mở MR cho draft** vì chưa đủ acceptance; giữ local branch để hoàn thiện.
+## Việc tiếp theo
 
-Đã thêm sơ bộ:
+1. Tiếp tục CORE-19 tại nhánh WIP: thêm fixture matrix cho cả 8 outcome/2 adapter, test DVC retry/CLI-desktop code/cancel, đọc AUTH_WIP.md.
+2. CORE-03/13 đã triển khai A/B/C: không nhận file UNKNOWN làm resume tài khoản đã xác thực.
+3. CORE-17: tích hợp attachment orchestration và counters/partial độc lập khỏi primary ZIP.
+   !11 chỉ port `dvc_notices.py` từ snapshot để sửa decoder/storage, chưa gọi từ pipeline/portal.
+4. CORE-20/21/22/23/24/25 vẫn còn theo acceptance gốc, không đóng bằng scaffold.
 
-- `PROFILE_VERSION=xml-profile-v4`, cache policy digest và `InventoryCache` bind
-  source root; cache schema/profile/limits đổi sẽ invalidate. Cache hit deepcopy
-  để không mutate manifest cũ. Plain dict cache không được coi là có provenance.
-- Raw files đọc với trần bytes; metadata filename trùng nhiều case không chọn bừa.
-- Inventory metadata dùng `main_scope`, lọc namespace và phụ lục; giữ full skeleton.
-- Profile thêm `document_root`, `structural_markers` để nhận diện role.
-- Classifier v2 thêm cấu trúc appendix/notice conflict và invalid-profile conflict.
-- File integrity tách riêng; acceptance luôn UNKNOWN, giữ raw status và source metadata.
-- Discovery không xem chuỗi “chấp nhận” trong metadata là legal acceptance evidence.
+## Tài liệu và công cụ
 
-Đã chạy sau các sửa draft: **17 inventory test + 5 classify test đạt**, mypy đạt.
-Ruff chỉ báo import order; đã sửa trước checkpoint (xem kiểm tra thực tế khi tiếp tục).
-**Chưa chạy full suite cho draft, chưa có test mới cho CORE-10/26.**
+- Acceptance đầy đủ: `docs/core-review-20261020/{REPORT.md,TASKS.md,BACKLOG.json}` tại repo gốc/MR !4.
+- Đọc WORKTREE_ADDENDUM/WORKTREE_EVIDENCE khi sửa DVC attachment/identity/auth/crash.
+- Policy/migration mới: `docs/core-hardening/{INVENTORY_POLICY,HTTP_POLICY,DIAGNOSTICS_POLICY,DOWNLOAD_INTEGRITY}.md` ở checkout.
+- Test: `.venv-release-1.1/Scripts/python.exe .cache/optimization/check_core.py TEN_MOC` từ repo gốc.
+- Ruff/mypy dùng `.venv-review/Scripts/python.exe`; Ruff cần `--no-respect-gitignore` trong checkout cache.
+- Tạo MR bằng `.cache/optimization/open_core_mr.py`; credentials chỉ đọc trong bộ nhớ.
+- Git metadata/CredentialManager cần escalation sandbox; user đã cho phép commit/push/MR.
+- Không chạy lại edit_offline.py/edit_outcomes.py; không reset/clean/stash repo gốc.
 
-Việc kế tiếp:
+## Continuation 2026-10-21
 
-1. Review lại draft, thêm regression cache khác root nhưng cùng path/size/mtime,
-   profile/policy invalidation, rehash/cache mutation, raw read giới hạn, symlink và
-   lỗi stat/read/hash (hiện một số I/O còn ở ngoài try). Test không giả vờ cache stat
-   phát hiện được nội dung đổi nhưng giữ nguyên size/mtime; `--rehash` vẫn cần.
-2. Test namespace/appendix/wrapper và skeleton không mất thông tin. Xem lại namespace
-   signature cho wrapper; `default_ns` hiện root wrapper trong signature basis.
-3. Hoàn thiện CORE-26: synthetic/anonymized fixtures có provenance cho declaration,
-   appendix, notice, unknown, conflict; mapping coverage theo form/version/namespace,
-   số chỉ tiêu có/thiếu. Export riêng parse quality, integrity, acceptance/raw/source.
-   Không suy đoán nghĩa ctXX, không tự chấp nhận pháp lý, không ẩn lần nộp cũ.
-4. Chạy targeted + full suite + Ruff/mypy/diff check, viết migration/policy docs,
-   commit tiếp trên nhánh hiện tại, push và mở MR target `codex/core-offline-reports`.
-5. Tiếp tục các mục còn lại theo dependency; đặc biệt CORE-21 là refactor lớn cần
-   nhiều MR nhỏ sau typed contracts. Không đóng cả 26 chỉ vì đã có vài MR nền tảng.
-
-## Công cụ và lệnh kiểm tra
-
-Chạy trong checkout `.../.cache/pr-worktrees/core-review`:
-
-```powershell
-C:/Users/dieut/tai-ho-so-thue-gtgt/.venv-release-1.1/Scripts/python.exe -m unittest discover -s tests -q
-C:/Users/dieut/tai-ho-so-thue-gtgt/.venv-review/Scripts/python.exe -m ruff check --no-respect-gitignore .
-C:/Users/dieut/tai-ho-so-thue-gtgt/.venv-review/Scripts/python.exe -m mypy gdt_tax
-git diff --check
-```
-
-Ruff cần `--no-respect-gitignore` vì checkout nằm trong `.cache`.
-Helper full suite ghi log, chạy từ repo gốc:
-`.venv-release-1.1/Scripts/python.exe .cache/optimization/check_core.py TEN_MOC`.
-
-Helper GitLab private ở repo gốc `.cache/optimization/open_core_mr.py`; dùng
-`--source codex/core-... --target codex/core-... --title ... --body-file PATH
---core-ids CORE-xx,...`. Nội dung MR là UTF-8 file thật. Credential đọc trong bộ nhớ
-từ Windows CredentialManager qua `scripts/release_gitlab.py`; không ghi/in token.
-Ledger MR: `.cache/optimization/core-mrs-created.json`.
-Ledger task: `.cache/optimization/core-pr-progress.json`.
-
-Snapshot WIP DVC lúc review:
-`.cache/optimization/core-review-worktree-snapshot` ở repo gốc. Có
-`gdt_tax/dvc_notices.py` và test chưa có trong main baseline. Khi sửa CORE-13/17/16,
-đọc WORKTREE_ADDENDUM/WORKTREE_EVIDENCE và snapshot; đừng chép cả UI WIP vào PR.
-Phụ lục cho thấy payload XML khai báo nhưng chứa HTML vẫn qua, reuse 1 byte,
-lookup notice thiếu source, attachment lỗi không làm parent partial và crash log
-chưa redact. Những lỗi này **chưa được sửa trong các MR đã mở**.
-
-Không dùng lại các script one-time `.cache/optimization/edit_offline.py` hoặc
-`edit_outcomes.py`; migration đã áp dụng. Không phát hành thật khi làm CORE-25.
+CORE-19 complete locally; 612 tests (606 pass/6 optional skip), Ruff/mypy 81 modules. See AUTH_POLICY.md. Continue CORE-17 and CORE-20 through CORE-25.

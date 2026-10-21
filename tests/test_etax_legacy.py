@@ -131,7 +131,7 @@ def make_legacy_handler(state: dict):
                 if state.get("accept_login", True):
                     return FakeResponse(LOGIN_OK_HTML, url=url)
                 return FakeResponse(
-                    "<html><form id='loginForm'></form><script>alert('Sai mat khau')</script></html>",
+                    "<html><form id='loginForm'></form><div>CAPTCHA không đúng</div><script>alert('Sai mat khau')</script></html>",
                     url=url,
                 )
             if event == "query":
@@ -225,7 +225,7 @@ class LegacyPortalTests(unittest.TestCase):
         portal = self.make_portal()
         initial = FakeResponse(LOGIN_PAGE_HTML.replace('</form>', "<input name='dse_pageId' value='old'></form>"),
                                url='https://fixture.test/initial')
-        refreshed = FakeResponse(initial.text.replace("value='old'", "value='new'"),
+        refreshed = FakeResponse(initial.text.replace("value='old'", "value='new'") + '<div>CAPTCHA không đúng</div>',
                                  url='https://fixture.test/retry')
         sent = []
         def post(action, fields, referer):

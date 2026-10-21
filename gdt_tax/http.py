@@ -22,6 +22,7 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 
+from .auth_outcomes import raise_terminal
 from .constants import BASE
 from .errors import NetworkError
 from .headers import (
@@ -189,6 +190,11 @@ class HttpClient:
                 format_size(len(body)),
             )
             raise_for_portal_verification(response)
+            content_type = response.headers.get('content-type', '').lower()
+            if (response.status_code in {502, 503, 504} or 'html' in content_type or 'json' in content_type
+                    or body.lstrip()[:32].lower().startswith((b'<html', b'<!doctype html', b'{'))):
+                adapter = 'ETAX_LEGACY' if urlsplit(url).hostname == 'thuedientu.gdt.gov.vn' else 'DVC'
+                raise_terminal(response, adapter, phase='operation')
             self._log_response(response)
             if self.dumper is not None:
                 self.dumper.record(

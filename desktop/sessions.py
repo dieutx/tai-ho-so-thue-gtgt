@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from threading import RLock
 from typing import Any
 
+from gdt_tax.auth_outcomes import AuthFailure, AuthOutcome, classify_response
 from gdt_tax.constants import LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from gdt_tax.errors import LegacyPageError
 from gdt_tax.gnt.portal import GntPortal
@@ -39,21 +39,7 @@ class AccountContext:
 
 
 def is_auth_failure(response: Any) -> bool:
-    if response.status_code in {401, 403}:
-        return True
-    url = getattr(response, "url", "") or ""
-    if re.search(r"(?:nextEventName=login(?:&|$)|/login(?:[/?]|$))", url, re.I):
-        return True
-    # Test the actual legacy login form, not every HTML error/empty result.
-    body = getattr(response, "content", b"") or b""
-    if len(body) > 2 * 1024 * 1024:
-        return False
-    text = getattr(response, "text", "") or ""
-    if re.search(r"<form\b[^>]*\b(?:id|name)\s*=\s*['\"]loginForm['\"]", text, re.I):
-        return True
-    normalized = text.lower()
-    return any(marker in normalized for marker in (
-        "phiên giao dịch đã hết", "phiên làm việc đã hết", "session expired", "session đã hết hạn"))
+    return classify_response(response, 'ETAX_LEGACY', phase='operation', authenticated=True) == AuthOutcome.EXPIRED_SESSION
 
 
 class SessionHttpClient(HttpClient):
@@ -64,6 +50,11 @@ class SessionHttpClient(HttpClient):
 
     def request(self, method: str, path: str, **kwargs):
         response = super().request(method, path, **kwargs)
+        outcome = classify_response(response, 'ETAX_LEGACY', phase='operation',
+                                    authenticated=self.session_state.authenticated)
+        if outcome in {AuthOutcome.MAINTENANCE, AuthOutcome.INTERACTIVE_AUTH_REQUIRED,
+                       AuthOutcome.INVALID_CREDENTIALS}:
+            raise AuthFailure(outcome)
         if not self.authenticating and self.session_state.authenticated and is_auth_failure(response):
             self.session_state.clear()
             raise SessionExpired("Phiên ETAX hết hạn")
@@ -215,15 +206,14 @@ class ETaxSessionManager:
                     self.invalidate()
                     hooks.emit(session="EXPIRED")
                     if attempt == 1:
-                        return JobResult("ERROR", "Phiên ETAX tiếp tục hết hạn; hãy đăng nhập lại", config.output, errors=1)
+                        return JobResult("ERROR", "Phiên ETAX tiếp tục hết hạn; hãy đăng nhập lại", config.output,
+                                         errors=1, error_code='AUTH_EXPIRED_SESSION')
                     logger.warning("Phiên ETAX hết hạn; xác thực lại một lần rồi tiếp tục, reuse file đã hoàn thành")
-                except LegacyPageError as error:
-                    # Exchange the reused portal state for a clean login, then retry once.
-                    self.invalidate()
-                    hooks.emit(session="EXPIRED")
-                    if attempt == 1:
-                        return JobResult("ERROR", str(error), config.output, errors=1)
-                    logger.warning("Mở trang legacy thất bại; đăng nhập lại một lần rồi thử lại: %s", error)
+                except LegacyPageError:
+                    return JobResult("ERROR", 'AUTH_SCHEMA_UNKNOWN: Trang nghiệp vụ chưa được nhận diện; đã dừng xác thực lại.',
+                                     config.output, errors=1, error_code='AUTH_SCHEMA_UNKNOWN')
+                except AuthFailure as error:
+                    return JobResult("ERROR", str(error), config.output, errors=1, error_code=error.code)
                 except RunCancelled:
                     raise
                 finally:

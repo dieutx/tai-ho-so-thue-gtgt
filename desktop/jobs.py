@@ -238,7 +238,8 @@ class Worker(QObject):
         except Exception as error:
             logging.getLogger('gdt_tax.desktop').error('Tác vụ thất bại: %s', self.redactor(str(error)))
             message = storage_message(error) if isinstance(error, (OSError, StorageError)) else str(error)
-            result = JobResult("ERROR", self.redactor(message), self.config.output)
+            result = JobResult("ERROR", self.redactor(message), self.config.output,
+                               error_code=getattr(error, 'code', ''))
         result.task_id = task_id
         if result.state == 'ERROR' and not result.issues:
             result.errors = max(1, result.errors)

@@ -146,6 +146,7 @@ class JobResult:
     ended_at: str = ""
     operation: str = ""
     requested: int = 0
+    error_code: str = ""
 
 
 ONLINE = {
@@ -190,12 +191,13 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
         result.state = "PARTIAL" if pipeline.records else "ERROR"
         result.message = str(error)
         result.errors = 1
-    except SessionExpired:
+    except SessionExpired as error:
         if propagate_auth:
             raise
         result.state, result.message = "ERROR", "Phiên ETAX hết hạn; đăng nhập lại để tiếp tục"
+        result.error_code = error.code
     except LegacyPageError as error:
-        # Desktop re-authenticates once and retries; CLI keeps the detailed page error.
+        # Unknown page structure is not evidence that authentication expired.
         if propagate_auth:
             raise
         result.state, result.message = "ERROR", str(error)
@@ -208,6 +210,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
             pipeline.record_errors[pipeline.active_record_id] = result.message
     except Exception as error:
         result.state, result.message = "ERROR", str(error)
+        result.error_code = getattr(error, 'code', '')
         if pipeline.active_record_id and pipeline.active_record_id not in pipeline.downloaded_ids:
             pipeline.failed_ids.add(pipeline.active_record_id)
             pipeline.record_errors[pipeline.active_record_id] = str(error)

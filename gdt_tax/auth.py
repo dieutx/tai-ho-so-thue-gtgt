@@ -11,6 +11,7 @@ import base64
 import logging
 import time
 
+from .auth_outcomes import AuthFailure, AuthOutcome, classify_response, raise_terminal
 from .captcha import KIND_LOGIN, CaptchaSolver, fetch_captcha
 from .constants import LANDING, LOGIN_ENDPOINT, LOGIN_PAGE, ORIGIN
 from .csrf import token_from_meta
@@ -35,6 +36,7 @@ def login(
     payload = base64.b64encode(settings.password.encode("utf-8")).decode("ascii")
 
     hooks = getattr(http, "hooks", RunHooks())
+    last_outcome = AuthOutcome.SCHEMA_UNKNOWN
     for attempt in range(1, settings.login_attempts + 1):
         if hooks.budget is not None:
             hooks.budget.authenticate()
@@ -47,12 +49,13 @@ def login(
                 headers={"Referer": f"{ORIGIN}/"},
             ),
         )
+        raise_terminal(page, 'DVC')
         if page.status_code != 200:
-            logger.warning("Không mở được trang đăng nhập: HTTP %s", page.status_code)
-            hooks.pause(PAUSE_BEFORE_RETRY, time.sleep)
-            continue
+            raise AuthFailure(AuthOutcome.SCHEMA_UNKNOWN)
 
         csrf = token_from_meta(page.text)
+        if not csrf:
+            raise AuthFailure(AuthOutcome.SCHEMA_UNKNOWN)
         image = fetch_captcha(
             http, KIND_LOGIN, logger=logger, profile=settings.header_profile
         )
@@ -88,21 +91,23 @@ def login(
         )
         logger.info("LOGIN: HTTP=%s", response.status_code)
 
-        try:
-            if str(response.json().get("status")) == "200":
-                accepted = getattr(captcha, "accepted", None)
-                if callable(accepted):
-                    accepted()
-                logger.info("ĐĂNG NHẬP THÀNH CÔNG")
-                return True
-        except (ValueError, AttributeError):
-            pass
+        outcome = classify_response(response, 'DVC')
+        last_outcome = outcome
+        if outcome == AuthOutcome.SUCCESS:
+            accepted = getattr(captcha, "accepted", None)
+            if callable(accepted):
+                accepted()
+            logger.info("ĐĂNG NHẬP THÀNH CÔNG")
+            return True
+        if outcome != AuthOutcome.CAPTCHA_INVALID:
+            raise AuthFailure(outcome)
         rejected = getattr(captcha, "rejected", None)
         if callable(rejected):
             rejected()
-        hooks.pause(PAUSE_AFTER_FAILED_LOGIN, time.sleep)
+        if attempt < settings.login_attempts:
+            hooks.pause(PAUSE_AFTER_FAILED_LOGIN, time.sleep)
 
-    return False
+    raise AuthFailure(last_outcome)
 
 
 def open_landing(
@@ -114,6 +119,7 @@ def open_landing(
     """Mở trang hồ sơ và trả về HTML (nguồn của CSRF token cho luồng ETAX)."""
     logger = logger or logging.getLogger(LOGGER_NAME)
     response = http.get(LANDING, headers=build_page_headers(profile=profile))
+    raise_terminal(response, 'DVC', authenticated=True)
     if response.status_code != 200:
         raise LoginError(f"Không mở được trang hồ sơ: HTTP {response.status_code}")
     logger.debug("Đã mở trang hồ sơ (%s bytes)", len(response.content))

@@ -14,6 +14,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 
+from ..auth_outcomes import raise_terminal
 from ..captcha import fetch_captcha
 from ..constants import CASE_DETAIL, LANDING
 from ..csrf import csrf_token
@@ -82,10 +83,12 @@ class Portal(ABC):
         """Mở trang chi tiết và lấy token CSRF của form tải xuống."""
         url = self.detail_url(record)
         response = self.http.get(url, headers=self.page_headers(headers={"Referer": self.landing_url}))
+        raise_terminal(response, 'DVC', authenticated=True)
         csrf = csrf_token(response.text) if response.status_code == 200 else ""
         return url, csrf
 
     def _page_result(self, response) -> PageResult:
+        raise_terminal(response, 'DVC', authenticated=True)
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
         parsed = parse_record_table(response.text, self.source)
