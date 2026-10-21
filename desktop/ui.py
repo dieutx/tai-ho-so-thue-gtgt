@@ -337,6 +337,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             try:
                 release = json.loads(info.read_text(encoding="utf-8"))
                 layout.addWidget(QLabel("Build: " + str(release.get("built_at_utc", "chưa ghi nhận"))))
+                layout.addWidget(QLabel("Core: " + str(release.get('core_version', '1.0.0')) +
+                                        " • Source: " + str(release.get('source_sha', 'chưa ghi nhận'))[:12]))
             except (OSError, ValueError):
                 pass
         status = QLabel("Chỉ kết nối GitLab khi bạn bấm Kiểm tra bản mới. Không gửi thông tin tài khoản thuế.")

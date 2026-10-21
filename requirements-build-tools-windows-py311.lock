@@ -1,0 +1,10 @@
+# Reviewed CPython 3.11 Windows x64 inventory; install with --no-deps, then pip check.
+ast-serialize==0.13.1
+librt==0.16.0
+mypy==2.4.0
+mypy-extensions==1.1.0
+pathspec==1.1.1
+psutil==7.2.2
+ruff==0.17.1
+setuptools==79.0.1
+typing-extensions==4.16.0

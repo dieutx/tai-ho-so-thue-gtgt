@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "python": "3.11",
+  "implementation": "CPython",
+  "system": "Windows",
+  "bits": 64,
+  "packages": [
+    {
+      "name": "ast-serialize",
+      "version": "0.13.1",
+      "metadata_sha256": "f6005532f49c7c552572bfab83625c00b7d6fb886067d416da0601c28111acf7",
+      "wheel_sha256": "c5ee3fb5b83cc1875e8783bb9cb6e759c933210b424789ce0c383091efd32b2f"
+    },
+    {
+      "name": "librt",
+      "version": "0.16.0",
+      "metadata_sha256": "d8d86b1900c9bd2deee1d47b226769832d9854dba7911e07637873a142e88c1a",
+      "wheel_sha256": "55ad5e704e1a425731c9b664712be1d8578dd7f0e50bc21a24d249b02258123d"
+    },
+    {
+      "name": "mypy",
+      "version": "2.4.0",
+      "metadata_sha256": "0dde788d2abb4252a7c5c6a11177ba591aae10102e9b84e618ff29a8f1cbcd88",
+      "wheel_sha256": "55ad5e704e1a425731c9b664712be1d8578dd7f0e50bc21a24d249b02258123d"
+    },
+    {
+      "name": "mypy-extensions",
+      "version": "1.1.0",
+      "metadata_sha256": "2c4a44936d885f30433181ca40bbf62457351f1f6b0871b11f8789564f87477f",
+      "wheel_sha256": "1b68144734c4b66791f27add5d425f3620775585718a03d0f9b110ba3a4d88db"
+    },
+    {
+      "name": "pathspec",
+      "version": "1.1.1",
+      "metadata_sha256": "68de3f158b6592f086e78754c962092f32a761944ab66a660c0d62ad79c4b69b",
+      "wheel_sha256": "1b68144734c4b66791f27add5d425f3620775585718a03d0f9b110ba3a4d88db"
+    },
+    {
+      "name": "psutil",
+      "version": "7.2.2",
+      "metadata_sha256": "525f8ba78523cf7bc3759d62a105e7c57fd679ea702402b9449fb0746aa0217f",
+      "wheel_sha256": "d4e0a5b3c507754487a0cdd46a453f48ec93d5ff66e527d511df0e830f267494"
+    },
+    {
+      "name": "ruff",
+      "version": "0.17.1",
+      "metadata_sha256": "226df027b70aa565417a87ab0ad0eece71e88e9626819a702b0ec908e4c99012",
+      "wheel_sha256": "f007a3d16d1ae82cfa6a903723326b4e7c4b4552c0b7ec343a1f120370a89ff7"
+    },
+    {
+      "name": "setuptools",
+      "version": "79.0.1",
+      "metadata_sha256": "d3152caeb1486d143b30b1d41fffaaddb7ea95fdc9547ae1135ce697b1a420b5",
+      "wheel_sha256": "4a63b1614ee9ccd281a804af409ec38d7dd719417dda5ac684c6f747afe28aa2"
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "metadata_sha256": "b05084ca1d50879865178d9fff9fabeab61bdfb1f361bfbde95421ffc8f9be46",
+      "wheel_sha256": "1b68144734c4b66791f27add5d425f3620775585718a03d0f9b110ba3a4d88db"
+    }
+  ]
+}

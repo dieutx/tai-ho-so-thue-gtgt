@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "python": "3.11",
+  "implementation": "CPython",
+  "system": "Windows",
+  "bits": 64,
+  "packages": [
+    {
+      "name": "altgraph",
+      "version": "0.17.5",
+      "metadata_sha256": "dc60641dba229a3aef09f764f562c38d908b930c92615af2e626af31d6ff19b5",
+      "wheel_sha256": "89896fe5f5f7e7b3d0c914f6a3ab70d5b37e61c2851472aa07f2f01cee703fe8"
+    },
+    {
+      "name": "beautifulsoup4",
+      "version": "4.15.0",
+      "metadata_sha256": "b2f888103259f1607c85f3b1163be1bc49fc9941a3243c3b89a21075bfc6d4fb",
+      "wheel_sha256": "aad0b0a12256807936d52d4a6f88a1773236ae527564a688bab4e3fe780e8724"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.10.18",
+      "metadata_sha256": "5f23b0cfb71be0a44970eb5d3ad49ba3db52616d7a583d594697bd9ee1bf2065",
+      "wheel_sha256": "61532836a2b3111b7ec23519c09df7c41180c27165fb872a6d8913b566b88ad1"
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "metadata_sha256": "89ce6362bb7be88558f4be99a98f5d1b4da93d19cd0323e5ee0bac05cf883dfb",
+      "wheel_sha256": "55ad5e704e1a425731c9b664712be1d8578dd7f0e50bc21a24d249b02258123d"
+    },
+    {
+      "name": "coloredlogs",
+      "version": "15.0.1",
+      "metadata_sha256": "1663baba746f35eefb249d945345d88566cc4f3643863eb31a91258c3cac674c",
+      "wheel_sha256": "9064fbe0b5b245466b2f85602e1ebf835d8879597ff6ef5956169dae05d95046"
+    },
+    {
+      "name": "ddddocr",
+      "version": "1.6.1",
+      "metadata_sha256": "cf9847f3755daaae45b42d85ec12b94669dd78aa348b5ccdc51c3975d934a8da",
+      "wheel_sha256": "69e6228a0d35958183cc1812f07c565ce837b95eb51bd8a33acba9fa4f68d6c9"
+    },
+    {
+      "name": "et-xmlfile",
+      "version": "2.0.0",
+      "metadata_sha256": "0e97d7ea909ed0fbe03d88bc8b6f58677cee1b07bd3353ce361cd2405915204e",
+      "wheel_sha256": "1e20998f3bb2e83c3485d5f94772c214f0e6152e015a5f07fbc5b7f577e6817e"
+    },
+    {
+      "name": "flatbuffers",
+      "version": "25.12.19",
+      "metadata_sha256": "9f38239f96faa21522a6aadab6912e1e560708bbe9c9f696a0679c9403fa089e",
+      "wheel_sha256": "24d5a1d459b551dc08415d3be609429f8315b8246cd2ca2d248abe27aadbc425"
+    },
+    {
+      "name": "humanfriendly",
+      "version": "10.0",
+      "metadata_sha256": "68bb349388cdfeca602acc3455b83a7b2fe3cbe84025e27493bcbe76f3ab6c82",
+      "wheel_sha256": "9064fbe0b5b245466b2f85602e1ebf835d8879597ff6ef5956169dae05d95046"
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "metadata_sha256": "dbd8c14c1e4ca1e0c9824a6dbc7cbbf78884f38eb52d91148cd3025f671e4b85",
+      "wheel_sha256": "96a37c8d7b7f425a05386731f644adbd66ebca17c45e8236176cfe614466df9d"
+    },
+    {
+      "name": "lxml",
+      "version": "6.1.3",
+      "metadata_sha256": "aad89f8107bc74045b86c9b7f7c0984196102520dd7faed5e4e45693b7c315ef",
+      "wheel_sha256": "55ad5e704e1a425731c9b664712be1d8578dd7f0e50bc21a24d249b02258123d"
+    },
+    {
+      "name": "mpmath",
+      "version": "1.3.0",
+      "metadata_sha256": "44b66ea444b9c0d19ae94815d356bf047ae6b680c19268b5c265687cd6a81406",
+      "wheel_sha256": "db07a93359e4e034b8785a58ad6d534ea3dca0635f1e184efe2e66e1c3a299ba"
+    },
+    {
+      "name": "numpy",
+      "version": "2.4.6",
+      "metadata_sha256": "b082c52ccbe3b880bae177c35171b52ed6c947f3ad71e3762f2723f60a411de0",
+      "wheel_sha256": "25d2d35a173bde827e96a4c16068225689edaffbe1cf0cdba403a29ffd9bc532"
+    },
+    {
+      "name": "onnxruntime",
+      "version": "1.20.1",
+      "metadata_sha256": "91139a5f630fb0b6991946a39764b5dd6beb4d6af9324bf5198df0d147777c2d",
+      "wheel_sha256": "9b2e1e70331e4e439effb69e2c12ff53476a8ad3ed7c8c7e627cc36d4cbe973c"
+    },
+    {
+      "name": "opencv-python",
+      "version": "4.11.0.86",
+      "metadata_sha256": "654b82764b82fe35a006ae6b67051be82888ff87d03ca5911776055a8a3d0e4e",
+      "wheel_sha256": "f5f1b5d2f4b338a5f09a35f70a458deb63fd86a8fe186976c33c1d47139547e6"
+    },
+    {
+      "name": "openpyxl",
+      "version": "3.1.5",
+      "metadata_sha256": "23f80ca9830dd89435da1710f26deda8f81e5409287e74540210c72627a4ad96",
+      "wheel_sha256": "0d96a30f8a702d6b9eef40807dced86b14f5c0b51c88d06f37f4d372f5e996d1"
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "metadata_sha256": "70fdb89fc4d4a9a043bf7372b8972bcc883fddff34ab55e9cf80d73875384763",
+      "wheel_sha256": "1b68144734c4b66791f27add5d425f3620775585718a03d0f9b110ba3a4d88db"
+    },
+    {
+      "name": "pefile",
+      "version": "2024.8.26",
+      "metadata_sha256": "8ad83a5f8659e8da6eeaabf2dafa0eebb8c05832a3def16a5db4dd0d52e72474",
+      "wheel_sha256": "678a585ea47fad307b3963436053a6d6a464d115fa1853f6a3c2e0bcfe39dc79"
+    },
+    {
+      "name": "pillow",
+      "version": "12.3.0",
+      "metadata_sha256": "8fc07146cab33ef7582361dab6eac596d340b03ec648f18217da7894f73838c8",
+      "wheel_sha256": "5c75cc289537ca8561d596a70574c9e5b0c66faee8118b45d52e9b77c6b88b32"
+    },
+    {
+      "name": "protobuf",
+      "version": "7.36.2",
+      "metadata_sha256": "445916389cc3a87d5f815d763192372a17a221339d474cb661523157bf07d61c",
+      "wheel_sha256": "30d18a8aa5737049bf47ec7833f079f591ab68a9aef577a21773d55a595d7ece"
+    },
+    {
+      "name": "pyinstaller",
+      "version": "6.22.3",
+      "metadata_sha256": "2991d3dcd53fe9966b8c16586322a7f9bbc564dd4752c190bd4fe8d6747f7046",
+      "wheel_sha256": "6ee7891b54f8afc3e852fb9312fe9bc24f78dbd8827bfc1e93439bb86d2adbd6"
+    },
+    {
+      "name": "pyinstaller-hooks-contrib",
+      "version": "2026.8",
+      "metadata_sha256": "686e63d76cb494d44c4533ed64a7d797970a1253493a4f875d39defc190396c4",
+      "wheel_sha256": "61532836a2b3111b7ec23519c09df7c41180c27165fb872a6d8913b566b88ad1"
+    },
+    {
+      "name": "pypdf",
+      "version": "6.21.1",
+      "metadata_sha256": "3925a75c81106ba7f048e0424e94740852099c166699f2afba934249dc527ebc",
+      "wheel_sha256": "96a37c8d7b7f425a05386731f644adbd66ebca17c45e8236176cfe614466df9d"
+    },
+    {
+      "name": "pyreadline3",
+      "version": "3.5.6",
+      "metadata_sha256": "e5aee6e93248c9b3db46ddd3923e85852d1c48fde67e84ee0a5bfd55e42468e0",
+      "wheel_sha256": "69e6228a0d35958183cc1812f07c565ce837b95eb51bd8a33acba9fa4f68d6c9"
+    },
+    {
+      "name": "pyside6-essentials",
+      "version": "6.8.3",
+      "metadata_sha256": "bd04bafa5ed41d5d0a688f2513fefee94576847a0c8ce2a441012a6b7a854be5",
+      "wheel_sha256": "bcec5242bc1ce051d4733b9340003d8f3ca3ed413a670b656e6f3fbaea8fe57e"
+    },
+    {
+      "name": "pywin32-ctypes",
+      "version": "0.2.3",
+      "metadata_sha256": "1e3767d3faff4d5b9c347160883831098d1f25acf4306b02c9acdcc6bfb5883b",
+      "wheel_sha256": "3aa464174798e461ecb0ca2b16395b4c8ab4ef6be91e917ad1f21003a952f710"
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "metadata_sha256": "8c384ba3e979480faae2859d3c5e6c1276dd2c3616e322e124d52c8cfc556f27",
+      "wheel_sha256": "69e6228a0d35958183cc1812f07c565ce837b95eb51bd8a33acba9fa4f68d6c9"
+    },
+    {
+      "name": "setuptools",
+      "version": "84.0.0",
+      "metadata_sha256": "3ef2975718dd31cabdd5829455e9b868ca14dbf79ed8fed2de0af4e87347006e",
+      "wheel_sha256": "61532836a2b3111b7ec23519c09df7c41180c27165fb872a6d8913b566b88ad1"
+    },
+    {
+      "name": "shiboken6",
+      "version": "6.8.3",
+      "metadata_sha256": "e2c642a7ef4ddab98ccb1a52968a6fa8d655933c72a97b70488472ca600fd304",
+      "wheel_sha256": "bcec5242bc1ce051d4733b9340003d8f3ca3ed413a670b656e6f3fbaea8fe57e"
+    },
+    {
+      "name": "soupsieve",
+      "version": "3.0.3",
+      "metadata_sha256": "f76db712b0fadfee975fb519a46cc7f7b92979dc0ca297004fffc97b0a1f5f7c",
+      "wheel_sha256": "5b77e4a649bbfb07fdbc123967eeecd1e5a478cfaca6eefc23c35e6fdf037848"
+    },
+    {
+      "name": "sympy",
+      "version": "1.14.0",
+      "metadata_sha256": "b756c2fbfd5be05ac5bdb0ebca61f55618f30f633ed92d88a5687429313a7595",
+      "wheel_sha256": "4a63b1614ee9ccd281a804af409ec38d7dd719417dda5ac684c6f747afe28aa2"
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "metadata_sha256": "b05084ca1d50879865178d9fff9fabeab61bdfb1f361bfbde95421ffc8f9be46",
+      "wheel_sha256": "1b68144734c4b66791f27add5d425f3620775585718a03d0f9b110ba3a4d88db"
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "metadata_sha256": "10898c620e8007c030e07fa5622b68358a43010025dfbd78a1cb797699de2bb4",
+      "wheel_sha256": "ccec20e2307acd7da453dd7437e70c6b08e2bc3ead3bc3445af135da37b56d59"
+    }
+  ]
+}
