@@ -7,6 +7,14 @@ fails clearly. Dry-run validates but never creates a directory or manifest.
 The manifest is an isolation guard, not encryption or proof of taxpayer ownership.
 Do not edit it to adopt old files. Each account should use a separate output folder.
 
+Desktop 2.0.2 handles an upgrade from an unowned legacy output folder by selecting
+`<base>/<account>/tai-moi/<document-kind>` for new online work. Path selection
+does not write anything, so lookup stays read-only. Existing valid owned folders
+are reused; invalid/mismatched owners are still rejected. Legacy files are never
+claimed, moved or deleted, and remain available through the offline/saved view.
+The result and Open folder action use the actual new output path. Catalog-only
+migration below does not solve online directory ownership by itself.
+
 Known-account primary/attachment resume also requires matching identity and
 validated kind, size and SHA-256 evidence. Unknown legacy files never satisfy it.
 Conflicting or suspect primary/alternate files are retained at their original

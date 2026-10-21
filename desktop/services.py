@@ -19,7 +19,7 @@ from gdt_tax.parser.cli import PARSED_NAME, parse_manifest, write_parsed
 from gdt_tax.parser.registry import load_registry
 from gdt_tax.pipeline import Pipeline
 from gdt_tax.proxy import parse_proxy
-from gdt_tax.run_hooks import RunCancelled, RunHooks
+from gdt_tax.run_hooks import RunBudget, RunCancelled, RunHooks
 from gdt_tax.storage import write_metadata
 from gdt_tax.tb.pipeline import TbPipeline
 from gdt_tax.tb.storage import write_tb_metadata
@@ -56,6 +56,7 @@ class RunConfig:
     input_rows: list[dict[str, Any]] = field(default_factory=list, repr=False)
     source_files: tuple[str, ...] = field(default=(), repr=False)
     report_path: Path | None = None
+    budget: RunBudget | None = field(default=None, repr=False)
 
     def settings(self) -> Settings:
         p = self.preferences

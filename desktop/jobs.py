@@ -175,7 +175,7 @@ class Worker(QObject):
 
     @Slot()
     def run(self) -> None:
-        hooks = RunHooks(self.cancel, self.progress.emit)
+        hooks = RunHooks(self.cancel, self.progress.emit, budget=self.config.budget)
         started_at = datetime.now(timezone.utc).isoformat()
         task_id = uuid4().hex[:12]
         try:

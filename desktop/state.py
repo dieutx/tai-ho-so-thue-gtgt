@@ -6,6 +6,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from gdt_tax.identity import IdentityError, account_fingerprint
+from gdt_tax.ownership import check_owner
+
 from .services import JobResult
 
 FOLDERS = {"tax": "to-khai", "gnt": "gnt", "notice": "thong-bao", "offline": "phan-tich"}
@@ -16,7 +19,21 @@ def job_output(base: Path, username: str, mode: str) -> Path:
         return base / FOLDERS[mode]
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", username)[:48].strip("_") or "tai-khoan"
     account = f"{safe}-{hashlib.sha256(username.encode()).hexdigest()[:8]}"
-    return base / account / FOLDERS[mode]
+    target = base / account / FOLDERS[mode]
+    fresh = base / account / 'tai-moi' / FOLDERS[mode]
+    key = account_fingerprint(username)
+    # Preserve existing verified output; keep unowned legacy files untouched.
+    # Once a new namespace is in use, keep using it even if old files are moved.
+    if fresh.exists():
+        check_owner(fresh, key)
+        return fresh
+    try:
+        check_owner(target, key)
+    except IdentityError as error:
+        if not str(error).startswith('DIRECTORY_LEGACY_UNOWNED:'):
+            raise
+        return fresh
+    return target
 
 
 @dataclass

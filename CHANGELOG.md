@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.2] — 2026-10-21
+
+- Sửa chặn `DIRECTORY_LEGACY_UNOWNED` sau nâng cấp: desktop tự chọn nhánh
+  `tai-moi` của đúng tài khoản khi thư mục cũ chưa có owner manifest. Dữ liệu
+  cũ giữ nguyên để mở offline; không tự gán sở hữu hoặc nhận tệp cũ là đã tải.
+  Thư mục đã có owner hợp lệ vẫn được dùng lại như trước.
+- Thông báo lỗi CLI giải thích đúng giới hạn của công cụ chuyển danh mục.
+- Chế độ chẩn đoán online opt-in trong EXE dùng Worker/OCR thật, đọc credential
+  từ file cấu hình có sẵn; giới hạn ba khoảng ngày 31 ngày, request/thời gian/
+  dung lượng, mỗi khoảng tối đa một hồ sơ kèm thông báo. Không chạy khi mở app.
+
 ## [2.0.1] — 2026-10-21
 
 - Hợp nhất 26 mục core: định danh tài khoản/nguồn, kiểm tra bảng và độ đầy đủ,

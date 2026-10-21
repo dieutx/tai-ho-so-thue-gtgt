@@ -36,7 +36,9 @@ def check_owner(directory: str | Path, account_key: str, *, create: bool = False
     if directory.exists() and any(path.is_symlink() or path.is_dir()
             or path.suffix.lower() in {".zip", ".xml", ".pdf", ".json", ".csv", ".xlsx"}
             for path in directory.iterdir()):
-        raise IdentityError("DIRECTORY_LEGACY_UNOWNED: dùng thư mục mới; xem gdt-migrate-identity")
+        raise IdentityError("DIRECTORY_LEGACY_UNOWNED: Thư mục có dữ liệu từ phiên bản cũ chưa xác định tài khoản. "
+                            "Chọn thư mục mới để tra cứu/tải tiếp; dữ liệu cũ vẫn mở được ở chế độ offline. "
+                            "Chuyển đổi danh mục bằng gdt-migrate-identity không gán quyền sở hữu cho thư mục.")
     if not create:
         return
     directory.mkdir(parents=True, exist_ok=True)
