@@ -12,9 +12,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from . import __version__
-from .auth_outcomes import AuthOutcome, classify_response
+from .auth_outcomes import AuthFailure, AuthOutcome, classify_response
 from .constants import LEGACY_ETAX_BASE, LOGIN_PAGE
-from .errors import GdtError
+from .errors import GdtError, PortalVerificationError
 from .http import HttpClient
 from .portal_profiles import PROFILE_VERSION, ROUTING_VERSION
 from .run_hooks import RunBudget, RunHooks
@@ -69,6 +69,10 @@ def public_probe(source, *, client_factory=HttpClient, clock=time.monotonic):
         report.update(http_reachable=True, http_status=response.status_code,
                       outcome=classify_response(response, 'DVC' if source in {'DVC', 'ETAX'} else 'ETAX_LEGACY', phase='page').value,
                       schema=safe_schema_evidence(response.text))
+    except AuthFailure as error:
+        report.update(http_reachable=True, outcome=error.outcome.value, error_code=error.code)
+    except PortalVerificationError as error:
+        report.update(http_reachable=True, outcome='ACCESS_VERIFICATION', error_code=error.code)
     except GdtError as error:
         report['outcome'] = getattr(error, 'code', 'HTTP_TRANSPORT_ERROR')
     finally:

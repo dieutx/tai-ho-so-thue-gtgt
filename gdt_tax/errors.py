@@ -65,3 +65,7 @@ class LegacyPageError(LegacyEtaxError):
 
     Không phải bằng chứng hết phiên; dừng và báo cấu trúc chưa nhận diện.
     """
+    code = 'AUTH_SCHEMA_UNKNOWN'
+
+    def __init__(self, message):
+        super().__init__(self.code + ': ' + message)

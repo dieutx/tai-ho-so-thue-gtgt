@@ -251,8 +251,8 @@ class AtomicRetryTests(unittest.TestCase):
         config = RunConfig('gnt', Path('fixture-output'), username='fixture', password='fixture', preferences=Preferences(login_attempts=1))
         portal = EtaxLegacyPortal(Mock(), solver, config.settings())
         failures = [FakeResponse('<form id="loginForm"></form><div>invalid captcha</div>', url='https://fixture.test')] * 5
-        from gdt_tax.portals import etax_legacy
-        success = FakeResponse(text=etax_legacy._LOGIN_OK_MARKER, url='https://fixture.test')
+        from tests.test_etax_legacy import LOGIN_OK_HTML
+        success = FakeResponse(text=LOGIN_OK_HTML, url='https://fixture.test')
         with patch.object(portal, '_legacy_captcha_image', side_effect=[f'image-{n}'.encode() for n in range(6)]) as fetch, patch.object(portal, '_post_form', side_effect=failures + [success]) as post:
             self.assertIs(portal._submit_login(Mock(text='fixture', url='https://fixture.test')), success)
         self.assertEqual(fetch.call_count, 6)

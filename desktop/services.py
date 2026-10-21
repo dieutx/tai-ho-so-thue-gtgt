@@ -202,6 +202,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
         if propagate_auth:
             raise
         result.state, result.message = "ERROR", str(error)
+        result.error_code = error.code
     except (StorageError, PermissionError) as error:
         logger.error("%s", error)
         result.state = "ERROR"

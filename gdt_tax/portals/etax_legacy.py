@@ -43,25 +43,9 @@ from ..naming import safe_filename_part
 from ..parsing import parse_record_table
 from .base import Portal
 
-#: Thành công khi trang trả về luồng trang chủ doanh nghiệp.
-_LOGIN_OK_MARKER = "corporateHomeProc"
-#: Trang cũ trả lại form đăng nhập khi sai mã CAPTCHA hoặc hết phiên.
 _LOGIN_FORM_ID = "loginForm"
 _SEARCH_FORM_ID = "traCuuKhaiForm"
 _RESULT_TABLE_ID = "data_content_onday"
-
-_LEGACY_ALERT_RE = re.compile(r"alert\(\s*['\"](.*?)['\"]\s*\)", re.I | re.S)
-
-
-def _alerts(html: str) -> list[str]:
-    """Các câu thông báo mà trang cũ nhúng trong ``alert('...')``."""
-    messages = []
-    for match in _LEGACY_ALERT_RE.finditer(html):
-        text = re.sub(r"\s+", " ", match.group(1)).strip()
-        if text:
-            messages.append(text)
-    return messages
-
 
 def _form_node(html: str, form_id: str):
     """Tìm form theo ``id`` rồi tới ``name`` (một số màn hình legacy chỉ có name)."""
@@ -70,19 +54,6 @@ def _form_node(html: str, form_id: str):
     if form is None and form_id:
         form = soup.find("form", attrs={"name": form_id})
     return form
-
-
-def _credentials_rejected(html: str) -> bool:
-    """Only recognize displayed server errors, never validator JavaScript."""
-    soup = BeautifulSoup(html, 'html.parser')
-    for node in soup(['script', 'style', 'noscript', 'template']):
-        node.decompose()
-    visible = ' '.join(soup.stripped_strings).casefold()
-    return any(message in visible for message in (
-        'tên đăng nhập hoặc mật khẩu của bạn không chính xác',
-        'tên đăng nhập hoặc mật khẩu không đúng',
-        'sai tên đăng nhập hoặc mật khẩu',
-    ))
 
 
 def _form_data(form) -> tuple[str, dict[str, str]]:
@@ -118,17 +89,10 @@ def _operation_url(html: str, operation: str) -> str:
 
 
 def _page_detail(response) -> str:
-    """Câu ngắn cổng trả về (title/alert/chữ hiển thị) để lỗi có ngữ cảnh."""
-    text = getattr(response, "text", "") or ""
-    if not text:
-        return ""
-    soup = BeautifulSoup(text, "html.parser")
-    for node in soup(["script", "style"]):
-        node.decompose()
-    title = soup.title.get_text(" ", strip=True) if soup.title else ""
-    visible = " ".join(soup.stripped_strings)
-    detail = title or next(iter(_alerts(text)), "") or visible
-    return re.sub(r"\s+", " ", detail).strip()[:180]
+    """Metadata-only detail for an unrecognized business page."""
+    from ..schema_evidence import safe_schema_evidence
+    evidence = safe_schema_evidence(getattr(response, 'text', '') or '')
+    return 'SCHEMA_UNKNOWN fingerprint=' + evidence.get('fingerprint', 'LIMIT')
 
 
 def _js_redirect(html: str, required_text: str) -> str:

@@ -20,6 +20,15 @@ from tests.test_http import FakeSession, StubResponse
 
 
 class HealthTests(unittest.TestCase):
+    def test_recognized_maintenance_response_is_reachable_but_capability_untested(self):
+        session = FakeSession([StubResponse(503)])
+        report = public_probe('DVC', client_factory=lambda **kwargs: HttpClient(session=session, **kwargs))
+        self.assertTrue(report['http_reachable'])
+        self.assertEqual(report['outcome'], 'MAINTENANCE')
+        self.assertEqual(report['error_code'], 'AUTH_MAINTENANCE')
+        self.assertEqual(report['authenticated_capability'], 'UNTESTED')
+        self.assertFalse(report['complete'])
+
     def test_report_retains_quality_without_record_body_identifiers_or_tokens(self):
         html = fixture('dvc_results_page1.html') + '<input type="hidden" value="private-fixture-token">'
         report = analyze_response(FakeResponse(html), 'DVC', 'search')

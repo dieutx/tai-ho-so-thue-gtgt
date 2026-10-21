@@ -1,7 +1,9 @@
 """Conservative adapter-specific authentication evidence; never echo portal text."""
 from __future__ import annotations
 
+import re
 from enum import Enum
+from html import unescape
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from bs4 import BeautifulSoup
@@ -68,6 +70,8 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
         json_message = ' '.join(str(payload[key]) for key in ('message', 'error', 'description')
                                 if isinstance(payload.get(key), str))
     soup = BeautifulSoup(text if not isinstance(payload, dict) else '', 'html.parser')
+    login_form = soup.select_one('form#loginForm, form[name="loginForm"]') is not None
+    home_form = soup.select_one('form#goProcForm, form[name="goProcForm"]') is not None
     for node in soup(['script', 'style', 'noscript', 'template']):
         node.decompose()
     for node in soup.select('[hidden], [aria-hidden="true"], input[type="hidden"]'):
@@ -93,7 +97,6 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
             return outcome
     if soup.select_one('input[autocomplete="one-time-code"], form#otpForm, form#ssoForm'):
         return AuthOutcome.INTERACTIVE_AUTH_REQUIRED
-    login_form = soup.select_one('form#loginForm, form[name="loginForm"]') is not None
     url = urlsplit(urljoin(getattr(response, 'url', '') or '',
                           response.headers.get('Location', '') if response.status_code in {301, 302, 303, 307, 308} else ''))
     events = parse_qs(url.query)
@@ -106,7 +109,8 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
             return AuthOutcome.SUCCESS
         # Legacy's reviewed navigation marker is in JavaScript; it is never
         # considered an error message or a signal that the session expired.
-        if adapter == 'ETAX_LEGACY' and 'corporateHomeProc' in text and not login_form:
+        home_operation = re.search(r'''[?&]dse_operationName=corporateHomeProc(?:[&'"\s<>]|$)''', unescape(text))
+        if adapter == 'ETAX_LEGACY' and home_form and home_operation and not login_form:
             return AuthOutcome.SUCCESS
     return AuthOutcome.SCHEMA_UNKNOWN
 

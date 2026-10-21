@@ -19,6 +19,20 @@ CHALLENGE = (
 
 
 class VerificationTests(unittest.TestCase):
+    def test_unknown_operation_page_exports_fingerprint_without_visible_portal_data(self):
+        http = Mock()
+        http.get.return_value = FakeResponse('<html><title>synthetic-private-taxpayer</title><body>synthetic-private-token</body></html>')
+        portal = EtaxLegacyPortal(http, Mock(), Mock(header_profile='browser', login_attempts=1))
+        portal.dse_session_id, portal.home_page_id = 'synthetic-session', '7'
+        with self.assertLogs(portal.logger, 'ERROR') as logs:
+            with self.assertRaises(LegacyEtaxError) as caught:
+                portal._open_operation_page('traCuuToKhaiProc', 'traCuuKhaiForm', 'tờ khai')
+        text = str(caught.exception) + ' '.join(logs.output)
+        for secret in ('synthetic-private-taxpayer', 'synthetic-private-token', 'synthetic-session'):
+            self.assertNotIn(secret, text)
+        self.assertIn('fingerprint=', text)
+        self.assertEqual(caught.exception.code, 'AUTH_SCHEMA_UNKNOWN')
+
     def test_visible_bad_credentials_stop_without_ocr_rejection_or_retry(self):
         portal = EtaxLegacyPortal(Mock(), Mock(), Mock(login_attempts=10))
         portal.captcha.solve.return_value = 'abc12'

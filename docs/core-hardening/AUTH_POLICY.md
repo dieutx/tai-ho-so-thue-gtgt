@@ -22,3 +22,8 @@ The synthetic matrix in tests/test_auth_outcomes.py and fixtures/auth/manifest.j
 covers both adapters, all outcomes, 200/401/403/503 and login redirects. Descriptive
 JSON codes are fixture contracts, not claims of live portal support. All validation
 is offline; no account or live portal was used.
+
+Final acceptance tightens legacy success to the reviewed home navigation form plus
+corporateHomeProc URL operation. A bare keyword in an unrelated script is unknown.
+Unknown business pages expose only a structural fingerprint and AUTH_SCHEMA_UNKNOWN,
+with the same code in CLI/desktop; visible portal text/alerts are never echoed.

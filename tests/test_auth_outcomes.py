@@ -20,6 +20,13 @@ from tests.test_verification import CHALLENGE
 
 
 class AuthContractTests(unittest.TestCase):
+    def test_legacy_success_requires_reviewed_navigation_form_and_operation(self):
+        for text in ('corporateHomeProc', '<script>var unused="corporateHomeProc";</script>',
+                     LOGIN_OK_HTML.replace('corporateHomeProc', 'unreviewedOperation')):
+            self.assertEqual(classify_response(FakeResponse(text), 'ETAX_LEGACY'), AuthOutcome.SCHEMA_UNKNOWN)
+        self.assertEqual(classify_response(FakeResponse(LOGIN_OK_HTML), 'ETAX_LEGACY'), AuthOutcome.SUCCESS)
+        self.assertEqual(classify_response(FakeResponse(LOGIN_OK_HTML.replace("id='goProcForm'", "id='goProcForm' hidden")), 'ETAX_LEGACY'), AuthOutcome.SUCCESS)
+
     def test_eight_outcomes_on_both_adapters(self):
         messages = {
             'INVALID_CREDENTIALS': 'Tên đăng nhập hoặc mật khẩu không chính xác',
