@@ -14,3 +14,16 @@ older callers; output names and schemas remain unchanged. No new payload copies
 are retained and no unbounded stream is introduced.
 
 This is PR A, before sharing orchestration (B) or composing the navigator (C).
+
+## PR B: shared sequential orchestration
+
+orchestration.py now owns retry/budget/completeness, repeated/empty page checks,
+page-boundary checkpoints and per-record target/progress/error bookkeeping. Adapter
+pagination requests and document validation/storage remain with each adapter.
+The page iterator yields before advancing: the caller consumes and downloads each
+record on the current DSE page. Early target completion is allowed only on a complete
+parse. A partial page retains records, checkpoints them and raises SCHEMA_CHANGED.
+
+tests/test_pipeline_contracts.py runs identical immediate-download, partial, repeated
+and target-stop traces through declaration, GNT and TB pipelines. No filenames,
+catalog schema, parallelism or payload buffering changed.

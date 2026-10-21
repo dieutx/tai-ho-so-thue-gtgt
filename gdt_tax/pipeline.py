@@ -7,20 +7,22 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from functools import partial
 
 from .attachments import AttachmentResult, collect_attachments
 from .auth import login, open_landing
 from .catalog import CatalogCheckpoint, flush_on_error
 from .classification import classify_record
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX, SOURCE_ETAX_LEGACY
-from .contracts import DownloadArtifact, checked_artifact
+from .contracts import DownloadArtifact, QueryOutcome, checked_artifact
 from .csrf import csrf_token
 from .dates import format_date
 from .dvc_notices import NOTICE_DIRECTORY, NoticeStore
 from .errors import LoginError, NetworkError, SchemaChangedError, SearchError
 from .http import HttpClient
 from .identity import account_fingerprint, scope_targets
-from .models import CaseRecord, PageResult, RunSummary
+from .models import CaseRecord, RunSummary
+from .orchestration import consume_record, pages, search_page
 from .ownership import prepare_output
 from .portals import build_portals
 from .run_hooks import RunBudget, RunHooks
@@ -162,28 +164,7 @@ class Pipeline:
         return summary
 
     def _search_and_download(self, portal, period, records, succeeded) -> bool:
-        page = 1
-        total_pages: int | None = None
-        seen_ids: set[str] = set()
-        while total_pages is None or page <= total_pages:
-            self.hooks.check()
-            result = self._search_page(portal, period, page)
-            known_total = total_pages is not None
-            if result.total_pages is not None:
-                total_pages = result.total_pages
-            page_ids = {found.ma_ho_so for found in result.records}
-            new_ids = page_ids - seen_ids
-            self.logger.info("TRANG %s: %s hồ sơ", page, len(result.records))
-            if page > 1 and not new_ids:
-                if known_total or result.records:
-                    raise SearchError(
-                        f"{portal.source} trang {page}/{total_pages} rỗng hoặc lặp lại; "
-                        "không thể xác nhận đã tra cứu đủ"
-                    )
-                break
-            if not result.records and total_pages is not None and total_pages > 1:
-                raise SearchError(f"{portal.source} trang {page}/{total_pages} không có hồ sơ")
-            seen_ids.update(page_ids)
+        for page, result in pages(self, lambda number: self._search_page(portal, period, number), records, portal.source):
             for index, found in enumerate(result.records, start=1):
                 self.hooks.check()
                 if found.nguon != period.source:
@@ -195,16 +176,7 @@ class Pipeline:
                     continue
                 record = records.setdefault(found.record_key, classify_record(found))
                 self.logger.info("TẢI trang=%s mục=%s/%s: %s", page, index, len(result.records), record.ma_ho_so)
-                self.active_record_id = record.record_key
-                targeted = self.target_ids is None or record.record_key in self.target_ids
-                success = self._attempt_download(portal, record, succeeded) if targeted else False
-                if not self.settings.dry_run and targeted:
-                    if record.record_key in succeeded:
-                        self.failed_ids.discard(record.record_key)
-                    else:
-                        self.failed_ids.add(record.record_key)
-                self._persist(records)
-                self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(succeeded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.record_key in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.record_key in succeeded else "Lỗi tải" if targeted else "Chưa tải")
+                success = consume_record(self, record, records, partial(self._attempt_download, portal, record, succeeded))
                 if self.settings.case_id and (success or self.settings.dry_run):
                     if result.diagnostics is None or result.diagnostics.complete:
                         return True
@@ -212,14 +184,6 @@ class Pipeline:
                     if result.diagnostics is None or result.diagnostics.complete:
                         return True
                 self._pause(self.settings.pause_between_records)
-            self._persist(records, force=True)
-            if result.diagnostics is not None and not result.diagnostics.complete:
-                raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
-            if total_pages is None and not new_ids:
-                break
-            page += 1
-            if total_pages is None or page <= total_pages:
-                self._pause(self.settings.pause_between_pages)
         return False
 
     def _pause(self, seconds: float) -> None:
@@ -227,28 +191,8 @@ class Pipeline:
         delay = seconds * (1 + random.uniform(0, jitter)) if jitter > 0 and seconds > 0 else seconds
         self.hooks.pause(delay, self.sleep)
 
-    def _search_page(self, portal, period, page: int) -> PageResult:
-        if self.hooks.budget is not None:
-            self.hooks.budget.page()
-        for attempt in range(1, self.settings.search_attempts + 1):
-            self.hooks.check()
-            result = portal.search(period, page)
-            if result.diagnostics is not None and not result.diagnostics.complete and result.diagnostics.status != "CAPTCHA_INVALID":
-                if result.records:
-                    return result
-                raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
-            self.logger.info(
-                "SEARCH %s %s page=%s try=%s: HTTP=%s, records=%s, pages=%s",
-                portal.source, period.label, page, attempt, result.http_status,
-                len(result.records), result.total_pages,
-            )
-            if result.http_status == 200 and (
-                result.records or (result.diagnostics is not None and result.diagnostics.status == "EMPTY_CONFIRMED")
-            ):
-                return result
-            if attempt < self.settings.search_attempts:
-                self._pause(SEARCH_RETRY_PAUSE)
-        raise SearchError(f"Không đọc được trang {page} sau {self.settings.search_attempts} lần thử")
+    def _search_page(self, portal, period, page: int) -> QueryOutcome[CaseRecord]:
+        return search_page(self, lambda: portal.search(period, page), portal.source, page)
 
     def _download(self, portal, record: CaseRecord, succeeded: set[str]) -> bool:
         # Dry-run không được dò/đổi tên file đã có hoặc tính chúng là vừa tải.

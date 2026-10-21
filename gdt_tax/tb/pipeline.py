@@ -10,14 +10,17 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from functools import partial
 
 from ..catalog import CatalogCheckpoint, flush_on_error
-from ..errors import NetworkError, SchemaChangedError, SearchError
+from ..contracts import QueryOutcome
+from ..errors import NetworkError
 from ..http import HttpClient
 from ..identity import account_fingerprint, scope_targets
+from ..orchestration import consume_record, pages, search_page
 from ..ownership import prepare_output
 from ..run_hooks import RunBudget, RunHooks
-from .models import TbPageResult, TbSummary, ThongBao, tb_periods
+from .models import TbSummary, ThongBao, tb_periods
 from .portal import TbPortal
 from .storage import TbStore, write_tb_metadata
 
@@ -126,28 +129,7 @@ class TbPipeline:
         records: dict[str, ThongBao],
         downloaded: set[str],
     ) -> None:
-        page = 1
-        total_pages: int | None = None
-        seen_ids: set[str] = set()
-        while total_pages is None or page <= total_pages:
-            self.hooks.check()
-            result = self._search_page(portal, period, page)
-            known_total = total_pages is not None
-            if result.total_pages is not None:
-                total_pages = result.total_pages
-            page_ids = {found.message_id for found in result.records}
-            new_ids = page_ids - seen_ids
-            self.logger.info("TRANG %s: %s thông báo", page, len(result.records))
-            if page > 1 and not new_ids:
-                if known_total or result.records:
-                    raise SearchError(
-                        f"Thông báo trang {page}/{total_pages} rỗng hoặc lặp lại; "
-                        "không thể xác nhận đã tra cứu đủ"
-                    )
-                break
-            if not result.records and total_pages is not None and total_pages > 1:
-                raise SearchError(f"Trang {page}/{total_pages} thông báo trống")
-            seen_ids.update(page_ids)
+        for page, result in pages(self, lambda number: self._search_page(portal, period, number), records, 'TB'):
             for index, found in enumerate(result.records, start=1):
                 self.hooks.check()
                 found.account_key = self.account_key
@@ -156,59 +138,19 @@ class TbPipeline:
                     "TẢI trang=%s mục=%s/%s: %s",
                     page, index, len(result.records), found.so_thong_bao or found.message_id,
                 )
-                self.active_record_id = record.record_key
-                targeted = self.target_ids is None or record.record_key in self.target_ids
-                if targeted:
-                    self._attempt_download(portal, record, downloaded)
-                if not self.settings.dry_run and targeted:
-                    if record.record_key in downloaded:
-                        self.failed_ids.discard(record.record_key)
-                    else:
-                        self.failed_ids.add(record.record_key)
-                self._persist(records)
-                self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(downloaded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.record_key in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.record_key in downloaded else "Lỗi tải" if targeted else "Chưa tải")
+                consume_record(self, record, records, partial(self._attempt_download, portal, record, downloaded))
                 if self.target_ids and self.target_ids.issubset(downloaded):
                     if result.diagnostics is None or result.diagnostics.complete:
                         return
                 self._pause(self.settings.pause_between_records)
-            self._persist(records, force=True)
-            if result.diagnostics is not None and not result.diagnostics.complete:
-                raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
-            if total_pages is None and not new_ids:
-                break
-            page += 1
-            if total_pages is None or page <= total_pages:
-                self._pause(self.settings.pause_between_pages)
 
     def _pause(self, seconds: float) -> None:
         jitter = self.settings.pause_jitter
         delay = seconds * (1 + random.uniform(0, jitter)) if jitter > 0 and seconds > 0 else seconds
         self.hooks.pause(delay, self.sleep)
 
-    def _search_page(self, portal: TbPortal, period, page: int) -> TbPageResult:
-        if self.hooks.budget is not None:
-            self.hooks.budget.page()
-        for attempt in range(1, self.settings.search_attempts + 1):
-            self.hooks.check()
-            result = portal.search_tb(period, page)
-            if result.diagnostics is not None and not result.diagnostics.complete and result.diagnostics.status != "CAPTCHA_INVALID":
-                if result.records:
-                    return result
-                raise SchemaChangedError("SCHEMA_CHANGED: " + "; ".join(result.diagnostics.reasons))
-            self.logger.info(
-                "SEARCH TB %s page=%s try=%s: HTTP=%s, records=%s, pages=%s",
-                period.label, page, attempt, result.http_status,
-                len(result.records), result.total_pages,
-            )
-            if result.http_status == 200 and (
-                result.records or (result.diagnostics is not None and result.diagnostics.status == "EMPTY_CONFIRMED")
-            ):
-                return result
-            if attempt < self.settings.search_attempts:
-                self._pause(SEARCH_RETRY_PAUSE)
-        raise SearchError(
-            f"Không đọc được trang thông báo {page} sau {self.settings.search_attempts} lần thử"
-        )
+    def _search_page(self, portal: TbPortal, period, page: int) -> QueryOutcome[ThongBao]:
+        return search_page(self, lambda: portal.search_tb(period, page), 'TB', page)
 
     def _download(self, portal: TbPortal, record: ThongBao, downloaded: set[str]) -> None:
         if self.settings.dry_run:
