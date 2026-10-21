@@ -20,6 +20,7 @@ from ..http import HttpClient
 from ..identity import account_fingerprint, scope_targets
 from ..orchestration import consume_record, pages, search_page
 from ..ownership import prepare_output
+from ..portal_profiles import profile_for
 from ..run_hooks import RunBudget, RunHooks
 from .models import GiayNopTien, GntSummary, gnt_periods
 from .portal import GntPortal
@@ -47,6 +48,7 @@ class GntPipeline:
         target_ids: set[str] | None = None,
     ) -> None:
         self.settings = settings
+        self.portal_profile = profile_for(settings, "GNT")
         self.http = http
         self.captcha = captcha
         self.store = store or GntStore(settings.download_dir)
@@ -95,7 +97,7 @@ class GntPipeline:
         prepare_output(self.settings)
         summary = GntSummary(dry_run=self.settings.dry_run)
         periods = gnt_periods(
-            self.settings.from_date, self.settings.to_date, self.settings.max_days_per_search
+            self.settings.from_date, self.settings.to_date, min(self.settings.max_days_per_search, self.portal_profile.max_days)
         )
         self.logger.info(
             "Bắt đầu tra cứu giấy nộp tiền: %s → %s (%s đoạn)",
@@ -124,6 +126,7 @@ class GntPipeline:
         summary.discovered = len(records)
         summary.downloaded = len(downloaded)
         summary.expected = len(self.target_ids) if self.target_ids is not None else len(records)
+        summary.portal_profile_version = self.portal_profile.version
         return summary
 
     def _search_period(
@@ -137,6 +140,8 @@ class GntPipeline:
             for index, found in enumerate(result.records, start=1):
                 self.hooks.check()
                 found.account_key = self.account_key
+                found.portal_profile_version = self.portal_profile.version
+                found.routing_version = "direct-source-v1"
                 record = records.setdefault(found.record_key, found)
                 self.logger.info(
                     "TẢI trang=%s mục=%s/%s: %s",

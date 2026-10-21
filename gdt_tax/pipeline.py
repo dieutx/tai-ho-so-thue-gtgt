@@ -24,6 +24,7 @@ from .identity import account_fingerprint, scope_targets
 from .models import CaseRecord, RunSummary
 from .orchestration import consume_record, pages, search_page
 from .ownership import prepare_output
+from .portal_profiles import profile_for
 from .portals import build_portals
 from .run_hooks import RunBudget, RunHooks
 from .storage import ZipStore, write_metadata
@@ -97,11 +98,11 @@ class Pipeline:
         summary = RunSummary(dry_run=self.settings.dry_run)
         plan = self.settings.execution_plan()
         summary.routing_version = plan.version
-        summary.profile_versions = {'DVC': self.settings.dvc_profile.version}
+        summary.profile_versions = {source: profile_for(self.settings, source).version for source in ('DVC', 'ETAX', 'ETAX_LEGACY', 'GNT', 'TB')}
         summary.routing_issues = plan.issues
         summary.skipped_periods = sum(issue['code'] in {'ROUTING_GAP', 'ROUTING_OVERLAP'} for issue in plan.issues)
         self.logger.info('EXECUTION_PLAN: routing=%s profile=%s periods=%s issues=%s',
-                         plan.version, self.settings.dvc_profile.version,
+                         plan.version, json.dumps(summary.profile_versions, sort_keys=True),
                          json.dumps([{'source': p.source, 'start': p.start.isoformat(), 'end': p.end.isoformat()}
                                      for p in plan.periods], sort_keys=True),
                          json.dumps(plan.issues, sort_keys=True))
@@ -171,7 +172,7 @@ class Pipeline:
                 if found.nguon != period.source:
                     raise SchemaChangedError("RECORD_SOURCE_OUTSIDE_PLAN")
                 found.account_key = self.account_key
-                found.portal_profile_version = (self.settings.dvc_profile.version if period.source == 'DVC' else 'legacy-v1')
+                found.portal_profile_version = profile_for(self.settings, period.source).version
                 found.routing_version = (self.settings.routing_policy or self.settings.execution_plan()).version
                 if self.case_targets is not None and found.record_key not in self.case_targets:
                     continue

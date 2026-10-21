@@ -29,7 +29,16 @@ from .dates import (
 from .errors import ConfigError
 from .headers import DEFAULT_PROFILE, PROFILES
 from .models import SearchPeriod
-from .portal_profiles import DVC_PROFILE, PortalProfile, RoutingPolicy, compatibility_routing
+from .portal_profiles import (
+    DVC_PROFILE,
+    ETAX_PROFILE,
+    LEGACY_PROFILES,
+    LegacyProfile,
+    PortalProfile,
+    RoutingPolicy,
+    compatibility_routing,
+    profile_for,
+)
 from .proxy import parse_proxy
 
 ENV_PREFIX = "GDT_"
@@ -152,6 +161,8 @@ class Settings:
     #: Tạm tắt toàn bộ request tới dichvucong.gdt.gov.vn, kể cả đăng nhập.
     dvc_enabled: bool = False
     dvc_profile: PortalProfile = DVC_PROFILE
+    etax_profile: PortalProfile = ETAX_PROFILE
+    legacy_profiles: tuple[LegacyProfile, ...] = LEGACY_PROFILES
     routing_policy: RoutingPolicy | None = None
 
     # --- Dẫn xuất ---
@@ -162,7 +173,8 @@ class Settings:
     def execution_plan(self):
         return (self.routing_policy or compatibility_routing(self)).plan(
             self.from_date, self.to_date, max_days=self.max_days_per_search,
-            enabled=self.source_enabled, dvc_profile=self.dvc_profile)
+            enabled=self.source_enabled, dvc_profile=self.dvc_profile,
+            source_limits={source: profile_for(self, source).max_days for source in ('DVC', 'ETAX', 'ETAX_LEGACY')})
 
     def source_enabled(self, source: str) -> bool:
         return source == SOURCE_ETAX_LEGACY or (

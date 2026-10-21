@@ -2,10 +2,18 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
-from .constants import DVC_DOWNLOAD, DVC_DOWNLOAD_FORM, DVC_SEARCH, DVC_VALIDATE
+from .constants import (
+    DVC_DOWNLOAD,
+    DVC_DOWNLOAD_FORM,
+    DVC_SEARCH,
+    DVC_VALIDATE,
+    ETAX_DOWNLOAD,
+    ETAX_SEARCH,
+    LEGACY_ETAX_ORIGIN,
+)
 from .errors import ConfigError
 from .models import SearchPeriod
 from .table_contracts import SCHEMAS, TableSchema
@@ -25,6 +33,7 @@ class PortalProfile:
     form_id: str = 'form_search'
     page_parameter: str = 'page'
     result_container: str = 'table-container'
+    scope_kind: str = 'id'
     page_total_id: str = 'totalPage'
     page_input_id: str = 'gotoPageInput'
     pagination: str = 'numbered'
@@ -33,7 +42,7 @@ class PortalProfile:
     response_contract: TableSchema = field(default_factory=lambda: SCHEMAS['DVC'])
 
     def validate(self):
-        if self.source != 'DVC' or not self.version or self.pagination != 'numbered':
+        if self.source not in {'DVC', 'ETAX'} or not re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', self.version) or self.pagination != 'numbered' or self.scope_kind not in {'id', 'class'}:
             raise ConfigError('PORTAL_PROFILE_UNSUPPORTED')
         for endpoint in (self.search_endpoint, self.validate_endpoint, self.download_endpoint, self.download_form_endpoint):
             if not re.fullmatch(r'/[A-Za-z0-9/_-]+', endpoint):
@@ -43,9 +52,78 @@ class PortalProfile:
                 raise ConfigError('PORTAL_DESCRIPTOR_INVALID')
         if not 1 <= self.max_days <= 31 or self.response_contract.name != self.source:
             raise ConfigError('PORTAL_CAPABILITY_INVALID')
+        if self.document_kinds != (('DECLARATION', 'ATTACHMENT') if self.source == 'DVC' else ('DECLARATION',)):
+            raise ConfigError('PORTAL_CAPABILITY_INVALID')
 
 
 DVC_PROFILE = PortalProfile()
+ETAX_PROFILE = PortalProfile(source='ETAX', search_endpoint=ETAX_SEARCH, download_endpoint=ETAX_DOWNLOAD,
+    form_id='form_search_tdt', result_container='bangKetQuaTraCuu_tdt', scope_kind='class',
+    page_total_id='goToPage_tdt', page_input_id='goToPage_tdt', response_contract=SCHEMAS['ETAX'], document_kinds=('DECLARATION',))
+
+
+@dataclass(frozen=True)
+class LegacyProfile:
+    source: str
+    operation: str
+    form_id: str
+    table_id: str
+    document_kinds: tuple[str, ...]
+    version: str = PROFILE_VERSION
+    endpoint: str = '/etaxnnt/Request'
+    page_parameter: str = 'pn'
+    query_event: str = 'query'
+    download_event: str = 'download'
+    pagination: str = 'post-number'
+    max_days: int = 31
+
+    def validate(self):
+        if self.source not in {'ETAX_LEGACY', 'GNT', 'TB'} or not re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', self.version) or not 1 <= self.max_days <= 31:
+            raise ConfigError('LEGACY_PROFILE_INVALID')
+        if not re.fullmatch(r'/etaxnnt/[A-Za-z0-9/_-]+', self.endpoint):
+            raise ConfigError('PORTAL_ENDPOINT_INVALID')
+        for value in (self.operation, self.form_id, self.table_id, self.page_parameter, self.query_event, self.download_event):
+            if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]*', value):
+                raise ConfigError('PORTAL_DESCRIPTOR_INVALID')
+        expected = {'ETAX_LEGACY': ('DECLARATION',), 'GNT': ('GNT',), 'TB': ('NOTICE',)}
+        strategy = 'post-first-get-number' if self.source == 'TB' else 'post-number'
+        if self.document_kinds != expected[self.source] or self.pagination != strategy:
+            raise ConfigError('LEGACY_CAPABILITY_UNSUPPORTED')
+
+    @property
+    def request_url(self):
+        return LEGACY_ETAX_ORIGIN + self.endpoint
+
+    @property
+    def schema(self):
+        return replace(SCHEMAS[self.source], table_id=self.table_id, empty_form=self.form_id, operation=self.operation)
+
+
+LEGACY_PROFILES = (
+    LegacyProfile('ETAX_LEGACY', 'traCuuToKhaiProc', 'traCuuKhaiForm', 'data_content_onday', ('DECLARATION',), download_event='downTkhai'),
+    LegacyProfile('GNT', 'corpQueryTaxProc', 'reportForm', 'data_content_onday', ('GNT',)),
+    LegacyProfile('TB', 'tracuuTBThueKhacProc', 'tKhaiForm', 'tbl_tracuu', ('NOTICE',), pagination='post-first-get-number'),
+)
+
+
+def profile_for(settings, source: str) -> PortalProfile | LegacyProfile:
+    selected: PortalProfile | LegacyProfile
+    if source in {'DVC', 'ETAX'}:
+        default = DVC_PROFILE if source == 'DVC' else ETAX_PROFILE
+        value = getattr(settings, 'dvc_profile' if source == 'DVC' else 'etax_profile', default)
+        selected = value if isinstance(value, PortalProfile) else default
+    else:
+        values = getattr(settings, 'legacy_profiles', LEGACY_PROFILES)
+        if not isinstance(values, tuple):
+            values = LEGACY_PROFILES
+        matches = [value for value in values if isinstance(value, LegacyProfile) and value.source == source]
+        if len(matches) != 1:
+            raise ConfigError('PORTAL_PROFILE_MISSING_OR_DUPLICATE')
+        selected = matches[0]
+    selected.validate()
+    if selected.source != source:
+        raise ConfigError('PORTAL_PROFILE_SOURCE_MISMATCH')
+    return selected
 
 
 @dataclass(frozen=True)
@@ -68,7 +146,7 @@ class RoutingPolicy:
     effective_at: date
     windows: tuple[RouteWindow, ...]
 
-    def plan(self, start: date, end: date, *, max_days: int, enabled, dvc_profile=DVC_PROFILE) -> ExecutionPlan:
+    def plan(self, start: date, end: date, *, max_days: int, enabled, dvc_profile=DVC_PROFILE, source_limits=None) -> ExecutionPlan:
         if start > end or not 1 <= max_days <= 31 or start < self.effective_at:
             raise ConfigError('ROUTING_RANGE_INVALID')
         dvc_profile.validate()
@@ -88,7 +166,9 @@ class RoutingPolicy:
                 result.issues.append({'code': 'ROUTING_GAP' if not sources else 'ROUTING_OVERLAP',
                     'start': date.fromordinal(first).isoformat(), 'end': date.fromordinal(last - 1).isoformat(), 'sources': sources})
             for source in sources:
-                limit = min(max_days, dvc_profile.max_days) if source == 'DVC' else max_days
+                limit = min(max_days, (source_limits or {}).get(source, dvc_profile.max_days if source == 'DVC' else max_days))
+                if not 1 <= limit <= 31:
+                    raise ConfigError('ROUTING_SOURCE_LIMIT_INVALID')
                 cursor = first
                 while cursor < last:
                     chunk_end = min(last, cursor + limit)

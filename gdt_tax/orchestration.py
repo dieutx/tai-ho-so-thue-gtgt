@@ -38,8 +38,8 @@ def search_page(context: RunContext, search: Callable[[], QueryOutcome[R]], sour
             counts={'records': len(result.records), 'page': page, 'attempt': attempt},
             elapsed_ms=(time.monotonic() - started) * 1000, run_id=context.hooks.run_id)
         evidence['schema_fingerprint'] = diagnostics.schema_fingerprint if diagnostics else ''
-        if source == 'DVC':
-            evidence['profile_version'] = context.settings.dvc_profile.version
+        from .portal_profiles import profile_for
+        evidence['profile_version'] = profile_for(context.settings, source).version
         if context.settings.routing_policy:
             evidence['routing_version'] = context.settings.routing_policy.version
         context.hooks.emit_support(evidence)

@@ -23,7 +23,7 @@ from ..csrf import csrf_token
 from ..headers import build_page_headers, build_xhr_headers
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..parsing import page_count, parse_record_table
-from ..portal_profiles import DVC_PROFILE, PortalProfile
+from ..portal_profiles import PortalProfile, profile_for
 
 
 class Portal(ABC):
@@ -39,9 +39,9 @@ class Portal(ABC):
         self.captcha = captcha
         self.settings = settings
         self.detail_html = ''
-        selected = getattr(settings, 'dvc_profile', DVC_PROFILE)
-        self.capabilities = selected if isinstance(selected, PortalProfile) else DVC_PROFILE
-        self.capabilities.validate()
+        selected = profile_for(settings, self.source if self.source in {'DVC', 'ETAX'} else 'DVC')
+        assert isinstance(selected, PortalProfile)
+        self.capabilities = selected
         self.logger = logger or logging.getLogger(f"gdt_tax.portal.{self.source.lower()}")
 
     @property
@@ -98,8 +98,8 @@ class Portal(ABC):
         raise_terminal(response, 'DVC', authenticated=True)
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
-        schema = (replace(self.capabilities.response_contract, container='#' + self.capabilities.result_container)
-                  if self.source == 'DVC' else None)
+        scope = ('#' if self.capabilities.scope_kind == 'id' else '.') + self.capabilities.result_container
+        schema = replace(self.capabilities.response_contract, container=scope)
         parsed = parse_record_table(response.text, self.source, schema=schema)
         result = PageResult(
             records=parsed.records,

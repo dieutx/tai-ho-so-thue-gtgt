@@ -7,6 +7,7 @@ import json
 import platform
 import time
 import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,7 +17,7 @@ from .auth_outcomes import AuthFailure, AuthOutcome, classify_response
 from .constants import LEGACY_ETAX_BASE, LOGIN_PAGE
 from .errors import GdtError, PortalVerificationError
 from .http import HttpClient
-from .portal_profiles import PROFILE_VERSION, ROUTING_VERSION
+from .portal_profiles import ROUTING_VERSION, LegacyProfile, profile_for
 from .run_hooks import RunBudget, RunHooks
 from .schema_evidence import safe_schema_evidence
 
@@ -28,7 +29,7 @@ def event(source, operation, *, outcome='UNTESTED', complete=False, counts=None,
     return {'schema_version': 'support-event-v1', 'trace_id': uuid.uuid4().hex,
             'run_id': run_id or uuid.uuid4().hex, 'operation_id': uuid.uuid4().hex,
             'source': source if source in SOURCES else 'UNKNOWN', 'operation': operation,
-            'profile_version': PROFILE_VERSION if source == 'DVC' else 'legacy-v1',
+            'profile_version': profile_for(None, source).version if source in SOURCES else 'UNKNOWN',
             'routing_version': ROUTING_VERSION, 'outcome': outcome, 'complete': complete,
             'counts': counts or {}, 'elapsed_ms': round(elapsed_ms, 3)}
 
@@ -46,8 +47,11 @@ def analyze_response(response, source, operation):
                   payload_sha256=hashlib.sha256(response.content).hexdigest(),
                   schema=safe_schema_evidence(response.text))
     if operation == 'search' and outcome == AuthOutcome.SCHEMA_UNKNOWN:
-        parsed = (parse_gnt_table(response.text) if source == 'GNT' else parse_tb_table(response.text) if source == 'TB'
-                  else parse_record_table(response.text, source))
+        profile = profile_for(None, source)
+        schema = (profile.schema if isinstance(profile, LegacyProfile) else
+                  replace(profile.response_contract, container=('#' if profile.scope_kind == 'id' else '.') + profile.result_container))
+        parsed = (parse_gnt_table(response.text, schema=schema) if source == 'GNT' else parse_tb_table(response.text, schema=schema) if source == 'TB'
+                  else parse_record_table(response.text, source, schema=schema))
         diagnostics = parsed.diagnostics
         report.update(outcome=diagnostics.status, complete=diagnostics.complete,
                       counts={'candidate': diagnostics.candidate_count, 'parsed': diagnostics.parsed_count,
@@ -88,6 +92,7 @@ def doctor(folder=None):
     registry = load_registry()
     report = event('DVC', 'offline_validate_inputs' if folder else 'doctor')
     report.update(core_version=__version__, last_verified_at=None, live_verification='NOT_PERFORMED',
+        portal_profiles={source: profile_for(None, source).version for source in SOURCES},
         mapping_registry_sha256=registry.fingerprint,
         mappings=[{'id': m.mapping_id, 'version': m.mapping_version, 'namespace': m.detect_namespace,
                    'fields': len(m.fields)} for m in registry.mappings()])

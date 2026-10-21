@@ -1,6 +1,7 @@
 """Business adapters compose session navigation; no declaration search inheritance."""
 from __future__ import annotations
 
+from .portal_profiles import LegacyProfile, profile_for
 from .portals.etax_legacy import LegacySessionNavigator, _form_fields
 
 
@@ -9,6 +10,7 @@ def form_fields(html: str, form_id: str):
 
 
 class LegacyBusinessPortal:
+    source: str
     def __init__(self, http, captcha, settings, logger=None, *, login_attempts=None,
                  session_state=None, navigator: LegacySessionNavigator | None = None):
         self.navigator = navigator or LegacySessionNavigator(http, captcha, settings, logger,
@@ -18,6 +20,9 @@ class LegacyBusinessPortal:
         self._search_page_html = ''
         self._search_page_url = ''
         self._search_form_id = ''
+        selected = profile_for(settings, self.source)
+        assert isinstance(selected, LegacyProfile)
+        self.capabilities = selected
 
     @property
     def profile(self):
@@ -51,7 +56,7 @@ class LegacyBusinessPortal:
         return self.navigator.login()
 
     def _open_operation_page(self, operation, expected_form, label):
-        return self.navigator._open_operation_page(operation, expected_form, label)
+        return self.navigator._open_operation_page(operation, expected_form, label, request_url=self.capabilities.request_url)
 
     def _post_form(self, html, form_id, referer, overrides):
         return self.navigator._post_form(html, form_id, referer, overrides)

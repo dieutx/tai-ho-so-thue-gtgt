@@ -53,6 +53,7 @@ class TableSchema:
     empty_markers: tuple[str, ...] = ()
     date_fields: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
+    operation: str = ''
 
     @property
     def aliases(self) -> dict[str, str]:
@@ -156,7 +157,7 @@ def _known_empty(soup: BeautifulSoup, schema: TableSchema) -> bool:
 
 def _has_form(soup: BeautifulSoup, schema: TableSchema) -> bool:
     operations = {"GNT": "corpQueryTaxProc", "TB": "tracuuTBThueKhacProc", "ETAX_LEGACY": "traCuuToKhaiProc"}
-    operation = operations.get(schema.name)
+    operation = schema.operation or operations.get(schema.name)
     return any(form.find("input", attrs={"name": "dse_operationName", "value": operation}) is not None
                for form in soup.find_all("form")) if operation else False
 

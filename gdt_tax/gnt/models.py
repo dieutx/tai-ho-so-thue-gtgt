@@ -47,6 +47,8 @@ class GiayNopTien:
     #: Tên file XML đã tải (rỗng nếu chưa tải).
     tep_xml: str = ""
     account_key: str = UNKNOWN
+    portal_profile_version: str = ""
+    routing_version: str = ""
 
     @property
     def key(self) -> RecordKey:
@@ -80,6 +82,7 @@ class GntSummary:
     periods: int = 0
     dry_run: bool = False
     expected: int | None = None
+    portal_profile_version: str = ""
 
     @property
     def complete(self) -> bool:

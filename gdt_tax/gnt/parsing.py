@@ -82,17 +82,17 @@ def parse_gnt_records(html: str) -> list[GiayNopTien]:
     return parse_gnt_table(html).records
 
 
-def parse_gnt_table(html: str) -> TableParse:
-    return parse_table(html, SCHEMAS["GNT"], lambda row, cells: gnt_record(cells, row), lambda record: record.ctu_id)
+def parse_gnt_table(html: str, *, schema=None) -> TableParse:
+    return parse_table(html, schema or SCHEMAS["GNT"], lambda row, cells: gnt_record(cells, row), lambda record: record.ctu_id)
 
 
-def gnt_page_count(html: str) -> int | None:
+def gnt_page_count(html: str, *, table_id: str = GNT_RESULT_TABLE_ID) -> int | None:
     """Tổng số trang theo dòng ``Trang 1/ 2``; ``None`` nếu trang không cho biết."""
     text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
     match = re.search(r"Trang\s*\d+\s*/\s*(\d+)", text, re.I)
     if match:
         return int(match.group(1))
-    return 1 if GNT_RESULT_TABLE_ID in html else 0
+    return 1 if table_id in html else 0
 
 
 __all__ = ["GNT_MIN_CELLS", "gnt_ctu_id", "gnt_page_count", "gnt_record", "parse_gnt_records"]

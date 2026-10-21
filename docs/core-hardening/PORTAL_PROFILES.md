@@ -6,8 +6,12 @@ result scope, total/input pagination IDs, document kinds, date limit and the tab
 response contract. DvcPortal consumes these descriptors; generic orchestration does
 not change when a profile changes. Profiles are immutable packaged Python data,
 validated before use. There is no remote config or executable selector loader.
-Legacy/ETAX retain the compatibility adapter until their own fixture-backed migration;
-their existing behavior is explicitly identified as legacy-v1 in record lineage.
+The follow-up migrates ETAX and all three legacy business adapters. ETAX consumes its
+own endpoint/form/page/scope/pagination response descriptors. LegacyProfile supplies
+operation/form/table/page/query/download descriptors, endpoint, supported kinds,
+pagination strategy and date limits to declaration/GNT/TB. LegacySessionNavigator
+keeps authentication/session bootstrap independent; business navigation receives the
+reviewed request endpoint. Query/download still use remote IDs unchanged.
 
 Settings.execution_plan uses RoutingPolicy effective dates and source windows. It
 segments dates at all boundaries, reports gaps, overlaps and disabled sources, and
@@ -20,3 +24,9 @@ each new record's JSON/CSV lineage. No source is silently substituted after fail
 Validation mutates endpoint/form/page/result IDs through the actual adapter and
 checks cutoff boundaries, effective date, missing/overlap windows, source disable,
 date limits, diagnostics and record lineage. All tests run offline.
+
+Capability limits are applied to routing for ETAX/legacy and to GNT/TB period plans.
+All five sources emit profile versions; GNT/TB use direct-source-v1 routing lineage.
+Unknown legacy query pages return schema diagnostics immediately, so the common
+orchestrator stops without six repeated queries. Tests mutate actual operation/form/
+table/page/endpoint/download event descriptors and verify original remote IDs/kinds.

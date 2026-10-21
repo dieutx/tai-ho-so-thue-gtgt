@@ -19,6 +19,7 @@ from ..http import HttpClient
 from ..identity import account_fingerprint, scope_targets
 from ..orchestration import consume_record, pages, search_page
 from ..ownership import prepare_output
+from ..portal_profiles import profile_for
 from ..run_hooks import RunBudget, RunHooks
 from .models import TbSummary, ThongBao, tb_periods
 from .portal import TbPortal
@@ -46,6 +47,7 @@ class TbPipeline:
         target_ids: set[str] | None = None,
     ) -> None:
         self.settings = settings
+        self.portal_profile = profile_for(settings, "TB")
         self.http = http
         self.captcha = captcha
         self.store = store or TbStore(settings.download_dir)
@@ -94,7 +96,7 @@ class TbPipeline:
         prepare_output(self.settings)
         summary = TbSummary(dry_run=self.settings.dry_run)
         periods = tb_periods(
-            self.settings.from_date, self.settings.to_date, self.settings.max_days_per_search
+            self.settings.from_date, self.settings.to_date, min(self.settings.max_days_per_search, self.portal_profile.max_days)
         )
         self.logger.info(
             "Bắt đầu tra cứu thông báo: %s → %s (%s đoạn)",
@@ -121,6 +123,7 @@ class TbPipeline:
         summary.discovered = len(records)
         summary.downloaded = len(downloaded)
         summary.expected = len(self.target_ids) if self.target_ids is not None else len(records)
+        summary.portal_profile_version = self.portal_profile.version
         return summary
 
     def _search_period(
@@ -134,6 +137,8 @@ class TbPipeline:
             for index, found in enumerate(result.records, start=1):
                 self.hooks.check()
                 found.account_key = self.account_key
+                found.portal_profile_version = self.portal_profile.version
+                found.routing_version = "direct-source-v1"
                 record = records.setdefault(found.record_key, found)
                 self.logger.info(
                     "TẢI trang=%s mục=%s/%s: %s",

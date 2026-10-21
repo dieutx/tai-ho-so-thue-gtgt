@@ -41,6 +41,8 @@ from ..legacy_session import LegacySessionState
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..naming import safe_filename_part
 from ..parsing import parse_record_table
+from ..portal_profiles import LegacyProfile, profile_for
+from ..table_contracts import ParseDiagnostics
 from .base import Portal
 
 _LOGIN_FORM_ID = "loginForm"
@@ -124,13 +126,13 @@ def _query_parameter(url: str, name: str) -> str:
     return values[0] if values else ""
 
 
-def _total_pages(html: str) -> int:
+def _total_pages(html: str, *, table_id: str = _RESULT_TABLE_ID) -> int:
     """Tổng số trang theo dòng ``Trang 1/ 5 . Có 43 bản ghi`` của trang legacy."""
     text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
     match = re.search(r"Trang\s*\d+\s*/\s*(\d+)", text, re.I)
     if match:
         return int(match.group(1))
-    return 1 if _RESULT_TABLE_ID in html else 0
+    return 1 if table_id in html else 0
 
 
 class LegacySessionNavigator:
@@ -417,7 +419,7 @@ class LegacySessionNavigator:
             break
         return response
 
-    def _open_operation_page(self, operation: str, expected_form: str, label: str):
+    def _open_operation_page(self, operation: str, expected_form: str, label: str, *, request_url=None):
         """Mở trang nghiệp vụ legacy và trả ``(response, form_id)`` thực tế.
 
         Ưu tiên liên kết mà trang chủ đã phát cho phiên hiện tại (mang đúng
@@ -441,7 +443,7 @@ class LegacySessionNavigator:
                 )
             else:
                 response = self.http.get(
-                    f"{LEGACY_ETAX_BASE}/Request",
+                    request_url or f"{LEGACY_ETAX_BASE}/Request",
                     params={
                         "dse_sessionId": self.dse_session_id,
                         "dse_applicationId": "-1",
@@ -479,6 +481,9 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
         self._search_page_html = ''
         self._search_page_url = ''
         self._search_form_id = _SEARCH_FORM_ID
+        selected = profile_for(self.settings, self.source)
+        assert isinstance(selected, LegacyProfile)
+        self.legacy_capabilities = selected
 
     # --- Giai đoạn 3: tra cứu ---
     def search(self, period: SearchPeriod, page: int) -> PageResult:
@@ -491,9 +496,9 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
         response = self._post_form(
             self._search_page_html, self._search_form_id, self._search_page_url,
             {
-                "dse_operationName": "traCuuToKhaiProc",
-                "dse_nextEventName": "query",
-                "pn": page,
+                "dse_operationName": self.legacy_capabilities.operation,
+                "dse_nextEventName": self.legacy_capabilities.query_event,
+                self.legacy_capabilities.page_parameter: page,
                 "maTKhai": "00",
                 "tenTKhai": "",
                 "kieuKy": "",
@@ -506,28 +511,28 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
             return PageResult(http_status=response.status_code)
         # Không thay form tốt bằng trang lỗi/hết phiên HTTP 200.
         empty_result = "Chưa có tờ khai nào" in response.text
-        form_id = self._form_id_for_operation(response.text, 'traCuuToKhaiProc', self._search_form_id)
+        form_id = self._form_id_for_operation(response.text, self.legacy_capabilities.operation, self._search_form_id)
         if not form_id or (
-            _RESULT_TABLE_ID not in response.text and not empty_result
+            self.legacy_capabilities.table_id not in response.text and not empty_result
         ):
             if self.session_state is not None:
                 raise LegacyEtaxError(
                     "Cổng trả HTTP 200 nhưng thiếu bảng/form tờ khai. "
                     "Hãy thử lại; nếu vẫn lỗi, đăng xuất rồi đăng nhập hoặc xem nhật ký."
                 )
-            self.logger.warning("Legacy không trả bảng kết quả/form tra cứu; có thể đã hết phiên")
-            return PageResult(http_status=response.status_code)
+            self.logger.warning("SCHEMA_CHANGED: legacy thiếu bảng hoặc form tra cứu")
+            return PageResult(http_status=response.status_code, diagnostics=ParseDiagnostics(reasons=["RESULT_FORM_OR_TABLE_MISSING"]))
         self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
-        parsed = parse_record_table(response.text, self.source)
-        return PageResult(records=parsed.records, total_pages=_total_pages(response.text),
+        parsed = parse_record_table(response.text, self.source, schema=self.legacy_capabilities.schema)
+        return PageResult(records=parsed.records, total_pages=_total_pages(response.text, table_id=self.legacy_capabilities.table_id),
                           http_status=response.status_code, diagnostics=parsed.diagnostics)
 
     def _open_search_page(self) -> None:
         """Mở trang tra cứu tờ khai (nơi có form ``traCuuKhaiForm``)."""
         response, form_id = self._open_operation_page(
-            "traCuuToKhaiProc", _SEARCH_FORM_ID, "tờ khai"
+            self.legacy_capabilities.operation, self.legacy_capabilities.form_id, "tờ khai", request_url=self.legacy_capabilities.request_url
         )
         self._search_form_id = form_id
         self._search_page_html = response.text
@@ -550,13 +555,13 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
         params = {key: fields[key] for key in keep if fields.get(key)}
         params.update(
             {
-                "dse_operationName": "traCuuToKhaiProc",
-                "dse_nextEventName": "downTkhai",
+                "dse_operationName": self.legacy_capabilities.operation,
+                "dse_nextEventName": self.legacy_capabilities.download_event,
                 "messageId": record.ma_ho_so,
             }
         )
         response = self.http.get(
-            f"{LEGACY_ETAX_BASE}/Request",
+            self.legacy_capabilities.request_url,
             params=params,
             headers=build_xhr_headers(
                 profile=self.profile,

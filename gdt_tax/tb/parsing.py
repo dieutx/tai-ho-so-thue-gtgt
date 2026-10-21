@@ -65,17 +65,17 @@ def parse_tb_records(html: str) -> list[ThongBao]:
     return parse_tb_table(html).records
 
 
-def parse_tb_table(html: str) -> TableParse:
-    return parse_table(html, SCHEMAS["TB"], lambda row, cells: tb_record(cells, row), lambda record: record.message_id)
+def parse_tb_table(html: str, *, schema=None) -> TableParse:
+    return parse_table(html, schema or SCHEMAS["TB"], lambda row, cells: tb_record(cells, row), lambda record: record.message_id)
 
 
-def tb_page_count(html: str) -> int | None:
+def tb_page_count(html: str, *, table_id: str = TB_RESULT_TABLE_ID) -> int | None:
     """Tổng số trang theo dòng ``Trang 1/ 14``; ``None`` nếu trang không cho biết."""
     text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
     match = re.search(r"Trang\s*\d+\s*/\s*(\d+)", text, re.I)
     if match:
         return int(match.group(1))
-    return 1 if TB_RESULT_TABLE_ID in html else 0
+    return 1 if table_id in html else 0
 
 
 __all__ = ["TB_MIN_CELLS", "parse_tb_records", "tb_download_args", "tb_page_count", "tb_record"]

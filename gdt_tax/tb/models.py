@@ -35,6 +35,8 @@ class ThongBao:
     #: Tên file PDF đã tải (rỗng nếu chưa tải).
     tep_pdf: str = ""
     account_key: str = UNKNOWN
+    portal_profile_version: str = ""
+    routing_version: str = ""
 
     @property
     def key(self) -> RecordKey:
@@ -68,6 +70,7 @@ class TbSummary:
     periods: int = 0
     dry_run: bool = False
     expected: int | None = None
+    portal_profile_version: str = ""
 
     @property
     def complete(self) -> bool:
