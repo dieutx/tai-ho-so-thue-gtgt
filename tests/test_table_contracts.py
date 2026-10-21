@@ -55,6 +55,43 @@ def named_soup(source):
 
 
 class TableContractTests(unittest.TestCase):
+    def test_gnt_live_headings_and_currency_totals_preserve_business_records(self):
+        soup = named_soup('GNT')
+        baseline = [row.to_dict() for row in read('GNT', str(soup)).records]
+        headings = soup.select('thead td')
+        headings[12].string = 'Nộp DS chi tiết số tiền thuế TNCN đã nộp thay cho từng cá nhân'
+        headings[13].string = 'Nộp DS chi tiết số tiền nộp thuế của tổ chức quản lý nền tảng TMĐT'
+        footer = BeautifulSoup('<table><tbody><tr><td colspan="5">Tổng tiền:</td><td>13,181,153</td><td>VND</td><td colspan="13"></td></tr>'
+                              '<tr><td colspan="5"></td><td>0</td><td>USD</td><td colspan="13"></td></tr></tbody></table>', 'lxml')
+        for row in list(footer.select('tr')):
+            soup.select_one('tbody').append(row)
+        parsed = read('GNT', str(soup))
+        self.assertEqual(parsed.diagnostics.status, 'PARSED')
+        self.assertEqual(parsed.diagnostics.candidate_count, 2)
+        self.assertEqual([row.to_dict() for row in parsed.records], baseline)
+        # A footer-looking row with a download handler is still an invalid record.
+        soup.select('tbody tr')[-1].find('td')['onclick'] = 'downloadGNT(999)'
+        self.assertEqual(read('GNT', str(soup)).diagnostics.status, 'SCHEMA_CHANGED')
+
+    def test_gnt_unknown_or_displaced_span_rows_are_not_silently_discarded(self):
+        footer = '<tr><td colspan="5">Tổng tiền:</td><td>100</td><td>VND</td><td colspan="13"></td></tr>'
+        for mutation in ('unknown', 'middle', 'amount', 'width', 'header'):
+            with self.subTest(mutation=mutation):
+                soup = named_soup('GNT')
+                row = BeautifulSoup('<table>' + footer + '</table>', 'lxml').find('tr')
+                soup.select_one('tbody').append(row)
+                if mutation == 'unknown':
+                    row.find('td').string = 'Unknown footer'
+                elif mutation == 'middle':
+                    soup.select_one('tbody').insert(0, row.extract())
+                elif mutation == 'amount':
+                    row.find_all('td')[1].string = 'invalid'
+                elif mutation == 'width':
+                    row.find('td')['colspan'] = '4'
+                else:
+                    soup.select('thead td')[1].string = 'Unknown column'
+                self.assertEqual(read('GNT', str(soup)).diagnostics.status, 'SCHEMA_CHANGED')
+
     def test_legacy_notice_action_heading_is_scoped_to_legacy(self):
         for source in ('ETAX_LEGACY', 'ETAX', 'DVC'):
             with self.subTest(source=source):

@@ -27,6 +27,15 @@ from .settings_store import default_output
 from .table_model import COLUMNS, RecordsModel, RecordsProxy, SelectionHeader
 
 
+class AccountLabel(QLabel):
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.window().saved_accounts_menu()
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
+
 def build_workspace(window):
     from .ui import TITLES, PathEdit, button, field
     self = window
@@ -44,7 +53,8 @@ def build_workspace(window):
     self.version_button = button('v' + __version__, self.show_release, 'Phiên bản và cập nhật')
     header.addWidget(self.version_button)
     header.addStretch()
-    self.account_label = QLabel('MST: —')
+    self.account_label = AccountLabel('MST: —')
+    self.account_label.setCursor(Qt.CursorShape.PointingHandCursor)
     self.account_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     self.account_label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
     self.account_label.customContextMenuRequested.connect(self.account_context_menu)

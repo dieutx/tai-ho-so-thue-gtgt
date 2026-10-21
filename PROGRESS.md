@@ -5,7 +5,19 @@
 tự chọn `tai-moi` nếu chưa có owner, không gán lại hoặc thay đổi dữ liệu cũ.
 Giữ thông báo legacy, XML/ZIP cũ, sửa chỉ số Qt và các prompt riêng ở checkout gốc.
 
-- Kiểm thử tích hợp: 714 tests, 708 đạt và 6 skip OCR tùy chọn; Qt/default OCR chạy.
+- Bản 2.0.3: sửa crash `NoneType.get` do HTML ẩn lồng nhau; nhận hai tiêu đề
+  GNT dài và chỉ bỏ đúng khối tổng tiền cuối bảng (5/1/1/13 cột). Kiểm thử
+  nguồn có quyền: GNT 09/2026 tra cứu, tải một XML, dùng lại tệp đều thành công.
+- Thêm danh sách công ty khi bấm MST, tự điền mật khẩu; tùy chọn lưu sau đăng
+  nhập thành công bằng Windows Credential Manager, nút quên từng tài khoản.
+  Không lưu mật khẩu trong settings/log/JSON; giữ quy tắc đổi phiên/tài khoản.
+  Xem [hướng dẫn và kiểm thử kho Windows](docs/SAVED_ACCOUNTS.md).
+- Smoke source/frozen bổ sung lỗi HTML/GNT và vòng lưu/đọc/chọn/cập nhật/xóa
+  hai tài khoản giả trong kho Windows. Bằng chứng 2.0.3 chỉ có hiệu lực sau khi
+  build/gates ở trên cùng source SHA; chưa công bố release/tag.
+
+- Kiểm thử 2.0.3: 723 tests, 717 đạt và 6 skip OCR tùy chọn; Qt/default OCR chạy.
+  Profile minimal: 723 tests, 43 skip đúng các thành phần tùy chọn.
 - Ruff toàn checkout và mypy core/concrete contracts đạt (90 file).
 - Chi tiết: [legacy và hồ sơ trước 2015](docs/LEGACY_NOTICES_PRE2015.md).
 - Snapshot truy vết từng MR: [RESUME.md](docs/core-hardening/RESUME.md).

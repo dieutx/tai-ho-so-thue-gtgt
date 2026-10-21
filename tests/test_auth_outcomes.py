@@ -20,6 +20,17 @@ from tests.test_verification import CHALLENGE
 
 
 class AuthContractTests(unittest.TestCase):
+    def test_nested_hidden_nodes_do_not_destroy_pending_selector_matches(self):
+        hidden = ('<div style="display:none"><span style="color:red">invalid credentials</span></div>'
+                  '<div hidden><span hidden>invalid captcha</span></div>'
+                  '<template><template>session expired</template></template>'
+                  '<div style="visibility:hidden"><b style="display:none">under maintenance</b></div>')
+        for adapter in ('DVC', 'ETAX_LEGACY'):
+            with self.subTest(adapter=adapter):
+                self.assertEqual(classify_response(FakeResponse(hidden), adapter), AuthOutcome.SCHEMA_UNKNOWN)
+                self.assertEqual(classify_response(FakeResponse(hidden + '<p>invalid captcha</p>'), adapter), AuthOutcome.CAPTCHA_INVALID)
+        self.assertEqual(classify_response(FakeResponse(hidden + LOGIN_OK_HTML), 'ETAX_LEGACY'), AuthOutcome.SUCCESS)
+
     def test_legacy_explicit_captcha_variant_is_retried_but_static_script_is_not(self):
         message = 'Mã xác thực không chính xác'
         self.assertEqual(classify_response(FakeResponse(LOGIN_PAGE_HTML + '<span>'+message+'</span>'), 'ETAX_LEGACY'), AuthOutcome.CAPTCHA_INVALID)

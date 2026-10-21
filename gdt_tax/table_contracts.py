@@ -10,7 +10,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
-TABLE_CONTRACT_VERSION = "portal-table-v2"
+TABLE_CONTRACT_VERSION = "portal-table-v3"
 
 
 def normalize_label(value: str) -> str:
@@ -102,7 +102,9 @@ SCHEMAS = {
         "Số tiền", "Loại tiền", "Trạng thái", "Số chứng từ", "Ngày lập GNT", "Ngày gửi GNT", "Ngày nộp thuế",
         "Nộp DS chi tiết TNCN", "Nộp DS chi tiết TMĐT", "Ngày nộp DS chi tiết", "Hình thức nộp", "Ngân hàng", "Tài khoản ngân hàng", "#", "Thông báo"),
         table_id="data_content_onday", empty_form="reportForm", empty_markers=("Chưa có giấy nộp tiền", "Không có dữ liệu", "không có giấy nộp tiền"),
-        date_fields=("ngay_lap", "ngay_gui", "ngay_nop", "ngay_nop_ds_chi_tiet")),
+        date_fields=("ngay_lap", "ngay_gui", "ngay_nop", "ngay_nop_ds_chi_tiet"),
+        extra_labels=(("Nộp DS chi tiết số tiền thuế TNCN đã nộp thay cho từng cá nhân", "co_ds_chi_tiet_tncn"),
+                      ("Nộp DS chi tiết số tiền nộp thuế của tổ chức quản lý nền tảng TMĐT", "co_ds_chi_tiet_tmdt"))),
     "TB": TableSchema("TB", ("stt", "ma_thong_bao", "ten_thong_bao", "so_thong_bao", "ngay_gui", "co_quan_gui", "trang_thai", "co_van_ban_giai_trinh", "co_phan_hoi_ra_soat", "actions"),
         ("STT", "Mã thông báo", "Tên thông báo", "Số thông báo", "Ngày gửi thông báo", "Cơ quan gửi", "Trạng thái", "Văn bản giải trình điện tử", "Phản hồi kết quả rà soát", "Tải thông báo"),
         table_id="tbl_tracuu", empty_form="tKhaiForm", empty_markers=("Không tìm thấy thông báo", "không có thông báo", "Chưa có thông báo", "Không có dữ liệu"), date_fields=("ngay_gui",)),
@@ -190,6 +192,36 @@ def _headerless_fingerprint(soup: BeautifulSoup, schema: TableSchema, nodes: lis
     return False
 
 
+def _gnt_total_rows(rows: list[Tag], mapping: dict[str, int], width: int) -> set[int]:
+    """Reviewed GNT trailing totals: 5 + amount + currency + 13 columns.
+
+    Never relax spans on business rows. Only the complete, named GNT schema
+    with the amount/currency in their reviewed positions may have this footer.
+    """
+    if width != 20 or mapping.get('so_tien') != 5 or mapping.get('loai_tien') != 6:
+        return set()
+    totals = []
+    for row in reversed(rows):
+        cells = row.find_all('td', recursive=False)
+        if (len(cells) != 4 or [str(cell.get('colspan', '1')) for cell in cells] != ['5', '1', '1', '13']
+                or any(str(cell.get('rowspan', '1')) != '1' for cell in cells)
+                or row.select_one('a, input, button, select, [onclick], [data-field], [data-column]')
+                or cells[3].get_text(strip=True) or cells[3].find(True)):
+            break
+        label, amount, currency, _ = [cell.get_text(' ', strip=True) for cell in cells]
+        if (normalize_label(label) not in {'tongtien', ''}
+                or not re.fullmatch(r'[+-]?\d+(?:[.,]\d+)*', amount.replace(' ', ''))
+                or not re.fullmatch(r'[A-Z]{3}', currency)):
+            break
+        totals.append(row)
+    totals.reverse()
+    if not totals or normalize_label(totals[0].find('td').get_text()) != 'tongtien':
+        return set()
+    if any(row.find('td').get_text(strip=True) for row in totals[1:]):
+        return set()
+    return {id(row) for row in totals}
+
+
 def parse_table(html: str, schema: TableSchema, decoder: Callable[[Tag, list[str]], Any],
                 identity: Callable[[Any], str]) -> TableParse:
     soup = BeautifulSoup(html, "lxml")
@@ -229,8 +261,12 @@ def parse_table(html: str, schema: TableSchema, decoder: Callable[[Tag, list[str
     header_problem = bool(headers and (width < 0 or not required.issubset(mapping)))
     header_reason = "REQUIRED_COLUMNS_MISSING_OR_AMBIGUOUS:" + ",".join(sorted(required - mapping.keys()))
     seen: dict[str, Any] = {}
+    rows = [row for row in table.find_all('tr') if row not in headers and row.find_parent('table') is table]
+    totals = _gnt_total_rows(rows, mapping, width) if schema.name == 'GNT' and headers and not header_problem else set()
     for row_index, row in enumerate(table.find_all("tr"), 1):
         if row in headers or row.find_parent("table") is not table:
+            continue
+        if id(row) in totals:
             continue
         nodes = row.find_all("td", recursive=False)
         if not nodes or not any(node.get_text(strip=True) or node.find(True) for node in nodes):

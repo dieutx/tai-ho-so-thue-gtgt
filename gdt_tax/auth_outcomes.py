@@ -86,11 +86,13 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
     soup = BeautifulSoup(text if not isinstance(payload, dict) else '', 'html.parser')
     login_form = soup.select_one('form#loginForm, form[name="loginForm"]') is not None
     home_form = soup.select_one('form#goProcForm, form[name="goProcForm"]') is not None
-    for node in soup(['script', 'style', 'noscript', 'template']):
+    # A selector returns a snapshot: decompose() on a parent also destroys its
+    # descendants. Visit children first so nested matches retain their attrs.
+    for node in reversed(soup(['script', 'style', 'noscript', 'template'])):
         node.decompose()
-    for node in soup.select('[hidden], [aria-hidden="true"], input[type="hidden"]'):
+    for node in reversed(soup.select('[hidden], [aria-hidden="true"], input[type="hidden"]')):
         node.decompose()
-    for node in soup.select('[style]'):
+    for node in reversed(soup.select('[style]')):
         style = ''.join(str(node.get('style', '')).casefold().split())
         if 'display:none' in style or 'visibility:hidden' in style:
             node.decompose()

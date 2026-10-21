@@ -466,6 +466,7 @@ class V2InteractionMixin:
         task_result = result
         self.refresh_account()
         if config and config.mode == 'login':
+            self.save_login(config, result.state == 'SUCCESS')
             self.status.setText(result.message)
             after, self.after_login = self.after_login, None
             if result.state == 'SUCCESS' and after:

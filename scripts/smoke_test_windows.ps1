@@ -30,6 +30,7 @@ foreach ($index in 1..2) {
     $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
     if (-not $result.pass -or -not $result.frozen -or -not $result.ocr_offline -or -not $result.captcha_fallback_bounded) { throw 'Frozen/OCR acceptance failed' }
     if (-not $result.portal_verification_detected) { throw 'Frozen portal verification detection failed' }
+    if (-not $result.portal_regressions -or -not $result.saved_accounts_native) { throw 'Frozen portal/vault regression failed' }
     if ($sourceResult) {
         foreach ($field in @('source_sha', 'core_version', 'ocr_fixture_sha256', 'ocr_text_sha256', 'ocr_model_sha256', 'ocr_charset_sha256')) {
             if ($result.$field -ne $sourceResult.$field) { throw ('Source/frozen OCR differs: ' + $field) }

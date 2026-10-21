@@ -29,8 +29,11 @@ def read_request(path: Path) -> dict:
         raise ValueError('LIVE_REQUEST_TOO_LARGE')
     request = json.loads(path.read_text(encoding='utf-8'))
     required = {'schema_version', 'env_file', 'username', 'output', 'report', 'periods', 'download'}
-    if not isinstance(request, dict) or set(request) != required or request['schema_version'] != 1:
+    if (not isinstance(request, dict) or set(request) not in (required, required | {'mode'})
+            or request['schema_version'] != 1):
         raise ValueError('LIVE_REQUEST_SCHEMA_INVALID')
+    if request.get('mode', 'tax') not in ('tax', 'gnt', 'notice'):
+        raise ValueError('LIVE_MODE_INVALID')
     if (not isinstance(request['username'], str) or not request['username'].strip()
             or not isinstance(request['download'], bool)
             or not isinstance(request['periods'], list) or not 1 <= len(request['periods']) <= 3):
@@ -82,9 +85,10 @@ def online_check(path: Path) -> int:
     cancel = Event()
     redactor = Redactor(config)
     queue = [(config, 'login')]
+    mode = request.get('mode', 'tax')
     for period in request['periods']:
-        queue.append((replace(config, mode='tax', dry_run=True,
-            output=job_output(config.output, config.username, 'tax'),
+        queue.append((replace(config, mode=mode, dry_run=True,
+            output=job_output(config.output, config.username, mode),
             from_date=period['from'], to_date=period['to']), 'query'))
     results = []
     keep = []
@@ -117,7 +121,7 @@ def online_check(path: Path) -> int:
         keep.append((thread, worker))
 
         def completed(result):
-            results.append({'operation': operation, 'from': current.from_date, 'to': current.to_date,
+            results.append({'operation': operation, 'mode': current.mode, 'from': current.from_date, 'to': current.to_date,
                 'state': result.state, 'code': result.error_code, 'message': redactor(result.message),
                 'discovered': result.discovered, 'downloaded': result.downloaded, 'reused': result.reused,
                 'errors': result.errors, 'output': str(result.output),
@@ -128,7 +132,7 @@ def online_check(path: Path) -> int:
             if operation == 'query' and result.rows and request['download'] and result.state in {'SUCCESS', 'PARTIAL'}:
                 row = result.rows[0]
                 queue.insert(0, (replace(current, dry_run=False, action='download_selected',
-                    output=result.output, target_ids=(document_id('tax', row),), input_rows=[dict(row)]), 'download'))
+                    output=result.output, target_ids=(document_id(current.mode, row),), input_rows=[dict(row)]), 'download'))
             if operation == 'download' and result.downloaded and result.state == 'SUCCESS':
                 queue.insert(0, (current, 'reuse'))
 

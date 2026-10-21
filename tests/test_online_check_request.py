@@ -38,6 +38,15 @@ class OnlineCheckRequestTests(unittest.TestCase):
         config.validate()
         self.assertEqual(config.settings().http_retries, 1)
 
+    def test_only_reviewed_online_modes_are_accepted(self):
+        for mode in ('tax', 'gnt', 'notice'):
+            self.request['mode'] = mode
+            self.assertEqual(self.read()['mode'], mode)
+        for mode in ('batch', None, [], 'offline'):
+            self.request['mode'] = mode
+            with self.assertRaisesRegex(ValueError, 'MODE'):
+                self.read()
+
     def test_password_in_request_and_unbounded_dates_are_rejected(self):
         self.request['password'] = 'synthetic-should-never-be-in-request'
         with self.assertRaisesRegex(ValueError, 'SCHEMA'):

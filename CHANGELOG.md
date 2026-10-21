@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.0.3] — 2026-10-21
+
+- Sửa lỗi `NoneType.get` khi trang cổng chứa nhiều phần tử HTML ẩn lồng nhau.
+- GNT nhận hai tiêu đề DS chi tiết dài trên cổng thật và dòng tổng tiền theo
+  loại tiền ở cuối bảng. Không bỏ qua ô gộp bất thường trong hàng hồ sơ.
+- Bấm MST trên thanh đầu để chọn công ty đã lưu; dialog đăng nhập có danh sách
+  MST, tự điền mật khẩu và nút quên tài khoản. Chỉ lưu sau đăng nhập thành công
+  khi bật “Lưu mật khẩu trên máy này”, bằng Windows Credential Manager; không
+  ghi mật khẩu vào settings, log hay file JSON. Đăng xuất xóa phiên hiện tại;
+  “Quên tài khoản đã lưu” xóa mật khẩu khỏi Windows Credential Manager.
+- Thêm kiểm thử lỗi HTML/GNT và roundtrip kho mật khẩu bằng tài khoản giả vào
+  smoke source/EXE. Chẩn đoán online giới hạn hỗ trợ cả tờ khai, GNT, thông báo.
+
 ## [2.0.2] — 2026-10-21
 
 - Sửa chặn `DIRECTORY_LEGACY_UNOWNED` sau nâng cấp: desktop tự chọn nhánh

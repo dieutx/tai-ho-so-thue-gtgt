@@ -51,6 +51,47 @@ def captcha_retry_check() -> bool:
         solver.close()
 
 
+def saved_accounts_check() -> bool:
+    """Native vault roundtrip with fresh synthetic identities; always clean up."""
+    from uuid import uuid4
+
+    from PySide6.QtWidgets import QApplication
+
+    from .account_dialog import AccountDialog
+    from .account_store import AccountStore
+    application = QApplication.instance() or QApplication([])
+    store = AccountStore()
+    names = ['smoke-' + uuid4().hex, 'smoke-' + uuid4().hex]
+    try:
+        for index, name in enumerate(names):
+            store.save(name, 'synthetic-' + str(index) + '-đ')
+        if not set(names).issubset(store.accounts()):
+            raise AssertionError('Saved account enumeration failed')
+        dialog = AccountDialog(username=names[0], store=store)
+        try:
+            if dialog.password.text() != 'synthetic-0-đ':
+                raise AssertionError('Saved account password was not restored')
+            dialog.accounts.setCurrentText(names[1])
+            if dialog.password.text() != 'synthetic-1-đ':
+                raise AssertionError('Saved account switching failed')
+            dialog.accounts.setEditText('unsaved-synthetic-' + uuid4().hex)
+            if dialog.password.text():
+                raise AssertionError('Password retained after account edit')
+            dialog.reject()
+        finally:
+            dialog.deleteLater()
+            application.processEvents()
+        store.save(names[0], 'synthetic-updated')
+        if store.password(names[0]) != 'synthetic-updated':
+            raise AssertionError('Saved password update failed')
+    finally:
+        for name in names:
+            store.forget(name)
+    if any(store.password(name) is not None for name in names):
+        raise AssertionError('Synthetic credentials were not deleted')
+    return True
+
+
 def self_test(source: Path, output: Path, report: Path) -> int:
     result = {"version": __version__, "frozen": bool(getattr(__import__("sys"), "frozen", False))}
     metadata = json.loads((Path(__file__).parent / 'resources/release.json').read_text(encoding='utf-8'))
@@ -84,6 +125,10 @@ def self_test(source: Path, output: Path, report: Path) -> int:
             finally:
                 ocr.close()
             result['captcha_fallback_bounded'] = captcha_retry_check()
+            from .portal_checks import portal_regression_check
+            result['portal_regressions'] = portal_regression_check()
+            if os.name == 'nt':
+                result['saved_accounts_native'] = saved_accounts_check()
             challenge = ('<apm_do_not_touch></apm_do_not_touch><body>human visitor'
                          '<input name="answer" id="ans"><button id="jar">Submit</button></body>')
             try:

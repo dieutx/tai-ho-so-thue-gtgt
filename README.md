@@ -53,3 +53,9 @@ Với danh sách tra cứu, chọn **Công cụ nâng cao → Xuất danh sách 
 [Thay đổi phiên bản](CHANGELOG.md) · [Hướng dẫn CLI](docs/CLI_GUIDE.md) · [Build từ mã nguồn](BUILD_WINDOWS.md) · [Kết quả kiểm thử](docs/DESKTOP_ACCEPTANCE.md)
 
 Phần mềm bên thứ ba, giấy phép [MIT](LICENSE). Không lưu mật khẩu tài khoản thuế vào cấu hình.
+
+Bấm **MST** trên thanh đầu để chọn công ty đã đăng nhập và lưu trước đó.
+Trong hộp đăng nhập, chọn/nhập MST; bật **Lưu mật khẩu trên máy này** để lưu
+sau khi đăng nhập thành công. Mật khẩu nằm trong Windows Credential Manager
+của người dùng Windows hiện tại, không nằm trong thư mục hồ sơ/settings.
+Chọn **Quên tài khoản đã lưu** để xóa mật khẩu; **Đăng xuất** chỉ đóng phiên hiện tại.

@@ -39,6 +39,7 @@ from gdt_tax.config import load_env_file
 
 from . import __version__
 from .account_dialog import AccountDialog
+from .account_store import AccountStore, AccountStoreError
 from .jobs import CaptchaRequest, JobController
 from .services import JobResult, RunConfig
 from .settings_store import Preferences, SettingsStore, default_output
@@ -161,7 +162,7 @@ class AdvancedDialog(QDialog):
         self.dvc = QCheckBox("Bật DVC (mặc định bật; tính năng thử nghiệm)")
         self.dvc.setChecked(parent.dvc)
         form.addRow(self.dvc)
-        note = QLabel("DVC được bật mặc định theo cấu hình mới; có thể tắt để chỉ dùng ETAX legacy. Không lưu tài khoản, mật khẩu, proxy hoặc header. Nhật ký chỉ ở trong phiên.")
+        note = QLabel("DVC được bật mặc định theo cấu hình mới; có thể tắt để chỉ dùng ETAX legacy. Mật khẩu tùy chọn lưu trong Windows Credential Manager; proxy và header chỉ ở trong phiên.")
         note.setWordWrap(True)
         form.addRow(note)
         self.error = QLabel()
@@ -296,6 +297,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         self.last_task = None
         self.tab_states = {mode: TabState() for mode in MODES}
         self.after_login = None
+        self.account_store = AccountStore()
+        self.remember_login = False
         self.deferred_account_action = None
         self.batch_modes = ("tax", "gnt", "notice")
         self.case_filter = ""
@@ -455,9 +458,10 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         if not self.account_action_allowed(lambda: self.open_login(initial=initial, after=after)):
             return
         account = self.controller.sessions.account
-        dialog = AccountDialog(self, *(initial or (account.username, "")))
+        dialog = AccountDialog(self, *(initial or (account.username, "")), store=self.account_store)
         accepted = dialog.exec()
         credentials = dialog.take_credentials()
+        remember = dialog.remember.isChecked()
         dialog.deleteLater()
         if not accepted or not credentials:
             return
@@ -466,9 +470,33 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         if old_username != account.username:
             self.clear_account_views()
         self.after_login = after
+        self.remember_login = remember
         config = self.make_config("login")
         self.launch(config, clear=False)
         self.refresh_account()
+
+    def save_login(self, config, success: bool) -> None:
+        remember, self.remember_login = self.remember_login, False
+        if success and remember and config:
+            try:
+                self.account_store.save(config.username, config.password)
+            except AccountStoreError as error:
+                self.error('Đã đăng nhập thành công. ' + str(error))
+
+    def saved_accounts_menu(self) -> None:
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+        try:
+            names = self.account_store.accounts()
+        except AccountStoreError as error:
+            self.error(str(error))
+            names = []
+        for username in names:
+            menu.addAction(username, lambda _checked=False, name=username: self.open_login(initial=(name, '')))
+        if names:
+            menu.addSeparator()
+        menu.addAction('Đăng nhập tài khoản khác…', lambda: self.open_login(initial=('', '')))
+        menu.exec(self.account_label.mapToGlobal(self.account_label.rect().bottomLeft()))
 
     def logout(self) -> None:
         if not self.account_action_allowed(self.logout):
