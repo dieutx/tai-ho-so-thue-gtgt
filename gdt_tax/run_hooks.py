@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from threading import Event
@@ -70,10 +71,13 @@ class RunBudget:
 class RunHooks:
     def __init__(self, cancel: Event | None = None,
                  progress: Callable[[dict[str, Any]], None] | None = None,
-                 budget: RunBudget | None = None) -> None:
+                 budget: RunBudget | None = None,
+                 support: Callable[[dict[str, Any]], None] | None = None) -> None:
         self.cancel = cancel
         self.progress = progress
         self.budget = budget
+        self.support = support
+        self.run_id = uuid.uuid4().hex
 
     def check(self) -> None:
         if self.cancel is not None and self.cancel.is_set():
@@ -93,3 +97,7 @@ class RunHooks:
     def emit(self, **payload: Any) -> None:
         if self.progress is not None:
             self.progress(payload)
+
+    def emit_support(self, payload: dict[str, Any]) -> None:
+        if self.support is not None:
+            self.support(payload)

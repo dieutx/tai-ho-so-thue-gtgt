@@ -29,6 +29,7 @@ class ParseDiagnostics:
     # Private per-row evidence. Never interpolate raw values into a log message.
     row_issues: list[dict] = field(default_factory=list)
     contract_version: str = TABLE_CONTRACT_VERSION
+    schema_fingerprint: str = ''
 
     @property
     def complete(self) -> bool:
@@ -187,6 +188,8 @@ def parse_table(html: str, schema: TableSchema, decoder: Callable[[Tag, list[str
                 identity: Callable[[Any], str]) -> TableParse:
     soup = BeautifulSoup(html, "lxml")
     result = TableParse()
+    from .schema_evidence import safe_schema_evidence
+    result.diagnostics.schema_fingerprint = safe_schema_evidence(html).get('fingerprint', '')
     diagnostics = result.diagnostics
     if soup.find("table") is None:
         for node in soup.find_all(["script", "style"]):

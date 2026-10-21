@@ -1,6 +1,8 @@
 """Sequential page consumption: download on the current DSE page before advancing."""
 from __future__ import annotations
 
+import json
+import time
 from collections.abc import Callable, Iterator
 from typing import Any, Protocol
 
@@ -27,8 +29,21 @@ def search_page(context: RunContext, search: Callable[[], QueryOutcome[R]], sour
         context.hooks.budget.page()
     for attempt in range(1, context.settings.search_attempts + 1):
         context.hooks.check()
+        started = time.monotonic()
         result = search()
         diagnostics = result.diagnostics
+        from .health import event
+        code = diagnostics.status if diagnostics and diagnostics.status in {'PARSED', 'EMPTY_CONFIRMED', 'SCHEMA_CHANGED', 'CAPTCHA_INVALID'} else 'SCHEMA_UNKNOWN'
+        evidence = event(source, 'search', outcome=code, complete=bool(diagnostics and diagnostics.complete),
+            counts={'records': len(result.records), 'page': page, 'attempt': attempt},
+            elapsed_ms=(time.monotonic() - started) * 1000, run_id=context.hooks.run_id)
+        evidence['schema_fingerprint'] = diagnostics.schema_fingerprint if diagnostics else ''
+        if source == 'DVC':
+            evidence['profile_version'] = context.settings.dvc_profile.version
+        if context.settings.routing_policy:
+            evidence['routing_version'] = context.settings.routing_policy.version
+        context.hooks.emit_support(evidence)
+        context.logger.debug('SUPPORT_EVENT %s', json.dumps(evidence, sort_keys=True))
         if diagnostics is not None and not diagnostics.complete and diagnostics.status != 'CAPTCHA_INVALID':
             if result.records:
                 return result

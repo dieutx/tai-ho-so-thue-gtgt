@@ -51,7 +51,8 @@ class Pipeline:
         self.portal_factory = portal_factory
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.sleep = sleep
-        self.hooks: RunHooks = hooks or getattr(http, "hooks", None) or RunHooks()
+        inherited_hooks = getattr(http, "hooks", None)
+        self.hooks: RunHooks = hooks or (inherited_hooks if isinstance(inherited_hooks, RunHooks) else RunHooks())
         if self.hooks.budget is None:
             self.hooks.budget = RunBudget()
         self.persist_metadata = persist_metadata
