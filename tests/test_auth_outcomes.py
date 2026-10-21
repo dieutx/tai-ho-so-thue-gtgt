@@ -20,6 +20,16 @@ from tests.test_verification import CHALLENGE
 
 
 class AuthContractTests(unittest.TestCase):
+    def test_legacy_explicit_captcha_variant_is_retried_but_static_script_is_not(self):
+        message = 'Mã xác thực không chính xác'
+        self.assertEqual(classify_response(FakeResponse(LOGIN_PAGE_HTML + '<span>'+message+'</span>'), 'ETAX_LEGACY'), AuthOutcome.CAPTCHA_INVALID)
+        self.assertEqual(classify_response(FakeResponse(LOGIN_PAGE_HTML + '<script>function unused(){alert("'+message+'");}</script>'), 'ETAX_LEGACY'), AuthOutcome.SCHEMA_UNKNOWN)
+
+    def test_business_xml_text_is_not_an_authentication_error(self):
+        body = '<?xml version="1.0"?><TBaoThueDTu>Mã xác thực không chính xác</TBaoThueDTu>'.encode()
+        self.assertEqual(classify_response(FakeResponse(content=body), 'ETAX_LEGACY', phase='operation', authenticated=True), AuthOutcome.SCHEMA_UNKNOWN)
+        self.assertEqual(classify_response(FakeResponse(content=body, status_code=401), 'ETAX_LEGACY', phase='operation', authenticated=True), AuthOutcome.EXPIRED_SESSION)
+
     def test_legacy_success_requires_reviewed_navigation_form_and_operation(self):
         for text in ('corporateHomeProc', '<script>var unused="corporateHomeProc";</script>',
                      LOGIN_OK_HTML.replace('corporateHomeProc', 'unreviewedOperation')):

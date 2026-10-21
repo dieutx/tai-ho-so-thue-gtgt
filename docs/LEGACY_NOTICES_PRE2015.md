@@ -1,5 +1,24 @@
 # Thông báo tờ khai legacy và hồ sơ trước 2015 — 21/10/2026
 
+## Cập nhật có quyền ngày 21/10/2026
+
+Sau báo cáo offline ban đầu, người dùng đã cấp quyền kiểm thử tài khoản thật.
+Luồng desktop Worker đã đăng nhập, đọc 7 hồ sơ tháng 01/2020, tải 1 ZIP và
+2 XML thông báo, rồi kiểm lại reuse mà không tải lại tệp hợp lệ. Kiểm chứng
+EXE tương ứng được lưu riêng ở máy làm việc, không đưa dữ liệu thuế vào Git.
+
+Các khác biệt thật được sửa bằng regression tổng hợp: header `Tải thông báo`
+trên bảng legacy, header có ngắt dòng, số thông báo hiển thị khác messageId,
+và namespace `http://kekhaithue.gdt.gov.vn/TBaoThue` của `TBaoThueDTu`.
+Phản hồi CAPTCHA `Mã xác thực không chính xác` được phân loại đúng; XML tải
+về không bị quét như trang đăng nhập.
+
+Hai phép tra cứu tháng 12/2014 và tháng 01/2013 trả rỗng có xác nhận từ cổng.
+Điều này chỉ mô tả đúng tài khoản/khoảng đã thử, không chứng minh mọi dữ liệu
+trước 2015 đều không còn. Chưa có mẫu tải thật trước 2015 để xác nhận tệp cũ.
+
+Phần dưới là ghi chép tại thời điểm kiểm thử offline ban đầu.
+
 Bản 2.0.1 hợp nhất phần core và nhánh legacy. Không đăng nhập hoặc tải hồ sơ
 thật trong lượt này; các ca kiểm chứng dùng fake transport/fixture offline.
 

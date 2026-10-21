@@ -6,7 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from desktop.online_check import read_request
+from desktop.online_check import check_preferences, read_request
+from desktop.services import RunConfig
 from tests.support import cleanup_temporary_directory
 
 
@@ -30,6 +31,12 @@ class OnlineCheckRequestTests(unittest.TestCase):
         self.assertEqual(self.read(), self.request)
         self.assertFalse(Path(self.request['output']).exists())
         self.assertFalse(Path(self.request['report']).exists())
+
+    def test_live_preferences_pass_the_production_settings_contract(self):
+        config = RunConfig('login', self.root, username='synthetic', password='synthetic-secret',
+                           preferences=check_preferences())
+        config.validate()
+        self.assertEqual(config.settings().http_retries, 1)
 
     def test_password_in_request_and_unbounded_dates_are_rejected(self):
         self.request['password'] = 'synthetic-should-never-be-in-request'

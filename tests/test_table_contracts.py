@@ -55,6 +55,19 @@ def named_soup(source):
 
 
 class TableContractTests(unittest.TestCase):
+    def test_legacy_notice_action_heading_is_scoped_to_legacy(self):
+        for source in ('ETAX_LEGACY', 'ETAX', 'DVC'):
+            with self.subTest(source=source):
+                soup = named_soup(source)
+                baseline = [row.to_dict() for row in read(source, str(soup)).records]
+                table = soup.find('table')
+                action = next(cell for cell in table.select('th') if cell.get_text(strip=True) == 'Thao tác')
+                action.string = 'Tải thông báo'
+                result = read(source, str(soup))
+                self.assertEqual(result.diagnostics.status, 'PARSED' if source == 'ETAX_LEGACY' else 'SCHEMA_CHANGED')
+                if source == 'ETAX_LEGACY':
+                    self.assertEqual([row.to_dict() for row in result.records], baseline)
+
     def test_all_fields_match_pre_contract_snapshots(self):
         for name, expected in GOLDEN["cases"].items():
             with self.subTest(name=name):

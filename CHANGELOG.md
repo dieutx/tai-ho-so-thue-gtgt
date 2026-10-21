@@ -7,6 +7,12 @@
   cũ giữ nguyên để mở offline; không tự gán sở hữu hoặc nhận tệp cũ là đã tải.
   Thư mục đã có owner hợp lệ vẫn được dùng lại như trước.
 - Thông báo lỗi CLI giải thích đúng giới hạn của công cụ chuyển danh mục.
+- Kiểm thử có quyền trên cổng thật phát hiện và sửa alias `Tải thông báo`
+  riêng cho bảng tờ khai legacy; chuẩn hóa ngắt dòng trong header thông báo,
+  lấy đúng messageId thay vì số tham chiếu hiển thị, nhận namespace XML
+  `TBaoThue` riêng. Giữ kiểm tra loại tệp và từ chối namespace chưa hỗ trợ.
+- Nhận đúng phản hồi `Mã xác thực không chính xác` để thử lại CAPTCHA hữu hạn;
+  không coi chuỗi alert tĩnh hay nội dung XML tờ khai/thông báo là lỗi đăng nhập.
 - Chế độ chẩn đoán online opt-in trong EXE dùng Worker/OCR thật, đọc credential
   từ file cấu hình có sẵn; giới hạn ba khoảng ngày 31 ngày, request/thời gian/
   dung lượng, mỗi khoảng tối đa một hồ sơ kèm thông báo. Không chạy khi mở app.

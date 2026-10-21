@@ -69,6 +69,20 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
             return explicit[code]
         json_message = ' '.join(str(payload[key]) for key in ('message', 'error', 'description')
                                 if isinstance(payload.get(key), str))
+    if body.lstrip().startswith((b'<?xml', b'%PDF-', b'PK')):
+        if authenticated and response.status_code == 401:
+            return AuthOutcome.EXPIRED_SESSION
+        # Downloaded business documents are not authentication pages. In
+        # particular, do not scan XML notice text for credential/CAPTCHA errors.
+        if not body.lstrip().startswith(b'<?xml'):
+            return AuthOutcome.SCHEMA_UNKNOWN
+        from .xml_policy import XmlReadError, parse_xml
+        try:
+            from lxml import etree
+            if etree.QName(parse_xml(body)).localname.casefold() != 'html':
+                return AuthOutcome.SCHEMA_UNKNOWN
+        except XmlReadError:
+            return AuthOutcome.SCHEMA_UNKNOWN
     soup = BeautifulSoup(text if not isinstance(payload, dict) else '', 'html.parser')
     login_form = soup.select_one('form#loginForm, form[name="loginForm"]') is not None
     home_form = soup.select_one('form#goProcForm, form[name="goProcForm"]') is not None
@@ -86,7 +100,8 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
             'tên đăng nhập hoặc mật khẩu không chính xác', 'tên đăng nhập hoặc mật khẩu không đúng',
             'sai tên đăng nhập hoặc mật khẩu', 'invalid credentials'),
         AuthOutcome.CAPTCHA_INVALID: ('captcha không đúng', 'captcha không chính xác', 'mã xác nhận không đúng',
-            'mã xác thực không đúng', 'sai mã captcha', 'invalid captcha'),
+            'mã xác thực không đúng', 'mã xác nhận không chính xác', 'mã xác thực không chính xác',
+            'sai mã captcha', 'invalid captcha'),
         AuthOutcome.MAINTENANCE: ('hệ thống đang bảo trì', 'cổng đang bảo trì', 'under maintenance'),
         AuthOutcome.INTERACTIVE_AUTH_REQUIRED: ('yêu cầu xác thực otp', 'nhập mã otp', 'otp required', 'sso required'),
         AuthOutcome.EXPIRED_SESSION: ('phiên giao dịch đã hết', 'phiên làm việc đã hết', 'session expired',

@@ -6,6 +6,7 @@ import re
 from bs4 import BeautifulSoup
 
 from .dvc_notices import DvcNotice, NoticeList, _fold
+from .table_contracts import normalize_label
 
 DOWNLOAD = re.compile(r"\bdownloadFile\(\s*['\"]([0-9]+)['\"]\s*\)", re.I)
 
@@ -16,8 +17,8 @@ def parse_legacy_notice_list(html: str) -> NoticeList:
     if len(tables) != 1:
         return NoticeList()
     table = tables[0]
-    headers = [_fold(cell.get_text(' ', strip=True)) for cell in table.select('thead th')]
-    expected = ['stt', 'so thong bao/ma giao dich van', 'thong bao', 'ngay gui', 'nguoi gui']
+    headers = [normalize_label(cell.get_text(' ', strip=True)) for cell in table.select('thead th')]
+    expected = [normalize_label(label) for label in ('STT', 'Số thông báo/Mã giao dịch VAN', 'Thông báo', 'Ngày gửi', 'Người gửi')]
     if headers != expected:
         return NoticeList()
     notices = []
@@ -35,7 +36,9 @@ def parse_legacy_notice_list(html: str) -> NoticeList:
             malformed = True
             continue
         notice_id = matches[0]
-        if cells[1].get_text(strip=True) != notice_id or notice_id in seen:
+        # The displayed notice/VAN reference is not the download messageId.
+        # Bind identity to the reviewed handler on this row, never its label.
+        if notice_id in seen:
             malformed = True
             continue
         seen.add(notice_id)

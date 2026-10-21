@@ -47,6 +47,11 @@ def read_request(path: Path) -> dict:
     return request
 
 
+def check_preferences() -> Preferences:
+    return Preferences(solver='ddddocr', record_delay=0.5, page_delay=0.5,
+                       jitter=0, retries=1, timeout=25, login_attempts=6, search_attempts=6)
+
+
 def online_check(path: Path) -> int:
     from PySide6.QtCore import QThread, QTimer
     from PySide6.QtWidgets import QApplication
@@ -64,13 +69,13 @@ def online_check(path: Path) -> int:
     report = Path(request['report'])
     if report.exists():
         raise ValueError('LIVE_REPORT_ALREADY_EXISTS')
-    preferences = Preferences(solver='ddddocr', record_delay=0.5, page_delay=0.5,
-                              jitter=0, retries=0, timeout=25, login_attempts=6, search_attempts=6)
+    preferences = check_preferences()
     budget = RunBudget(max_seconds=300, max_requests=120, max_bytes=128 * 1024 * 1024,
                        max_pages=15, max_auth_attempts=6)
     config = RunConfig('login', Path(request['output']), username=request['username'],
         password=credentials['GDT_PASSWORD'], preferences=preferences, budget=budget)
     credentials.clear()
+    config.validate()
     application = QApplication.instance() or QApplication([])
     application.setApplicationName('TaiHoSoThueOnlineCheck')
     manager = ETaxSessionManager()

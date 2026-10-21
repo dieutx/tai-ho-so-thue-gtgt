@@ -10,7 +10,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
-TABLE_CONTRACT_VERSION = "portal-table-v1"
+TABLE_CONTRACT_VERSION = "portal-table-v2"
 
 
 def normalize_label(value: str) -> str:
@@ -54,12 +54,16 @@ class TableSchema:
     date_fields: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
     operation: str = ''
+    extra_labels: tuple[tuple[str, str], ...] = ()
 
     @property
     def aliases(self) -> dict[str, str]:
         aliases = {normalize_label(label): name for name, label in zip(self.fields, self.labels, strict=True) if name and label}
         aliases.update({normalize_label(name): name for name in self.fields if name})
         for label, name in COMMON_ALIASES.items():
+            if name in self.fields:
+                aliases[normalize_label(label)] = name
+        for label, name in self.extra_labels:
             if name in self.fields:
                 aliases[normalize_label(label)] = name
         return aliases
@@ -89,7 +93,8 @@ SCHEMAS = {
         date_fields=("ngay_nop",), optional=("ho_so_dinh_kem",)),
     "ETAX_LEGACY": TableSchema("ETAX_LEGACY", (*TAX_FIELDS[:8], "", *TAX_FIELDS[8:]),
         (*TAX_LABELS[:8], "", *TAX_LABELS[8:]), table_id="data_content_onday", empty_form="traCuuKhaiForm",
-        empty_markers=("Chưa có tờ khai nào được gửi thỏa mãn điều kiện tra cứu trên",), date_fields=("ngay_nop",)),
+        empty_markers=("Chưa có tờ khai nào được gửi thỏa mãn điều kiện tra cứu trên",), date_fields=("ngay_nop",),
+        extra_labels=(("Tải thông báo", "actions"),)),
     "GNT": TableSchema("GNT", ("stt", "so_tham_chieu", "ma_giao_dich_chi_tiet", "lan_nop", "so_gnt",
         "so_tien", "loai_tien", "trang_thai", "so_chung_tu", "ngay_lap", "ngay_gui", "ngay_nop",
         "co_ds_chi_tiet_tncn", "co_ds_chi_tiet_tmdt", "ngay_nop_ds_chi_tiet", "hinh_thuc_nop", "ngan_hang", "tai_khoan", "actions", "thong_bao"),
