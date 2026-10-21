@@ -97,7 +97,10 @@ def self_test(source: Path, output: Path, report: Path) -> int:
     metadata = json.loads((Path(__file__).parent / 'resources/release.json').read_text(encoding='utf-8'))
     result['source_sha'] = metadata.get('source_sha', '')
     result['core_version'] = metadata.get('core_version', '1.0.0')
+    result['release_version'] = metadata.get('version', '')
     try:
+        if result['release_version'] != __version__:
+            raise AssertionError('Release metadata version differs from application')
         def no_network(*_args, **_kwargs):
             raise AssertionError("Network accessed by offline smoke test")
         with patch.object(socket.socket, "connect", no_network), patch.object(socket, "create_connection", no_network):

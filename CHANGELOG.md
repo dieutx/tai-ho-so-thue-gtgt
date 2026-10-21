@@ -13,6 +13,8 @@
   ánh xạ thông báo legacy theo tên cột, bỏ text ẩn khi đọc rỗng/phân trang,
   nhận CAPTCHA qua classifier chung và chặn ID GNT xung đột.
   Chi tiết: [SCHEMA_REVIEW_20261022.md](docs/SCHEMA_REVIEW_20261022.md).
+- Sửa metadata EXE lấy nhầm phiên bản từ Python đã cài ở checkout cũ; đọc
+  phiên bản từ đúng file source, buộc code/metadata/smoke/receipt khớp nhau.
 
 ## [2.0.3] — 2026-10-21
 

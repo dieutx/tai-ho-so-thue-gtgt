@@ -46,6 +46,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Release metadata generation failed' }
     $releaseVersion = & $Python -c "from desktop import __version__; print(__version__)"
     if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid desktop version' }
+    $metadataVersion = & $Python -c "import json; from pathlib import Path; print(json.loads(Path('desktop/resources/release.json').read_text(encoding='utf-8'))['version'])"
+    if ($LASTEXITCODE -ne 0 -or $metadataVersion -ne $releaseVersion) { throw 'Source and generated EXE versions differ' }
     $measureRoot = Join-Path '.cache/optimization' ('release-' + $releaseVersion)
     if ($MeasureOnedir) {
         $previousBundleMode = $env:TAIHOSOTHUE_ONEDIR

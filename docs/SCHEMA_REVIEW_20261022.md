@@ -58,6 +58,21 @@ riêng, đối chiếu SHA mã nguồn và checksum artifact trong receipt bàn 
 hợp là lỗi đã quan sát trên cổng thật. Smoke source/frozen có DVC 12 ô, ETAX
 nhiều scope, thông báo legacy đảo cột, text ẩn, CAPTCHA có table và phân trang.
 
+## Lỗi đóng gói bắt được trước bàn giao
+
+`scripts/write_release_metadata.py` import `desktop` theo môi trường Python.
+Khi chạy script bằng đường dẫn từ checkout cô lập nhưng interpreter có editable
+install ở checkout cũ, metadata/Windows resource ghi 2.0.0 trong khi ứng dụng
+và smoke chạy 2.0.4. Receipt trước đây chỉ so source SHA, nên chưa chặn lệch
+phiên bản; bước bàn giao riêng đã chặn artifact này trước khi đưa vào `dist`
+chính hoặc chạy online EXE.
+
+Nay đọc literal phiên bản bằng AST trực tiếp từ file mã nguồn đúng checkout;
+không import package từ môi trường đã cài. Test mô phỏng package cũ trong
+`sys.modules` và source khác để xác minh metadata/Windows version đúng nguồn.
+Build so phiên bản trước PyInstaller; smoke so phiên bản code với metadata
+thật trong bundle; receipt bắt buộc source/frozen/version/core version khớp.
+
 ## Giới hạn được giữ
 
 - Không thêm alias theo suy đoán hoặc nới cột bắt buộc cho mọi nguồn.

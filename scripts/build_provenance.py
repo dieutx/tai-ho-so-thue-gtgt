@@ -26,8 +26,15 @@ def build_receipt(root: Path):
     if not smoke_path.resolve().is_relative_to((root / '.cache').resolve()):
         raise ValueError('BUILD_SMOKE_SCOPE_INVALID')
     smoke = [json.loads((smoke_path / f'report-{index}.json').read_text(encoding='utf-8')) for index in (1, 2)]
-    if not all(item.get('pass') and item.get('frozen') and item.get('source_sha') == info['source_sha'] for item in smoke):
+    if not all(item.get('pass') and item.get('frozen') and item.get('source_sha') == info['source_sha']
+               and item.get('version') == item.get('release_version') == info['version']
+               and item.get('core_version') == info['core_version'] for item in smoke):
         raise ValueError('BUILD_FROZEN_GATE_FAILED')
+    source = json.loads((smoke_path / 'source-report.json').read_text(encoding='utf-8'))
+    if (not source.get('pass') or source.get('frozen') or source.get('source_sha') != info['source_sha']
+            or source.get('version') != info['version'] or source.get('release_version') != info['version']
+            or source.get('core_version') != info['core_version']):
+        raise ValueError('BUILD_SOURCE_SMOKE_GATE_FAILED')
     for name, digest in info['dependency_inventory_sha256'].items():
         if Path(name).name != name or sha256(root / 'packaging' / name) != digest:
             raise ValueError('BUILD_DEPENDENCY_PROVENANCE_CHANGED')
