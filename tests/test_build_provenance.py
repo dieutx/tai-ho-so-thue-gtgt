@@ -40,6 +40,9 @@ class BuildProvenanceTests(unittest.TestCase):
             for name in ('desktop', 'build-tools'):
                 (root / f'packaging/{name}-windows-py311.inventory.json').write_text('{}')
             write_metadata(root, 'a' * 40)
+            # PyInstaller loads this as an expression; indented trailing lines
+            # raise IndentationError even when the metadata JSON is valid.
+            compile((root / 'packaging/version.txt').read_text(encoding='utf-8'), 'version.txt', 'eval')
             (root / '.cache/ci/desktop.json').write_text(json.dumps({'pass': True, 'source_sha': 'a' * 40}))
             (root / '.cache/bundle-audit.json').write_text('{"pass":true}')
             (root / '.cache/last-smoke-path.txt').write_text(str(root / '.cache/smoke-test'))

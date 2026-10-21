@@ -29,7 +29,7 @@ def write_metadata(root: Path, source_sha: str):
      StringStruct('ProductVersion','{__version__}')])]),
      VarFileInfo([VarStruct('Translation',[1033,1200])])])
     '''
-    (root / 'packaging/version.txt').write_text(version, encoding='utf-8')
+    (root / 'packaging/version.txt').write_text(version.strip() + '\n', encoding='utf-8')
     (root / 'desktop/resources/release.json').write_text(json.dumps({
         'version': __version__, 'built_at_utc': datetime.now(timezone.utc).isoformat(timespec='seconds'),
         'published': False, 'profile': 'Full / CPU OCR',
