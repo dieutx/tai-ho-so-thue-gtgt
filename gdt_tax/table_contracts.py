@@ -213,13 +213,13 @@ def _gnt_total_rows(rows: list[Tag], mapping: dict[str, int], width: int) -> set
                 or not re.fullmatch(r'[+-]?\d+(?:[.,]\d+)*', amount.replace(' ', ''))
                 or not re.fullmatch(r'[A-Z]{3}', currency)):
             break
-        totals.append(row)
+        totals.append((row, normalize_label(label)))
     totals.reverse()
-    if not totals or normalize_label(totals[0].find('td').get_text()) != 'tongtien':
+    if not totals or totals[0][1] != 'tongtien':
         return set()
-    if any(row.find('td').get_text(strip=True) for row in totals[1:]):
+    if any(label for _, label in totals[1:]):
         return set()
-    return {id(row) for row in totals}
+    return {id(row) for row, _ in totals}
 
 
 def parse_table(html: str, schema: TableSchema, decoder: Callable[[Tag, list[str]], Any],
