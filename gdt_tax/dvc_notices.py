@@ -21,10 +21,10 @@ import os
 import re
 import tempfile
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 
 from .atomic import replace_with_retry
 from .errors import StorageError
@@ -116,19 +116,33 @@ def _truthy(value) -> bool:
     return str(value or "").strip().casefold() not in {"", "0", "false", "none"}
 
 
-def parse_notices(html: str) -> list[DvcNotice]:
+@dataclass
+class NoticeList:
+    notices: list[DvcNotice] = field(default_factory=list)
+    status: str = 'SCHEMA_UNKNOWN'
+
+
+def parse_notice_list(html: str) -> NoticeList:
     """Đọc danh sách thông báo trong modal ``#modalThongBao`` của trang chi tiết."""
     if not html:
-        return []
+        return NoticeList()
     soup = BeautifulSoup(html, "lxml")
-    scope: Tag | BeautifulSoup = soup.find(id="modalThongBao") or soup
+    modals = soup.select('#modalThongBao')
+    if len(modals) != 1:
+        return NoticeList()
+    scope = modals[0]
     notices: list[DvcNotice] = []
-    seen: set[str] = set()
+    seen: set[tuple] = set()
+    malformed = False
     for anchor in scope.find_all("a"):
         notice_id = str(anchor.get("data-id") or "").strip()
+        candidate = notice_id or 'downloadThongBao' in str(anchor.get('onclick') or '')
         if not notice_id or "downloadThongBao" not in str(anchor.get("onclick") or ""):
+            malformed = malformed or bool(candidate)
             continue
-        key = f"{'tdt' if _truthy(anchor.get('data-is-thue-dien-tu')) else 'dvc'}:{notice_id}"
+        key = (notice_id, _truthy(anchor.get('data-is-thue-dien-tu')),
+               str(anchor.get('data-loaitracuu') or ''),
+               str(anchor.get('data-loai-tbao') or anchor.get('data-loaibao') or ''))
         if key in seen:
             continue
         seen.add(key)
@@ -144,7 +158,15 @@ def parse_notices(html: str) -> list[DvcNotice]:
                 loai_tbao=str(anchor.get("data-loai-tbao") or anchor.get("data-loaibao") or "").strip(),
             )
         )
-    return notices
+    empty = ('khong co thong bao' in _fold(scope.get_text(' ', strip=True))
+             or scope.get('data-empty') == 'true')
+    return NoticeList(notices, 'PARSED' if notices and not malformed and not empty
+                      else 'EMPTY_CONFIRMED' if empty and not notices and not malformed else 'SCHEMA_UNKNOWN')
+
+
+def parse_notices(html: str) -> list[DvcNotice]:
+    """Compatibility reader; orchestration must use the completeness result."""
+    return parse_notice_list(html).notices
 
 
 def _notice_text(row) -> tuple[str, str]:

@@ -282,6 +282,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     logger.info("KẾT QUẢ: %s/%s hồ sơ đã tải, %s đoạn bị bỏ qua",
                 summary.downloaded, summary.expected, summary.skipped_periods)
+    logger.info('THÔNG BÁO ĐÍNH KÈM: tìm thấy=%s tải=%s dùng lại=%s lỗi=%s đầy đủ=%s',
+                summary.attachments_discovered, summary.attachments_downloaded, summary.attachments_reused,
+                summary.attachments_failed, summary.attachments_complete)
     if settings.dry_run:
         logger.info("Dry-run: tìm thấy %s hồ sơ, %s đoạn bị bỏ qua.", summary.discovered, summary.skipped_periods)
         return EXIT_OK if summary.search_complete else EXIT_INCOMPLETE

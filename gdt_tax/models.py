@@ -36,6 +36,8 @@ class CaseRecord:
     quy_tac_phan_loai: str = ""
     ly_do_phan_loai: str = ""
     account_key: str = UNKNOWN
+    attachment_status: str = 'NOT_REQUESTED'
+    attachment_result: str = ''
 
     @property
     def key(self) -> RecordKey:
@@ -83,9 +85,18 @@ class RunSummary:
     dry_run: bool = False
     discovered: int = 0
     skipped_periods: int = 0
+    attachments_complete: bool = True
+    attachments_discovered: int = 0
+    attachments_downloaded: int = 0
+    attachments_reused: int = 0
+    attachments_failed: int = 0
 
     @property
     def complete(self) -> bool:
+        return self.primary_complete and self.attachments_complete
+
+    @property
+    def primary_complete(self) -> bool:
         return self.skipped_periods == 0 and self.downloaded == self.expected
 
     @property

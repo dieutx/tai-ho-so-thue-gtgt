@@ -36,6 +36,7 @@ class Portal(ABC):
         self.http = http
         self.captcha = captcha
         self.settings = settings
+        self.detail_html = ''
         self.logger = logger or logging.getLogger(f"gdt_tax.portal.{self.source.lower()}")
 
     @property
@@ -84,6 +85,7 @@ class Portal(ABC):
         url = self.detail_url(record)
         response = self.http.get(url, headers=self.page_headers(headers={"Referer": self.landing_url}))
         raise_terminal(response, 'DVC', authenticated=True)
+        self.detail_html = response.text if response.status_code == 200 else ''
         csrf = csrf_token(response.text) if response.status_code == 200 else ""
         return url, csrf
 

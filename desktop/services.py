@@ -147,6 +147,7 @@ class JobResult:
     operation: str = ""
     requested: int = 0
     error_code: str = ""
+    attachment_results: dict[str, dict] = field(default_factory=dict)
 
 
 ONLINE = {
@@ -177,7 +178,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
         summary = pipeline.run()
         complete = summary.search_complete if config.mode == "tax" and config.dry_run else (True if config.dry_run else summary.complete)
         if config.target_ids is not None:
-            complete = set(pipeline.target_ids or ()).issubset(pipeline.downloaded_ids)
+            complete = set(pipeline.target_ids or ()).issubset(pipeline.downloaded_ids) and getattr(summary, 'attachments_complete', True)
         result.skipped = getattr(summary, "skipped_periods", 0)
         result.state = "SUCCESS" if complete else "PARTIAL"
         result.message = "Tra cứu hoàn tất" if config.dry_run else "Thành công"
@@ -242,6 +243,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     missing = set(pipeline.target_ids or ()) - pipeline.records.keys()
     result.errors = max(result.errors, len(pipeline.failed_ids), int(result.state == "ERROR")) + len(missing)
     result.reused = len(pipeline.reused_ids)
+    result.attachment_results = {key: item.to_dict() for key, item in getattr(pipeline, 'attachments', {}).items()}
     result.account_key = account_fingerprint(config.username)
     result.date_range = (config.from_date, config.to_date)
     result.operation = config.action or ('query' if config.dry_run else 'query_and_download')

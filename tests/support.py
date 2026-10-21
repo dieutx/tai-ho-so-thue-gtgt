@@ -42,7 +42,7 @@ FAKE_CAPTCHA_BYTES = PNG_HEADER + b"0" * 600
 
 LOGIN_HTML = '<html><head><meta name="csrf-token" content="csrf-login"></head></html>'
 LANDING_HTML = '<html><body><input type="hidden" name="_csrf" value="csrf-landing"></body></html>'
-DETAIL_HTML = '<html><body><input type="hidden" name="_csrf" value="csrf-detail"></body></html>'
+DETAIL_HTML = '<html><body><input type="hidden" name="_csrf" value="csrf-detail"><div id="modalThongBao" data-empty="true">Không có thông báo</div></body></html>'
 
 
 def fixture(name: str) -> str:

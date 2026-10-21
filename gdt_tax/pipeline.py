@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import random
 import time
 from collections.abc import Callable
 
+from .attachments import AttachmentResult, collect_attachments
 from .auth import login, open_landing
 from .catalog import CatalogCheckpoint, flush_on_error
 from .classification import classify_record
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX, SOURCE_ETAX_LEGACY
 from .csrf import csrf_token
 from .dates import format_date
+from .dvc_notices import NOTICE_DIRECTORY, NoticeStore
 from .errors import LoginError, NetworkError, SchemaChangedError, SearchError
 from .http import HttpClient
 from .identity import account_fingerprint, scope_targets
@@ -36,6 +39,7 @@ class Pipeline:
         hooks: RunHooks | None = None,
         persist_metadata: bool = True,
         target_ids: set[str] | None = None,
+        download_notices: bool = True,
     ) -> None:
         self.settings = settings
         self.http = http
@@ -59,6 +63,9 @@ class Pipeline:
         self.downloaded_ids: set[str] = set()
         self.failed_ids: set[str] = set()
         self.reused_ids: set[str] = set()
+        self.download_notices = download_notices
+        self.notice_store = NoticeStore(settings.download_dir / NOTICE_DIRECTORY)
+        self.attachments: dict[str, AttachmentResult] = {}
 
     def _persist(self, records, **kwargs):
         return self.checkpoint.persist(records, **kwargs)
@@ -82,6 +89,7 @@ class Pipeline:
         self.downloaded_ids = set()
         self.failed_ids = set()
         self.reused_ids = set()
+        self.attachments = {}
         summary = RunSummary(dry_run=self.settings.dry_run)
         self.logger.info(
             "Bắt đầu: %s → %s (cutoff %s; DVC %s)",
@@ -135,6 +143,11 @@ class Pipeline:
         summary.downloaded = len(succeeded)
         summary.discovered = len(records)
         summary.expected = len(self.target_ids) if self.target_ids is not None else 1 if self.settings.case_id else len(records)
+        summary.attachments_complete = all(item.complete for item in self.attachments.values())
+        summary.attachments_discovered = sum(item.discovered for item in self.attachments.values())
+        summary.attachments_downloaded = sum(item.downloaded for item in self.attachments.values())
+        summary.attachments_reused = sum(item.reused for item in self.attachments.values())
+        summary.attachments_failed = sum(item.failed + item.discovery_failed for item in self.attachments.values())
         return summary
 
     def _search_and_download(self, portal, period, records, succeeded) -> bool:
@@ -234,6 +247,7 @@ class Pipeline:
         if self.store.find_existing(record):
             self.reused_ids.add(record.record_key)
             succeeded.add(record.record_key)
+            self._download_attachments(portal, record)
             return True
         detail_url, csrf = portal.fetch_detail_csrf(record)
         if not csrf and not getattr(portal, "csrf_optional", False):
@@ -249,7 +263,21 @@ class Pipeline:
             self.record_errors[record.record_key] = "Dữ liệu trả về không phải ZIP hoàn chỉnh/hợp lệ. Tệp chưa được lưu; có thể phiên đã hết hạn."
             return False
         succeeded.add(record.record_key)
+        self._download_attachments(portal, record)
         return True
+
+    def _download_attachments(self, portal, record):
+        if not self.download_notices or not callable(getattr(portal, 'fetch_notice_list', None)):
+            return
+        result = AttachmentResult(record.record_key)
+        self.attachments[record.record_key] = result
+        try:
+            collect_attachments(portal, record, self.notice_store, self.hooks, result)
+        finally:
+            record.attachment_status = result.status
+            record.attachment_result = json.dumps(result.to_dict(), ensure_ascii=False, sort_keys=True)
+            self.logger.info('ATTACHMENTS: status=%s discovered=%s downloaded=%s reused=%s failed=%s',
+                result.status, result.discovered, result.downloaded, result.reused, result.failed + result.discovery_failed)
 
 
 __all__ = ["Pipeline"]

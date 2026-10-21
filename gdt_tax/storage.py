@@ -238,6 +238,8 @@ def write_metadata(
 
 def write_excel_report(path: str | Path, rows: Iterable[Mapping[str, object]]) -> Path:
     """Xuất danh sách tờ khai dạng bảng Excel, an toàn với công thức từ dữ liệu ngoài."""
+    from .attachments import attachment_sheet
+    rows = list(rows)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Danh sách tờ khai"
@@ -278,6 +280,7 @@ def write_excel_report(path: str | Path, rows: Iterable[Mapping[str, object]]) -
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 0
+    attachment_sheet(workbook, rows)
 
     with BytesIO() as stream:
         workbook.save(stream)

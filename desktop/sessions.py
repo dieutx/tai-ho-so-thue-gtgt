@@ -258,6 +258,7 @@ class ETaxSessionManager:
             result.skipped += child.skipped + int(child.state == "ERROR")
             result.reused += child.reused
             result.issues.extend(child.issues)
+            result.attachment_results.update(child.attachment_results)
             result.requested += child.requested
             if child.state == "CANCELLED":
                 result.state, result.message = child.state, child.message

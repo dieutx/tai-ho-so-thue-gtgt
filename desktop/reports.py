@@ -3,6 +3,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from gdt_tax.attachments import attachment_sheet
 from gdt_tax.export import write_workbook
 from gdt_tax.spreadsheet_values import append_row
 from gdt_tax.storage import _excel_value
@@ -44,6 +45,7 @@ def export_document_report(config, hooks):
         append_row(summary, [key, _excel_value(value)])
     summary.column_dimensions['A'].width = 28
     summary.column_dimensions['B'].width = 90
+    attachment_sheet(workbook, rows)
     hooks.check()
     path = write_workbook(workbook, config.report_path)
     return JobResult('SUCCESS', 'Đã xuất danh sách Excel; tệp hồ sơ gốc giữ nguyên', config.output,
