@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.0.4] — 2026-10-22
+
+- Sửa `SCHEMA_CHANGED: REQUIRED_COLUMNS_MISSING_OR_AMBIGUOUS:lan_nop` trên DVC:
+  nhận đúng tiêu đề `Lần nộp (Tờ khai)/File số (DLVC)`. Giữ kiểm tra cột bắt buộc,
+  cột trùng, thứ tự cột và giá trị lần nộp; không đoán theo vị trí.
+- Nhận hàng DVC bỏ ô cuối `Hồ sơ đính kèm` dù vẫn hiện tiêu đề. Chỉ cho phép
+  thiếu cột tùy chọn ở cuối hàng; thiếu cột giữa hoặc cột bắt buộc vẫn báo lỗi.
+- Smoke Python/EXE thêm bảng DVC tổng hợp với tiêu đề thực tế. Chẩn đoán online
+  nhận tùy chọn `dvc` rõ ràng và ghi nguồn hồ sơ để phân biệt DVC với legacy.
+
 ## [2.0.3] — 2026-10-21
 
 - Sửa lỗi `NoneType.get` khi trang cổng chứa nhiều phần tử HTML ẩn lồng nhau.

@@ -47,6 +47,19 @@ class OnlineCheckRequestTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'MODE'):
                 self.read()
 
+    def test_explicit_dvc_routing_is_bounded_and_only_valid_for_tax(self):
+        self.request['dvc'] = True
+        self.assertTrue(self.read()['dvc'])
+        for mode in ('gnt', 'notice'):
+            self.request['mode'] = mode
+            with self.assertRaisesRegex(ValueError, 'DVC_SCOPE'):
+                self.read()
+        self.request['mode'] = 'tax'
+        for value in ('true', 1, None, []):
+            self.request['dvc'] = value
+            with self.assertRaisesRegex(ValueError, 'DVC_SCOPE'):
+                self.read()
+
     def test_password_in_request_and_unbounded_dates_are_rejected(self):
         self.request['password'] = 'synthetic-should-never-be-in-request'
         with self.assertRaisesRegex(ValueError, 'SCHEMA'):

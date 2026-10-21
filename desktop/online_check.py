@@ -29,11 +29,15 @@ def read_request(path: Path) -> dict:
         raise ValueError('LIVE_REQUEST_TOO_LARGE')
     request = json.loads(path.read_text(encoding='utf-8'))
     required = {'schema_version', 'env_file', 'username', 'output', 'report', 'periods', 'download'}
-    if (not isinstance(request, dict) or set(request) not in (required, required | {'mode'})
+    if (not isinstance(request, dict) or not required.issubset(request)
+            or set(request) - required - {'mode', 'dvc'}
             or request['schema_version'] != 1):
         raise ValueError('LIVE_REQUEST_SCHEMA_INVALID')
     if request.get('mode', 'tax') not in ('tax', 'gnt', 'notice'):
         raise ValueError('LIVE_MODE_INVALID')
+    if (not isinstance(request.get('dvc', False), bool)
+            or request.get('dvc', False) and request.get('mode', 'tax') != 'tax'):
+        raise ValueError('LIVE_DVC_SCOPE_INVALID')
     if (not isinstance(request['username'], str) or not request['username'].strip()
             or not isinstance(request['download'], bool)
             or not isinstance(request['periods'], list) or not 1 <= len(request['periods']) <= 3):
@@ -76,7 +80,8 @@ def online_check(path: Path) -> int:
     budget = RunBudget(max_seconds=300, max_requests=120, max_bytes=128 * 1024 * 1024,
                        max_pages=15, max_auth_attempts=6)
     config = RunConfig('login', Path(request['output']), username=request['username'],
-        password=credentials['GDT_PASSWORD'], preferences=preferences, budget=budget)
+        password=credentials['GDT_PASSWORD'], preferences=preferences, budget=budget,
+        dvc=request.get('dvc', False))
     credentials.clear()
     config.validate()
     application = QApplication.instance() or QApplication([])
@@ -122,6 +127,7 @@ def online_check(path: Path) -> int:
 
         def completed(result):
             results.append({'operation': operation, 'mode': current.mode, 'from': current.from_date, 'to': current.to_date,
+                'dvc_enabled': current.dvc, 'sources': sorted({row['nguon'] for row in result.rows if row.get('nguon')}),
                 'state': result.state, 'code': result.error_code, 'message': redactor(result.message),
                 'discovered': result.discovered, 'downloaded': result.downloaded, 'reused': result.reused,
                 'errors': result.errors, 'output': str(result.output),

@@ -10,7 +10,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
-TABLE_CONTRACT_VERSION = "portal-table-v3"
+TABLE_CONTRACT_VERSION = "portal-table-v4"
 
 
 def normalize_label(value: str) -> str:
@@ -90,7 +90,8 @@ SCHEMAS = {
         ("STT", "Thao tác", "Mã hồ sơ", "Tên TTHC", "Tờ khai", "Kỳ tính thuế", "Loại tờ khai",
          "Lần nộp bổ sung", "Lần nộp", "Cơ quan thuế tiếp nhận", "Ngày nộp", "Trạng thái", "Hồ sơ đính kèm"),
         container="#table-container", empty_markers=("Không có dữ liệu", "Không tìm thấy hồ sơ"),
-        date_fields=("ngay_nop",), optional=("ho_so_dinh_kem",)),
+        date_fields=("ngay_nop",), optional=("ho_so_dinh_kem",),
+        extra_labels=(("Lần nộp (Tờ khai)/File số (DLVC)", "lan_nop"),)),
     "ETAX_LEGACY": TableSchema("ETAX_LEGACY", (*TAX_FIELDS[:8], "", *TAX_FIELDS[8:]),
         (*TAX_LABELS[:8], "", *TAX_LABELS[8:]), table_id="data_content_onday", empty_form="traCuuKhaiForm",
         empty_markers=("Chưa có tờ khai nào được gửi thỏa mãn điều kiện tra cứu trên",), date_fields=("ngay_nop",),
@@ -285,10 +286,16 @@ def parse_table(html: str, schema: TableSchema, decoder: Callable[[Tag, list[str
                 local_map[name] = index
         attributes_complete = required.issubset(local_map)
         selected = local_map if attributes_complete else mapping
+        # DVC may render the attachment heading but omit its trailing cell.
+        # Only explicitly optional columns at the row's end may be absent;
+        # a missing middle/required/unknown column must still fail.
+        missing_tail = set(range(len(raw), width))
+        optional_columns = {column for name, column in mapping.items() if name in schema.optional}
+        row_width_matches = len(raw) == width or bool(missing_tail) and missing_tail.issubset(optional_columns)
         error = None
         if any(str(node.get("colspan", "1")) != "1" or str(node.get("rowspan", "1")) != "1" for node in nodes):
             error = "DATA_CELL_SPAN_UNSUPPORTED"
-        elif headers and not attributes_complete and (header_problem or len(raw) != width):
+        elif headers and not attributes_complete and (header_problem or not row_width_matches):
             error = header_reason if header_problem else "ROW_SCHEMA_MISMATCH"
         elif selected:
             cells = [raw[selected[name]] if name in selected and selected[name] < len(raw) else "" for name in schema.fields]

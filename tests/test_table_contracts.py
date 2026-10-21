@@ -55,6 +55,78 @@ def named_soup(source):
 
 
 class TableContractTests(unittest.TestCase):
+    def test_dvc_live_submission_file_heading_preserves_fields_after_reordering(self):
+        for reorder in (False, True):
+            with self.subTest(reorder=reorder):
+                soup = named_soup('DVC')
+                baseline = [row.to_dict() for row in read('DVC', str(soup)).records]
+                headings = soup.select('thead th')
+                headings[8].string = 'Lần nộp (Tờ khai)/File số (DLVC)'
+                for cell in headings:
+                    cell['rowspan'] = '2'
+                if reorder:
+                    for row in soup.select('tr'):
+                        cells = row.find_all(['th', 'td'], recursive=False)
+                        for cell in reversed(cells):
+                            row.append(cell.extract())
+                parsed = read('DVC', str(soup))
+                self.assertEqual(parsed.diagnostics.status, 'PARSED')
+                self.assertEqual([row.to_dict() for row in parsed.records], baseline)
+                self.assertEqual(parsed.diagnostics.skipped_count, 0)
+
+    def test_dvc_submission_heading_does_not_relax_required_or_ambiguous_columns(self):
+        for mutation in ('unknown', 'duplicate', 'invalid_counter', 'other_source'):
+            with self.subTest(mutation=mutation):
+                source = 'ETAX' if mutation == 'other_source' else 'DVC'
+                soup = named_soup(source)
+                headings = soup.select('thead th')
+                index = SCHEMAS[source].fields.index('lan_nop')
+                headings[index].string = 'Lần nộp (Tờ khai)/File số (DLVC)'
+                if mutation == 'unknown':
+                    headings[index].string = 'Unknown submission column'
+                elif mutation == 'duplicate':
+                    headings[-1].string = 'Lần nộp'
+                elif mutation == 'invalid_counter':
+                    soup.select_one('tbody tr').find_all('td', recursive=False)[index].string = 'invalid'
+                parsed = read(source, str(soup))
+                self.assertEqual(parsed.diagnostics.status, 'SCHEMA_CHANGED')
+                if mutation == 'invalid_counter':
+                    self.assertEqual(len(parsed.records), 1)
+                    self.assertIn('INVALID_COUNTER_COLUMN:lan_nop', parsed.diagnostics.reasons)
+                else:
+                    self.assertEqual(parsed.records, [])
+
+    def test_dvc_optional_attachment_tail_may_be_absent_per_row(self):
+        soup = named_soup('DVC')
+        baseline = [row.to_dict() for row in read('DVC', str(soup)).records]
+        soup.select('thead th')[8].string = 'Lần nộp (Tờ khai)/File số (DLVC)'
+        soup.select_one('tbody tr').find_all('td', recursive=False)[-1].decompose()
+        baseline[0]['ho_so_dinh_kem'] = ''
+        parsed = read('DVC', str(soup))
+        self.assertEqual(parsed.diagnostics.status, 'PARSED')
+        self.assertEqual([row.to_dict() for row in parsed.records], baseline)
+
+    def test_missing_optional_middle_or_required_tail_is_not_shifted(self):
+        for mutation in ('middle', 'required_tail', 'unknown_tail'):
+            with self.subTest(mutation=mutation):
+                soup = named_soup('DVC')
+                rows = soup.select('thead tr, tbody tr')
+                if mutation == 'middle':
+                    for row in rows:
+                        cells = row.find_all(['th', 'td'], recursive=False)
+                        row.insert(3, cells[-1].extract())
+                    soup.select_one('tbody tr').find_all('td', recursive=False)[3].decompose()
+                elif mutation == 'required_tail':
+                    soup.select_one('tbody tr').find_all('td', recursive=False)[-1].decompose()
+                    soup.select_one('tbody tr').find_all('td', recursive=False)[-1].decompose()
+                else:
+                    heading = soup.new_tag('th')
+                    heading.string = 'Unknown extra column'
+                    rows[0].append(heading)
+                parsed = read('DVC', str(soup))
+                self.assertEqual(parsed.diagnostics.status, 'SCHEMA_CHANGED')
+                self.assertIn('ROW_SCHEMA_MISMATCH', parsed.diagnostics.reasons)
+
     def test_gnt_live_headings_and_currency_totals_preserve_business_records(self):
         soup = named_soup('GNT')
         baseline = [row.to_dict() for row in read('GNT', str(soup)).records]
@@ -167,6 +239,9 @@ class TableContractTests(unittest.TestCase):
                 soup = named_soup(source)
                 rows = [row for row in soup.find("table").find_all("tr") if row.find_parent("thead") is None]
                 rows[1].find_all("td", recursive=False)[-1].decompose()
+                if source == 'DVC':
+                    # The trailing attachment is optional; remove status too.
+                    rows[1].find_all('td', recursive=False)[-1].decompose()
                 parsed = read(source, str(soup))
                 self.assertEqual(parsed.diagnostics.status, "SCHEMA_CHANGED")
                 self.assertEqual((parsed.diagnostics.candidate_count, parsed.diagnostics.parsed_count, parsed.diagnostics.skipped_count), (2, 1, 1))

@@ -1,5 +1,15 @@
 # Tiến độ sửa 26 mục core
 
+## Sửa lỗi DVC 2.0.4 — 22/10/2026
+
+Đã tái hiện lỗi `lan_nop` trên DVC thật, bổ sung tiêu đề mới và xử lý đúng
+hàng thiếu ô đính kèm tùy chọn ở cuối. Source kiểm tra DVC 09/2026 (24 hồ sơ),
+01–22/10/2026 (10 hồ sơ), legacy 06/2025 (2 hồ sơ), đều SUCCESS. Build EXE
+chỉ được bàn giao sau gate và kiểm thử frozen riêng.
+Chi tiết và giới hạn: [DVC_SCHEMA_FIX_20261022.md](docs/DVC_SCHEMA_FIX_20261022.md).
+
+## Lịch sử tích hợp
+
 Đã merge đủ **26/26 mục** vào `main`, cùng nhánh tài liệu review !4 và
 `feat/legacy-notices-pre2015`. Desktop 2.0.2 sửa luồng nâng cấp thư mục cũ:
 tự chọn `tai-moi` nếu chưa có owner, không gán lại hoặc thay đổi dữ liệu cũ.
