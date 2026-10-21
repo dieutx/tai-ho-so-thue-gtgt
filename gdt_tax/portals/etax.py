@@ -8,9 +8,9 @@ Hai endpoint khác biệt so với nguồn DVC:
 
 from __future__ import annotations
 
+from bs4 import BeautifulSoup
+
 from ..constants import (
-    ETAX_DOWNLOAD,
-    ETAX_SEARCH,
     ORIGIN,
     SOURCE_ETAX,
 )
@@ -32,10 +32,10 @@ class EtaxPortal(Portal):
 
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         response = self.http.post(
-            ETAX_SEARCH,
+            self.capabilities.search_endpoint,
             data={
                 "_csrf": self.csrf,
-                "page": page,
+                self.capabilities.page_parameter: page,
                 "size": self.settings.page_size,
                 "maToKhai_tdt": "",
                 "maGiaoDichTthc_tdt": "",
@@ -52,19 +52,26 @@ class EtaxPortal(Portal):
                     "Content-Type": "application/x-www-form-urlencoded",
                     "HX-Current-URL": self.landing_url,
                     "HX-Request": "true",
-                    "HX-Target": "bangKetQuaTraCuu_tdt",
-                    "HX-Trigger": "form_search_tdt",
+                    "HX-Target": self.capabilities.result_container,
+                    "HX-Trigger": self.capabilities.form_id,
                     "Origin": ORIGIN,
                     "Referer": self.landing_url,
                     "X-XSRF-TOKEN": self.csrf,
                 },
             ),
         )
-        return self._page_result(response)
+        result = self._page_result(response)
+        soup = BeautifulSoup(response.text, 'lxml')
+        total = soup.find(id=self.capabilities.page_total_id)
+        control = soup.find(id=self.capabilities.page_input_id)
+        count = total.get_text(strip=True) if total else ''
+        count = count or str(control.get('max', '')) if control else count
+        result.total_pages = int(count) if count.isdigit() else None
+        return result
 
     def download(self, record: CaseRecord, detail_url: str, csrf: str):
         return self.http.post(
-            ETAX_DOWNLOAD,
+            self.capabilities.download_endpoint,
             params={"loaiTraCuu": SOURCE_ETAX},
             json={"maHoSo": record.ma_ho_so},
             headers=self.xhr_headers(

@@ -31,7 +31,7 @@ foreach ($index in 1..2) {
     if (-not $result.pass -or -not $result.frozen -or -not $result.ocr_offline -or -not $result.captcha_fallback_bounded) { throw 'Frozen/OCR acceptance failed' }
     if (-not $result.portal_verification_detected) { throw 'Frozen portal verification detection failed' }
     if ($sourceResult) {
-        foreach ($field in @('ocr_fixture_sha256', 'ocr_text_sha256', 'ocr_model_sha256', 'ocr_charset_sha256')) {
+        foreach ($field in @('source_sha', 'core_version', 'ocr_fixture_sha256', 'ocr_text_sha256', 'ocr_model_sha256', 'ocr_charset_sha256')) {
             if ($result.$field -ne $sourceResult.$field) { throw ('Source/frozen OCR differs: ' + $field) }
         }
         if (($result.ocr_providers -join ',') -ne ($sourceResult.ocr_providers -join ',')) { throw 'Source/frozen ONNX provider differs' }

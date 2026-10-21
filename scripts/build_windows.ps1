@@ -16,7 +16,9 @@ try {
     & $Python -c "import sys,struct; assert sys.version_info[:2] == (3,11) and struct.calcsize('P') == 8, 'Require CPython 3.11 x64'"
     if ($LASTEXITCODE -ne 0) { throw 'Unsupported build interpreter' }
     if (-not $SkipInstall) {
-        & $Python -m pip install -r requirements-desktop.txt -e .
+        & $Python -m pip install --no-deps -r requirements-desktop-windows-py311.lock
+        if ($LASTEXITCODE -ne 0) { throw 'Locked runtime installation failed' }
+        & $Python -m pip install --no-deps --no-build-isolation -e .
         if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
     }
     if (-not $ToolsPython) {
@@ -25,14 +27,20 @@ try {
             & $Python -m venv (Join-Path $root '.venv-release-tools')
             if ($LASTEXITCODE -ne 0) { throw 'Tooling venv creation failed' }
         }
-        & $ToolsPython -m pip install -r requirements-build-tools.txt
+        & $ToolsPython -m pip install --no-deps -r requirements-build-tools-windows-py311.lock
         if ($LASTEXITCODE -ne 0) { throw 'Tooling installation failed' }
     }
-    & $Python -m unittest discover -s tests -t .
+    & $Python -m pip check
+    if ($LASTEXITCODE -ne 0) { throw 'Runtime dependency graph is incomplete' }
+    & $Python scripts/dependency_inventory.py verify --profile runtime
+    if ($LASTEXITCODE -ne 0) { throw 'Runtime inventory mismatch' }
+    & $ToolsPython scripts/dependency_inventory.py verify --profile tools
+    if ($LASTEXITCODE -ne 0) { throw 'Tooling inventory mismatch' }
+    & $Python scripts/run_test_gate.py --profile desktop
     if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
     & $ToolsPython -m ruff check .
     if ($LASTEXITCODE -ne 0) { throw 'Lint failed' }
-    & $ToolsPython -m mypy gdt_tax
+    & $ToolsPython -m mypy gdt_tax tests/test_core_contracts.py
     if ($LASTEXITCODE -ne 0) { throw 'Type checks failed' }
     & $Python scripts/write_release_metadata.py
     if ($LASTEXITCODE -ne 0) { throw 'Release metadata generation failed' }
@@ -59,5 +67,7 @@ try {
     }
     & (Join-Path $PSScriptRoot 'smoke_test_windows.ps1') -Exe $exe -Python $Python
     if ($LASTEXITCODE -ne 0) { throw 'Frozen smoke test failed' }
+    & $Python scripts/build_provenance.py
+    if ($LASTEXITCODE -ne 0) { throw 'Build provenance verification failed' }
     Get-FileHash -LiteralPath $exe -Algorithm SHA256
 } finally { Pop-Location }

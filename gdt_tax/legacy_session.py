@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .auth_outcomes import AuthFailure, AuthOutcome
+
 
 @dataclass
 class LegacySessionState:
@@ -18,5 +20,7 @@ class LegacySessionState:
         self.authenticated = False
 
 
-class SessionExpired(Exception):
+class SessionExpired(AuthFailure):
     """An actual authentication response; distinct from HTML/parser/server errors."""
+    def __init__(self, message=''):
+        super().__init__(AuthOutcome.EXPIRED_SESSION)

@@ -1,6 +1,6 @@
 {
   "mapping_id": "GTGT_842_01-GTGT",
-  "mapping_version": "1",
+  "mapping_version": "2",
   "tax_type": "GTGT",
   "form_code": "842",
   "form_version": null,
@@ -226,5 +226,12 @@
       "datatype": "decimal",
       "xpath": "CTieuTKhaiChinh/ct43"
     }
-  }
+  },
+  "numeric_format": "xml_decimal",
+  "supported_versions": [
+    "2.5.1",
+    "2.6.8",
+    "2.7.4",
+    "2.8.3"
+  ]
 }

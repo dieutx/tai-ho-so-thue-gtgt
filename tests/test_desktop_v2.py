@@ -19,6 +19,8 @@ from desktop.documents import (
     display_amount,
     document_id,
     event_datetime,
+    record_from_row,
+    remote_document_id,
     verify_rows,
 )
 from desktop.services import JobResult, RunConfig, run_offline, run_online
@@ -27,6 +29,8 @@ from gdt_tax.constants import SOURCE_ETAX_LEGACY
 from gdt_tax.errors import NetworkError, StorageError
 from gdt_tax.gnt.models import GiayNopTien
 from gdt_tax.gnt.storage import GntStore
+from gdt_tax.identity import RecordKey, account_fingerprint
+from gdt_tax.integrity import source_reference, validate_tax_zip, write_evidence
 from gdt_tax.models import CaseRecord
 from gdt_tax.run_hooks import RunHooks
 from gdt_tax.storage import ZipStore
@@ -118,10 +122,12 @@ class DocumentStateTests(unittest.TestCase):
                 self.assertEqual([document_id(mode, r) for r in result.rows if r['_file_status'] == 'downloaded'], [key])
 
     def test_existing_valid_xml_survives_selected_retry_without_content_change(self):
+        from gdt_tax.ownership import check_owner
+        check_owner(self.root, account_fingerprint('fixture-user'), create=True)
         config = RunConfig('gnt', self.root, username='fixture-user', password='fixture-secret', preferences=self.prefs)
         query = run_online(replace(config, dry_run=True), RunHooks(), StubCaptcha(), logging.getLogger('gdt_tax.test'), http=FakeHttp(make_gnt_handler({})))
         row = query.rows[0]
-        record = GiayNopTien(**{key: value for key, value in row.items() if not key.startswith('_')})
+        record = record_from_row('gnt', row)
         path = GntStore(self.root).save(record, Path('tests/fixtures/gnt_chungtu.xml').read_bytes())
         before = hashlib.sha256(path.read_bytes()).hexdigest()
         state = {}
@@ -158,16 +164,19 @@ class DocumentStateTests(unittest.TestCase):
         self.assertEqual(result.state, 'PARTIAL')
         self.assertEqual(result.errors, 1)
         self.assertEqual(state['downloads'], ['900000002'])
-        self.assertEqual(result.issues[0]['document_id'], '900000001')
+        self.assertEqual(RecordKey.parse(result.issues[0]['document_id']).remote_id, '900000001')
         self.assertIn('HTTP 500', result.issues[0]['message'])
 
     def test_gui_resume_keeps_original_zip_filename(self):
+        from gdt_tax.ownership import check_owner
+        check_owner(self.root, account_fingerprint('fixture-user'), create=True)
         config = RunConfig('tax', self.root, username='fixture-user', password='fixture-secret', preferences=self.prefs, dry_run=True)
         query = run_online(config, RunHooks(), StubCaptcha(), logging.getLogger('gdt_tax.test'), http=FakeHttp(make_legacy_handler({})))
         row = query.rows[0]
         key = document_id('tax', row)
-        original = self.root / (key + '-legacy.zip')
+        original = self.root / (remote_document_id('tax', row) + '-legacy.zip')
         original.write_bytes(sample_zip())
+        write_evidence(original, validate_tax_zip(sample_zip()), source_reference(record_from_row('tax', row), 'zip'))
         result = run_online(replace(config, dry_run=False, target_ids=(key,), input_rows=[row]), RunHooks(), StubCaptcha(),
                             logging.getLogger('gdt_tax.test'), http=FakeHttp(make_legacy_handler({})))
         self.assertEqual(result.reused, 1)
@@ -241,7 +250,7 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.assertEqual(self.window.proxy_model.rowCount(), 3)
 
     def test_select_visible_rows_and_download_uses_original_query_period(self):
-        rows = [dict(CaseRecord(str(i), SOURCE_ETAX_LEGACY, to_khai=title).to_dict(), _file_status='not_downloaded')
+        rows = [dict(CaseRecord(str(i), SOURCE_ETAX_LEGACY, to_khai=title, account_key=account_fingerprint('fixture-user')).to_dict(), _file_status='not_downloaded')
                 for i, title in enumerate(['Match one', 'Match two', 'Other'])]
         self.window.controller.sessions.set_account('fixture-user', 'fixture-secret')
         self.window.result = JobResult('SUCCESS', 'Query', self.root, rows=rows, date_range=('01/06/2025', '30/06/2025'),
@@ -252,9 +261,23 @@ class DesktopV2InteractionTests(unittest.TestCase):
         with patch.object(self.window, 'launch') as launch:
             self.window.download_checked()
         config = launch.call_args.args[0]
-        self.assertEqual(set(config.target_ids), {'0', '1'})
+        self.assertEqual(set(config.target_ids), {document_id('tax', row) for row in rows[:2]})
         self.assertEqual(config.from_date, '01/06/2025')
         self.assertEqual(config.output, self.root)
+
+    def test_unknown_or_other_account_rows_require_new_query(self):
+        self.window.controller.sessions.set_account('fixture-user', 'fixture-secret')
+        account = account_fingerprint('fixture-user')
+        self.window.result = JobResult('SUCCESS', 'Query', self.root,
+                                      date_range=('01/06/2025', '30/06/2025'),
+                                      account_key=account, operation='query')
+        for owner in ('UNKNOWN', account_fingerprint('another-user')):
+            row = CaseRecord('same-id', SOURCE_ETAX_LEGACY, account_key=owner).to_dict()
+            with self.subTest(owner=owner), patch.object(self.window, 'launch') as launch, \
+                    patch.object(self.window, 'error') as error:
+                self.window.download_rows([row])
+                launch.assert_not_called()
+                error.assert_called_once()
 
     def test_drawer_closes_without_changing_filter_or_scroll(self):
         row = CaseRecord('fixture', SOURCE_ETAX_LEGACY, to_khai='Tờ khai fixture').to_dict()

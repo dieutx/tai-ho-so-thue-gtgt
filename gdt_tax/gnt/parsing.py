@@ -34,7 +34,7 @@ import re
 from bs4 import BeautifulSoup, Tag
 
 from ..constants import GNT_RESULT_TABLE_ID
-from ..parsing import direct_cells
+from ..table_contracts import SCHEMAS, TableParse, parse_table
 from .models import GiayNopTien
 
 GNT_MIN_CELLS = 20
@@ -79,29 +79,20 @@ def gnt_record(cells: list[str], row: Tag) -> GiayNopTien | None:
 
 def parse_gnt_records(html: str) -> list[GiayNopTien]:
     """Đọc mọi giấy nộp tiền trong bảng kết quả, bỏ trùng theo ``ctu_id``."""
-    soup = BeautifulSoup(html, "lxml")
-    table = soup.find("table", id=GNT_RESULT_TABLE_ID)
-    if table is None:
-        return []
-    body = table.find("tbody") or table
-    records: list[GiayNopTien] = []
-    seen: set[str] = set()
-    for row in body.find_all("tr"):
-        record = gnt_record(direct_cells(row), row)
-        if record is None or record.ctu_id in seen:
-            continue
-        seen.add(record.ctu_id)
-        records.append(record)
-    return records
+    return parse_gnt_table(html).records
 
 
-def gnt_page_count(html: str) -> int | None:
+def parse_gnt_table(html: str, *, schema=None) -> TableParse:
+    return parse_table(html, schema or SCHEMAS["GNT"], lambda row, cells: gnt_record(cells, row), lambda record: record.ctu_id)
+
+
+def gnt_page_count(html: str, *, table_id: str = GNT_RESULT_TABLE_ID) -> int | None:
     """Tổng số trang theo dòng ``Trang 1/ 2``; ``None`` nếu trang không cho biết."""
     text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
     match = re.search(r"Trang\s*\d+\s*/\s*(\d+)", text, re.I)
     if match:
         return int(match.group(1))
-    return 1 if GNT_RESULT_TABLE_ID in html else 0
+    return 1 if table_id in html else 0
 
 
 __all__ = ["GNT_MIN_CELLS", "gnt_ctu_id", "gnt_page_count", "gnt_record", "parse_gnt_records"]

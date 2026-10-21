@@ -7,6 +7,7 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 
+from .redaction import exception_summary
 from .traffic import mask_secrets
 
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -31,8 +32,6 @@ class SecretsFilter(logging.Filter):
         self.secrets = tuple(secret for secret in secrets if secret)
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if not self.secrets:
-            return True
         message = record.getMessage()
         masked = mask_secrets(message, self.secrets)
         if masked != message:
@@ -40,6 +39,9 @@ class SecretsFilter(logging.Filter):
             record.args = ()
         if record.exc_text:
             record.exc_text = mask_secrets(record.exc_text, self.secrets)
+        if record.exc_info:
+            record.exc_text = exception_summary(*record.exc_info)
+            record.exc_info = None
         return True
 
 
@@ -50,10 +52,8 @@ def configure_logging(
 ) -> None:
     """Bật log ra stdout, tránh lỗi mã hóa tiếng Việt trên Windows.
 
-    Khi có ``log_file``, ghi thêm toàn bộ log vào file đó ở mức ``DEBUG`` — kể cả
-    header và body của từng request (đã che dữ liệu nhạy cảm). Nhờ vậy người dùng
-    có sẵn một file đầy đủ để gửi kèm khi cổng đổi giao diện, không phải chạy lại
-    ở chế độ verbose.
+    File DEBUG chứa metadata HTTP đã làm sạch và hash, không có payload gốc.
+    Exception chỉ giữ loại lỗi và frame, không ghi message/locals/source line.
     """
     configure_streams()
     close_logging()
@@ -67,10 +67,9 @@ def configure_logging(
         file_handler.setLevel(logging.DEBUG)
         handlers.append(file_handler)
 
-    if secrets:
-        secrets_filter = SecretsFilter(secrets)
-        for handler in handlers:
-            handler.addFilter(secrets_filter)
+    secrets_filter = SecretsFilter(secrets)
+    for handler in handlers:
+        handler.addFilter(secrets_filter)
 
     _OWNED_HANDLERS.update(handlers)
 

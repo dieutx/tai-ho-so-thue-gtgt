@@ -2,18 +2,20 @@
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from threading import RLock
 from typing import Any
 
+from gdt_tax.auth_outcomes import AuthFailure, AuthOutcome, classify_response
 from gdt_tax.constants import LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from gdt_tax.errors import LegacyPageError
 from gdt_tax.gnt.portal import GntPortal
 from gdt_tax.http import HttpClient
+from gdt_tax.identity import RecordKey, account_fingerprint
 from gdt_tax.legacy_session import LegacySessionState, SessionExpired
+from gdt_tax.ownership import prepare_output
 from gdt_tax.portals import build_portals
 from gdt_tax.portals.etax_legacy import EtaxLegacyPortal
 from gdt_tax.proxy import parse_proxy
@@ -37,21 +39,7 @@ class AccountContext:
 
 
 def is_auth_failure(response: Any) -> bool:
-    if response.status_code in {401, 403}:
-        return True
-    url = getattr(response, "url", "") or ""
-    if re.search(r"(?:nextEventName=login(?:&|$)|/login(?:[/?]|$))", url, re.I):
-        return True
-    # Test the actual legacy login form, not every HTML error/empty result.
-    body = getattr(response, "content", b"") or b""
-    if len(body) > 2 * 1024 * 1024:
-        return False
-    text = getattr(response, "text", "") or ""
-    if re.search(r"<form\b[^>]*\b(?:id|name)\s*=\s*['\"]loginForm['\"]", text, re.I):
-        return True
-    normalized = text.lower()
-    return any(marker in normalized for marker in (
-        "phiên giao dịch đã hết", "phiên làm việc đã hết", "session expired", "session đã hết hạn"))
+    return classify_response(response, 'ETAX_LEGACY', phase='operation', authenticated=True) == AuthOutcome.EXPIRED_SESSION
 
 
 class SessionHttpClient(HttpClient):
@@ -62,6 +50,11 @@ class SessionHttpClient(HttpClient):
 
     def request(self, method: str, path: str, **kwargs):
         response = super().request(method, path, **kwargs)
+        outcome = classify_response(response, 'ETAX_LEGACY', phase='operation',
+                                    authenticated=self.session_state.authenticated)
+        if outcome in {AuthOutcome.MAINTENANCE, AuthOutcome.INTERACTIVE_AUTH_REQUIRED,
+                       AuthOutcome.INVALID_CREDENTIALS}:
+            raise AuthFailure(outcome)
         if not self.authenticating and self.session_state.authenticated and is_auth_failure(response):
             self.session_state.clear()
             raise SessionExpired("Phiên ETAX hết hạn")
@@ -74,7 +67,10 @@ class RoutedHttpClient:
         self.legacy, self.dvc = legacy, dvc
 
     def request(self, method: str, path: str, **kwargs):
-        target = self.legacy if path.startswith(LEGACY_ETAX_ORIGIN + "/") else self.dvc
+        from gdt_tax.http_policy import OriginPolicy, origin
+        url = self.dvc.url(path)
+        OriginPolicy().validate(url)
+        target = self.legacy if origin(url) == LEGACY_ETAX_ORIGIN else self.dvc
         return target.request(method, path, **kwargs)
 
     def get(self, path: str, **kwargs):
@@ -169,8 +165,11 @@ class ETaxSessionManager:
         logger = logger or logging.getLogger("gdt_tax.desktop")
         with self.lock:
             hooks.check()
+            config = config.normalized_selection()
             self.set_account(config.username, config.password)
             settings = config.settings()
+            if config.mode != "login":
+                prepare_output(settings)
             if config.mode == "tax" and config.dvc and settings.from_date < settings.etax_cutoff <= settings.to_date:
                 return self._mixed_tax(config, hooks, captcha, logger)
             needs_legacy = config.mode in {"login", "gnt", "notice"} or any(
@@ -207,15 +206,14 @@ class ETaxSessionManager:
                     self.invalidate()
                     hooks.emit(session="EXPIRED")
                     if attempt == 1:
-                        return JobResult("ERROR", "Phiên ETAX tiếp tục hết hạn; hãy đăng nhập lại", config.output, errors=1)
+                        return JobResult("ERROR", "Phiên ETAX tiếp tục hết hạn; hãy đăng nhập lại", config.output,
+                                         errors=1, error_code='AUTH_EXPIRED_SESSION')
                     logger.warning("Phiên ETAX hết hạn; xác thực lại một lần rồi tiếp tục, reuse file đã hoàn thành")
-                except LegacyPageError as error:
-                    # Exchange the reused portal state for a clean login, then retry once.
-                    self.invalidate()
-                    hooks.emit(session="EXPIRED")
-                    if attempt == 1:
-                        return JobResult("ERROR", str(error), config.output, errors=1)
-                    logger.warning("Mở trang legacy thất bại; đăng nhập lại một lần rồi thử lại: %s", error)
+                except LegacyPageError:
+                    return JobResult("ERROR", 'AUTH_SCHEMA_UNKNOWN: Trang nghiệp vụ chưa được nhận diện; đã dừng xác thực lại.',
+                                     config.output, errors=1, error_code='AUTH_SCHEMA_UNKNOWN')
+                except AuthFailure as error:
+                    return JobResult("ERROR", str(error), config.output, errors=1, error_code=error.code)
                 except RunCancelled:
                     raise
                 finally:
@@ -230,12 +228,16 @@ class ETaxSessionManager:
                  replace(config, from_date=settings.etax_cutoff.strftime("%d/%m/%Y"))]
         if config.target_ids is not None:
             selected = set(config.target_ids)
-            legacy_ids = {str(row.get("ma_ho_so")) for row in config.input_rows
-                          if row.get("nguon") == SOURCE_ETAX_LEGACY and row.get("ma_ho_so") in selected}
+            legacy_ids = {token for token in selected if RecordKey.parse(token).source == SOURCE_ETAX_LEGACY}
             dvc_ids = selected - legacy_ids
             parts = [replace(part, target_ids=tuple(sorted(legacy_ids if not part.dvc else dvc_ids)))
                      for part in parts if (legacy_ids if not part.dvc else dvc_ids)]
+        if config.case_id:
+            source = RecordKey.parse(config.case_id).source
+            parts = [part for part in parts if (source == SOURCE_ETAX_LEGACY) == (not part.dvc)]
         result = JobResult("SUCCESS", "Chỉ tra cứu" if config.dry_run else "Đã hoàn tất", config.output)
+        result.account_key = account_fingerprint(config.username)
+        result.date_range = (config.from_date, config.to_date)
         outcomes = []
         for part in parts:
             try:
@@ -256,6 +258,7 @@ class ETaxSessionManager:
             result.skipped += child.skipped + int(child.state == "ERROR")
             result.reused += child.reused
             result.issues.extend(child.issues)
+            result.attachment_results.update(child.attachment_results)
             result.requested += child.requested
             if child.state == "CANCELLED":
                 result.state, result.message = child.state, child.message

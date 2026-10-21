@@ -131,7 +131,7 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.state['login_posts'], 1)
         self.assertEqual(self.transports[0].max_active, 1)
 
-    def test_page_open_failure_relogins_once_and_retries(self):
+    def test_page_open_failure_does_not_reauthenticate_without_expiry_evidence(self):
         from unittest.mock import patch
 
         from desktop.services import JobResult
@@ -149,8 +149,10 @@ class SessionTests(unittest.TestCase):
 
         with patch("desktop.sessions.run_online", side_effect=fake_run_online):
             result = self.run_mode("gnt")
-        self.assertEqual(result.state, "SUCCESS")
-        self.assertEqual(self.state["login_posts"], 2)
+        self.assertEqual(result.state, "ERROR")
+        self.assertEqual(result.error_code, 'AUTH_SCHEMA_UNKNOWN')
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(self.state["login_posts"], 1)
         self.assertTrue(self.manager.session.authenticated)
 
     def test_page_open_failure_twice_reports_page_detail(self):
@@ -163,9 +165,10 @@ class SessionTests(unittest.TestCase):
         with patch("desktop.sessions.run_online", side_effect=LegacyPageError(detail)):
             result = self.run_mode("notice")
         self.assertEqual(result.state, "ERROR")
-        self.assertEqual(result.message, detail)
-        self.assertEqual(self.state["login_posts"], 2)
-        self.assertFalse(self.manager.session.authenticated)
+        self.assertEqual(result.error_code, 'AUTH_SCHEMA_UNKNOWN')
+        self.assertNotIn(detail, result.message)
+        self.assertEqual(self.state["login_posts"], 1)
+        self.assertTrue(self.manager.session.authenticated)
 
     def test_offline_does_not_initialize_any_client(self):
         config = replace(self.config, mode='offline', source=Path('tests/fixtures'), stage='inventory')
@@ -174,8 +177,9 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.transports, [])
 
     def test_auth_detection_does_not_confuse_html_server_errors(self):
-        for status in (401, 403):
+        for status in (401,):
             self.assertTrue(is_auth_failure(FakeResponse(status_code=status)))
+        self.assertFalse(is_auth_failure(FakeResponse(status_code=403)))
         self.assertTrue(is_auth_failure(FakeResponse('<form id="loginForm">')))
         self.assertFalse(is_auth_failure(FakeResponse('<html>Gateway failure</html>', status_code=500)))
 

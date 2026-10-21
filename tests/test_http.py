@@ -121,7 +121,8 @@ class RequestLoggingTests(unittest.TestCase):
         self.assertIn(MASK, text)
         self.assertNotIn("c2VjcmV0", text)
         self.assertNotIn("bi-mat", text)
-        self.assertIn("xin chao", text)
+        self.assertNotIn("xin chao", text)
+        self.assertIn("payload omitted", text)
 
     def test_khong_log_debug_khi_khong_bat(self):
         client, _ = make_client([StubResponse(200)])
@@ -242,7 +243,8 @@ class DumpTests(unittest.TestCase):
             self.assertEqual(len(written), 2)
             self.assertTrue(written[0].name.endswith(".request.txt"))
             self.assertTrue(written[1].name.endswith(".response.txt"))
-            self.assertIn("<html>ket qua</html>", written[1].read_text(encoding="utf-8"))
+            self.assertNotIn("<html>ket qua</html>", written[1].read_text(encoding="utf-8"))
+            self.assertIn("sha256=", written[1].read_text(encoding="utf-8"))
 
     def test_khong_dump_thi_khong_tao_thu_muc(self):
         with tempfile.TemporaryDirectory() as tmp:

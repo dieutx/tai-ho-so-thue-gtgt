@@ -26,7 +26,14 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .documents import FILE_LABELS, counters, display_amount, document_id
+from .documents import (
+    FILE_LABELS,
+    counters,
+    display_amount,
+    document_id,
+    document_label,
+    remote_document_id,
+)
 from .state import TabState
 from .table_model import COLUMNS
 
@@ -223,6 +230,11 @@ class V2InteractionMixin:
         if not self.can_target_download():
             self.error('Tra cứu kỳ tương ứng bằng tài khoản hiện tại trước khi tải các tệp này.')
             return
+        from gdt_tax.identity import RecordKey
+        account_key = self.result.account_key
+        if any(RecordKey.parse(document_id(self.mode, row)).account_key != account_key for row in rows):
+            self.error('Hồ sơ chưa có bằng chứng thuộc tài khoản hiện tại. Tra cứu lại kỳ tương ứng trước khi tải.')
+            return
         if self.mode == 'tax' and not self.dvc and any(row.get('nguon') == 'DVC' for row in rows):
             self.error('Nguồn DVC đang tắt. Bật DVC trong Cài đặt trước khi tải các hồ sơ này.')
             return
@@ -322,7 +334,7 @@ class V2InteractionMixin:
 
     def copy_document_id(self):
         if self.detail_row:
-            QApplication.clipboard().setText(document_id(self.mode, self.detail_row))
+            QApplication.clipboard().setText(remote_document_id(self.mode, self.detail_row))
 
     def open_detail_file(self):
         if not self.detail_row:
@@ -370,7 +382,7 @@ class V2InteractionMixin:
             else:
                 action = menu.addAction('Tải riêng tệp này', lambda: self.download_rows([row]))
                 action.setEnabled(self.can_target_download() and not self.controller.busy)
-            menu.addAction('Sao chép mã đầy đủ', lambda: QApplication.clipboard().setText(document_id(self.mode, row)))
+            menu.addAction('Sao chép mã đầy đủ', lambda: QApplication.clipboard().setText(remote_document_id(self.mode, row)))
         menu.addAction('Mở thư mục', self.open_output)
         menu.addAction('Sao chép metadata', lambda: QApplication.clipboard().setText(json.dumps(row, ensure_ascii=False)))
         menu.exec(self.table.viewport().mapToGlobal(position))
@@ -522,7 +534,7 @@ class V2InteractionMixin:
                  f'<p>Đoạn/nguồn chưa xử lý: {result.skipped}. Tệp đã có hợp lệ được giữ; không gộp bỏ qua nguồn thành tệp tải thành công.</p>',
                  f'<p>Nơi lưu: {html.escape(str(result.output))}</p>']
         for issue in result.issues:
-            parts.append(f'<p><b>{html.escape(issue.get("document_id") or "Tác vụ")}</b><br>{html.escape(issue.get("message", ""))}</p>')
+            parts.append(f'<p><b>{html.escape(document_label(issue.get("document_id") or ""))}</b><br>{html.escape(issue.get("message", ""))}</p>')
         body.setHtml(''.join(parts))
         layout.addWidget(body)
         actions = QHBoxLayout()

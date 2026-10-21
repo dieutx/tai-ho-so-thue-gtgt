@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import date
 
+from .identity import IDENTITY_VERSION, UNKNOWN, RecordKey
+from .table_contracts import ParseDiagnostics
+
 
 @dataclass
 class CaseRecord:
@@ -32,10 +35,23 @@ class CaseRecord:
     loai_tai_lieu: str = "UNKNOWN"
     quy_tac_phan_loai: str = ""
     ly_do_phan_loai: str = ""
+    account_key: str = UNKNOWN
+    attachment_status: str = 'NOT_REQUESTED'
+    attachment_result: str = ''
+    portal_profile_version: str = ''
+    routing_version: str = ''
+
+    @property
+    def key(self) -> RecordKey:
+        return RecordKey(self.account_key, self.nguon, "DECLARATION", self.ma_ho_so)
+
+    @property
+    def record_key(self) -> str:
+        return self.key.serialize()
 
     def to_dict(self) -> dict[str, str]:
         """Chuyển sang ``dict`` để ghi CSV/JSON."""
-        return asdict(self)
+        return {**asdict(self), "record_key": self.record_key, "identity_version": IDENTITY_VERSION}
 
 
 @dataclass(frozen=True)
@@ -58,6 +74,7 @@ class PageResult:
     records: list[CaseRecord] = field(default_factory=list)
     total_pages: int | None = None
     http_status: int = 0
+    diagnostics: ParseDiagnostics | None = None
 
 
 @dataclass
@@ -70,9 +87,21 @@ class RunSummary:
     dry_run: bool = False
     discovered: int = 0
     skipped_periods: int = 0
+    attachments_complete: bool = True
+    attachments_discovered: int = 0
+    attachments_downloaded: int = 0
+    attachments_reused: int = 0
+    attachments_failed: int = 0
+    routing_version: str = ''
+    profile_versions: dict[str, str] = field(default_factory=dict)
+    routing_issues: list[dict] = field(default_factory=list)
 
     @property
     def complete(self) -> bool:
+        return self.primary_complete and self.attachments_complete
+
+    @property
+    def primary_complete(self) -> bool:
         return self.skipped_periods == 0 and self.downloaded == self.expected
 
     @property

@@ -48,13 +48,13 @@ class MaskHeadersTests(unittest.TestCase):
 class MaskDataTests(unittest.TestCase):
     def test_che_mat_khau_va_csrf_trong_form(self):
         masked = mask_data({"tenDN": "0101234567-QL", "matKhau": "c2VjcmV0", "_csrf": "token"})
-        self.assertEqual(masked["tenDN"], "0101234567-QL")
+        self.assertEqual(masked["tenDN"], MASK)
         self.assertEqual(masked["matKhau"], MASK)
         self.assertEqual(masked["_csrf"], MASK)
 
     def test_che_form_dang_danh_sach(self):
         masked = mask_data([("tenDN", "abc"), ("matKhau", "c2VjcmV0")])
-        self.assertEqual(masked, [("tenDN", "abc"), ("matKhau", MASK)])
+        self.assertEqual(masked, [("tenDN", MASK), ("matKhau", MASK)])
 
     def test_che_long_trong_dict_con(self):
         masked = mask_data({"auth": {"password": "bi-mat", "user": "abc"}})
@@ -80,12 +80,11 @@ class DescribeParamsTests(unittest.TestCase):
         self.assertEqual(describe_params({"page": 1, "size": 10}), "page=1&size=10")
 
     def test_che_tham_so_nhay_cam(self):
-        self.assertEqual(describe_params({"captcha": "abcde", "_csrf": "token"}), "captcha=abcde&_csrf=***")
+        self.assertEqual(describe_params({"captcha": "abcde", "_csrf": "token"}), "captcha=***&_csrf=***")
 
     def test_cat_bot_khi_qua_dai(self):
         text = describe_params({"tuNgay": "0" * 50}, limit=10)
-        self.assertTrue(text.startswith("tuNgay=000"))
-        self.assertIn("ký tự)", text)
+        self.assertEqual(text, "tuNgay=***")
 
 
 class FormatSizeTests(unittest.TestCase):
@@ -138,23 +137,23 @@ class TrafficDumperTests(unittest.TestCase):
             response=StubResponse('{"status": "200"}', headers={"Set-Cookie": "XSRF=x"}),
             elapsed=0.5,
         )
-        self.assertEqual([path.suffix for path in paths], [".txt", ".txt", ".body"])
+        self.assertEqual([path.suffix for path in paths], [".txt", ".txt"])
 
         request_text = paths[0].read_text(encoding="utf-8")
         response_text = paths[1].read_text(encoding="utf-8")
-        raw_body = paths[2].read_bytes()
 
         self.assertIn("POST https://x.test/tthc/loginLDAP", request_text)
         self.assertIn("Cookie: ***", request_text)
         self.assertIn("User-Agent: Mozilla/5.0", request_text)
-        self.assertIn('"matKhau": "***"', request_text)
+        self.assertIn("payload omitted", request_text)
+        self.assertNotIn('"tenDN"', request_text)
         self.assertNotIn("c2VjcmV0", request_text)
         self.assertIn("tham số: page=1", request_text)
 
         self.assertIn("HTTP 200 (0.50s", response_text)
         self.assertIn("Set-Cookie: ***", response_text)
-        self.assertIn('"status": "200"', response_text)
-        self.assertEqual(raw_body, b'{"status": "200"}')
+        self.assertIn("payload omitted", response_text)
+        self.assertNotIn('"status": "200"', response_text)
 
     def test_danh_so_file_tang_dan_theo_thu_tu_goi(self):
         dumper = self.make_dumper()
@@ -173,13 +172,14 @@ class TrafficDumperTests(unittest.TestCase):
         self.assertEqual([path.suffix for path in paths], [".txt", ".txt"])
 
     def test_body_qua_lon_thi_chi_giu_phan_dau(self):
-        dumper = self.make_dumper(max_body_bytes=16)
+        dumper = self.make_dumper(max_body_bytes=16, private=True)
         paths = dumper.record(
             method="GET",
             url="https://x.test/tthc/tchs",
             response=StubResponse(content=b"x" * 100),
         )
         self.assertEqual(paths[2].read_bytes(), b"x" * 16)
+        self.assertTrue((dumper.root / "PRIVATE.txt").exists())
 
     def test_ghi_them_nhieu_lan_chay_khong_ghi_de(self):
         with tempfile.TemporaryDirectory() as tmp:

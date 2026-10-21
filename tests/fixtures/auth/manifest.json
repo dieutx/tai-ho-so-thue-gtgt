@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "provenance": "synthetic",
+  "source": ["DVC", "ETAX_LEGACY"],
+  "operation": "login_submit/session_validation",
+  "sanitized_at": "2026-10-21",
+  "adapter_version": "auth-v1",
+  "content_kind": ["html", "json", "redirect"],
+  "generator": "tests.test_auth_outcomes.AuthContractTests",
+  "sanitization": "Constructed from invented values; no account, capture, CAPTCHA or tax document used. Descriptive JSON error codes are contracts, not captured portal codes.",
+  "outcomes": ["SUCCESS", "INVALID_CREDENTIALS", "CAPTCHA_INVALID", "EXPIRED_SESSION", "ACCESS_VERIFICATION", "MAINTENANCE", "INTERACTIVE_AUTH_REQUIRED", "SCHEMA_UNKNOWN"]
+}

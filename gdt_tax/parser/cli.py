@@ -21,10 +21,12 @@ import zlib
 from pathlib import Path
 
 from ..archive_limits import MAX_ARCHIVE_BYTES, MAX_COMPRESSION_RATIO, MAX_MEMBERS
+from ..artifact_contracts import lineage, validate_payload
 from ..atomic import replace_with_retry
 from ..errors import GdtError
 from ..inventory import MANIFEST_NAME, _unsafe_member
 from ..logging_setup import configure_streams
+from ..outcomes import quality_summary, write_summary
 from ..run_hooks import RunHooks
 from .extract import PARSER_VERSION, SCHEMA_VERSION, extract_declaration
 from .registry import load_registry
@@ -41,6 +43,7 @@ def _read_manifest(path: Path) -> dict:
         raise GdtError(f"Không đọc được manifest {path}: {error}") from error
     if not isinstance(payload, dict):
         raise GdtError(f"Manifest {path} không phải object")
+    validate_payload(payload, "containers")
     return payload
 
 
@@ -83,6 +86,7 @@ def parse_manifest(
     logger: logging.Logger | None = None,
 ) -> list[dict]:
     """Parse mọi XML trong manifest; lỗi một artifact không dừng cả batch."""
+    validate_payload(manifest, "containers")
     log = logger or logging.getLogger(LOGGER_NAME)
     results: list[dict] = []
     for container in manifest.get("containers", []):
@@ -120,7 +124,7 @@ def parse_manifest(
     return results
 
 
-def write_parsed(results: list[dict], output_dir: Path, name: str = PARSED_NAME) -> Path:
+def write_parsed(results: list[dict], output_dir: Path, name: str = PARSED_NAME, *, manifest: dict | None = None) -> Path:
     target = output_dir / name
     payload = {
         "schema_version": SCHEMA_VERSION,
@@ -128,6 +132,12 @@ def write_parsed(results: list[dict], output_dir: Path, name: str = PARSED_NAME)
         "count": len(results),
         "declarations": results,
     }
+    if manifest is not None:
+        payload["lineage"] = lineage(manifest)
+    hashes = {row.get("registry_sha256") for row in results if row.get("registry_sha256")}
+    if len(hashes) > 1:
+        raise GdtError("ARTIFACT_REGISTRY_MISMATCH: mixed parser registries")
+    payload["registry_sha256"] = next(iter(hashes), None)
     data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None
@@ -160,6 +170,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", help="Thư mục ghi kết quả (mặc định: thư mục nguồn)")
     parser.add_argument("--manifest", help="Đường dẫn manifest (mặc định: <folder>/manifest)")
     parser.add_argument("--forms-dir", help="Thư mục mapping mẫu biểu")
+    parser.add_argument("--summary-json", help="Ghi quality summary JSON, exit 0=đủ, 1=partial, 2=input lỗi")
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser
 
@@ -179,10 +190,10 @@ def main(argv: list[str] | None = None) -> int:
         manifest = _read_manifest(manifest_path)
         registry = load_registry(args.forms_dir, logger=log)
         results = parse_manifest(manifest, root, registry=registry, logger=log)
-        target = write_parsed(results, output)
+        target = write_parsed(results, output, manifest=manifest)
     except GdtError as error:
         log.error("%s", error)
-        return 1
+        return 2
     mapped = sum(1 for item in results if item["status"] == "MAPPED")
     need = sum(1 for item in results if item["status"] == "NEED_MAPPING")
     errors = sum(1 for item in results if item["status"] == "error")
@@ -194,7 +205,12 @@ def main(argv: list[str] | None = None) -> int:
         errors,
     )
     log.info("Kết quả: %s", target)
-    return 0
+    summary = quality_summary("parse", results, complete_status="MAPPED")
+    try:
+        return write_summary(args.summary_json, summary)
+    except GdtError as error:
+        log.error("%s", error)
+        return 2
 
 
 __all__ = ["PARSED_NAME", "main", "parse_manifest", "write_parsed"]

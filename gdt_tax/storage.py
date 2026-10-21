@@ -29,6 +29,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
+from gdt_tax.spreadsheet_values import append_row, csv_value
+
 from .archive_limits import (
     MAX_ARCHIVE_BYTES,
     MAX_COMPRESSION_RATIO,
@@ -37,9 +39,21 @@ from .archive_limits import (
     MAX_TOTAL_UNCOMPRESSED,
 )
 from .atomic import replace_with_retry
+from .catalog import generation, serialized_catalog
 from .classification import TAX_GROUPS
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX
+from .contracts import DownloadArtifact
 from .errors import StorageError
+from .identity import key_from_row
+from .integrity import (
+    matches_evidence,
+    read_bounded,
+    safe_destination,
+    source_reference,
+    valid_declaration_zip,
+    validate_tax_zip,
+    write_evidence,
+)
 from .models import CaseRecord
 from .naming import zip_filename
 
@@ -90,12 +104,18 @@ def decode_zip_bytes(response) -> bytes | None:
     Cổng có lúc trả trực tiếp file nhị phân, có lúc trả JSON dạng
     ``{"content": "<base64>", "fileName": "..."}``.
     """
+    if isinstance(response, DownloadArtifact):
+        return response.data if response.media_kind == 'zip' and valid_zip(response.data) else None
     data = response.content
+    if len(data) > (MAX_ARCHIVE_BYTES * 4 // 3 + 4096):
+        return None
     try:
         payload = response.json()
     except ValueError:
         payload = None
     if isinstance(payload, dict) and payload.get("content"):
+        if not isinstance(payload["content"], str) or len(payload["content"]) > (MAX_ARCHIVE_BYTES + 2) // 3 * 4:
+            return None
         try:
             data = base64.b64decode(payload["content"], validate=True)
         except (ValueError, TypeError):
@@ -133,11 +153,9 @@ class ZipStore:
             try:
                 if candidate.stat().st_size > MAX_ARCHIVE_BYTES:
                     continue
-                if not valid_zip(candidate.read_bytes()):
+                content = read_bounded(candidate, MAX_ARCHIVE_BYTES)
+                if not valid_declaration_zip(content) or not matches_evidence(candidate, content, source_reference(record, "zip")):
                     continue
-                if candidate != preferred and not preferred.exists():
-                    candidate.rename(preferred)
-                    candidate = preferred
                 record.tep_zip = candidate.name
                 self.logger.info("Bỏ qua ZIP đã có: %s", candidate.name)
                 return candidate
@@ -147,12 +165,14 @@ class ZipStore:
 
     def save(self, record: CaseRecord, data: bytes) -> Path | None:
         """Ghi ZIP xuống đĩa sau khi kiểm tra tính toàn vẹn."""
-        if not valid_zip(data):
+        result = validate_tax_zip(data)
+        if not result.ok:
             self.logger.error("Phản hồi không phải ZIP hợp lệ: %s", record.ma_ho_so)
             return None
         self.directory.mkdir(parents=True, exist_ok=True)
-        path = self.path_for(record)
+        path = safe_destination(self.path_for(record), data, source_reference(record, "zip"))
         _atomic_write(path, data)
+        write_evidence(path, result, source_reference(record, "zip"))
         record.tep_zip = path.name
         self.logger.info("Đã lưu %s (%s bytes)", path.name, f"{len(data):,}")
         return path
@@ -165,9 +185,11 @@ class ZipStore:
         return self.save(record, data)
 
 
+@serialized_catalog
 def write_metadata(
     directory: str | Path,
     records: Mapping[str, CaseRecord] | Iterable[CaseRecord],
+    *, materialize: bool = True,
 ) -> tuple[Path, Path] | None:
     """Gộp hồ sơ với JSON cũ, xuất CSV/JSON/Excel/nhóm; không ghi khi input rỗng."""
     if isinstance(records, Mapping):
@@ -181,21 +203,25 @@ def write_metadata(
     directory.mkdir(parents=True, exist_ok=True)
     json_path = directory / METADATA_JSON
     previous = _metadata_rows(json_path)
-    merged = {(row["nguon"], row["ma_ho_so"]): row for row in previous}
+    merged = {key_from_row(row, "DECLARATION").serialize(): row for row in previous}
     for record in ordered:
-        key = (record.nguon, record.ma_ho_so)
+        key = record.record_key
         row = {**merged.get(key, {}), **record.to_dict()}
         # Tra cứu/dry-run không được xoá tham chiếu của file đã tải lần trước.
         if not record.tep_zip and key in merged:
             row["tep_zip"] = merged[key].get("tep_zip", "")
         merged[key] = row
     rows = [merged[key] for key in sorted(merged)]
+    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
+    generation(json_path, [], ready=False)
+    if not materialize:
+        return directory / METADATA_CSV, json_path
     fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     csv_path = directory / METADATA_CSV
     with StringIO(newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({key: csv_value(value) for key, value in row.items()} for row in rows)
         csv_bytes = stream.getvalue().encode("utf-8-sig")
     groups: dict[str, list] = {group: [] for group in TAX_GROUPS}
     for row in rows:
@@ -204,29 +230,31 @@ def write_metadata(
             groups[group if group in groups else "UNKNOWN"].append(row)
     # JSON là danh mục chính. Mỗi file được thay thế nguyên tử; chưa có
     # transaction chung cho cả bốn danh mục (xem roadmap storage).
-    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
     _atomic_write(csv_path, csv_bytes)
     write_excel_report(directory / METADATA_XLSX, rows)
     grouped = {"schema_version": 1, "groups": groups}
     _atomic_write(directory / "phan_loai_ho_so.json",
                   json.dumps(grouped, ensure_ascii=False, indent=2).encode("utf-8"))
+    generation(json_path, [csv_path, directory / METADATA_XLSX, directory / "phan_loai_ho_so.json"], ready=True)
     return csv_path, json_path
 
 
 def write_excel_report(path: str | Path, rows: Iterable[Mapping[str, object]]) -> Path:
     """Xuất danh sách tờ khai dạng bảng Excel, an toàn với công thức từ dữ liệu ngoài."""
+    from .attachments import attachment_sheet
+    rows = list(rows)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Danh sách tờ khai"
     sheet.freeze_panes = "A2"
-    sheet.append([header for header, _ in EXCEL_COLUMNS])
+    append_row(sheet, [header for header, _ in EXCEL_COLUMNS])
 
     for index, row in enumerate(rows, start=1):
         values: list[object] = [index]
         for _, field in EXCEL_COLUMNS[1:]:
             value = row.get(field, "") if field else ""
             values.append(_excel_value(value))
-        sheet.append(values)
+        append_row(sheet, values)
 
     header_fill = PatternFill("solid", fgColor="1F4E78")
     for cell in sheet[1]:
@@ -255,6 +283,7 @@ def write_excel_report(path: str | Path, rows: Iterable[Mapping[str, object]]) -
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 0
+    attachment_sheet(workbook, rows)
 
     with BytesIO() as stream:
         workbook.save(stream)
@@ -280,7 +309,7 @@ def _metadata_rows(path: Path) -> list[dict]:
         rows = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(rows, list) or any(
             not isinstance(row, dict) or not isinstance(row.get("ma_ho_so"), str)
-            or not isinstance(row.get("nguon"), str) for row in rows
+            or ("nguon" in row and not isinstance(row["nguon"], str)) for row in rows
         ):
             raise ValueError("metadata phải là danh sách hồ sơ có ma_ho_so và nguon")
         return rows

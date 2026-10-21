@@ -16,15 +16,17 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from .artifact_contracts import lineage, validate_payload
 from .atomic import replace_with_retry
 from .errors import GdtError
 from .inventory import MANIFEST_NAME
 from .logging_setup import configure_streams
+from .outcomes import quality_summary, write_summary
 from .parser.registry import MappingRegistry, load_registry
 from .run_hooks import RunHooks
 
 LOGGER_NAME = "gdt_tax.classify"
-CLASSIFY_VERSION = "content-classify-v1"
+CLASSIFY_VERSION = "content-classify-v2"
 CLASSIFICATION_NAME = "phan_loai_artifact.json"
 
 TAX_GROUPS = ("GTGT", "TNCN", "TNDN", "FCT", "MON_BAI", "TAI_NGUYEN", "OTHER", "UNKNOWN")
@@ -61,6 +63,13 @@ class ArtifactClassification:
     evidence: list[str] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
+    file_integrity: str = "UNKNOWN"
+    acceptance_status: str = "UNKNOWN"
+    acceptance_raw: str | None = None
+    acceptance_source: str | None = None
+    acceptance_verified_at: str | None = None
+    namespace: str | None = None
+    mapping_coverage: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -100,7 +109,7 @@ def classify_artifact(
 ) -> ArtifactClassification:
     """Phân loại một artifact từ profile XML (không cần đọc lại bytes)."""
     profile = xml_profile or {}
-    root = profile.get("root_element")
+    root = profile.get("document_root") or profile.get("root_element")
     form_code = profile.get("possible_form_code")
     form_version = profile.get("possible_form_version")
     form_name = profile.get("possible_form_name")
@@ -116,6 +125,9 @@ def classify_artifact(
 
     # Nhóm thuế: ưu tiên mapping đã đăng ký (bằng chứng mạnh), sau đó tên mẫu.
     mapping = registry.lookup(form_code, form_version) if registry is not None else None
+    if mapping is not None and not mapping.matches_profile(root, profile.get('namespace')):
+        evidence.append('mapping rejected: document schema/date not verified')
+        mapping = None
     tax_group = "UNKNOWN"
     reason: str | None = None
     if mapping is not None and mapping.tax_type:
@@ -133,10 +145,17 @@ def classify_artifact(
 
     # Vai trò tài liệu từ cấu trúc: dùng các marker đã thấy trong XML thật.
     # `possible_*` không có sẵn marker node, nên suy từ root + có chỉ tiêu tổng hợp.
-    has_declaration = root in {"HSoThueDTu", "TKhai"} and form_code is not None
-    has_appendix = False
+    markers = profile.get("structural_markers")
+    has_declaration = ("CTieuTKhaiChinh" in markers or "HSoKhaiThue" in markers) if isinstance(markers, list) else root in {"HSoThueDTu", "TKhai"} and form_code is not None
+    has_appendix = any(str(marker).startswith(("PLuc", "BangKe")) for marker in (markers or [])) or str(root).startswith(("PLuc", "BangKe"))
     role = _document_role(root, has_declaration, has_appendix)
-    evidence.append(f"role từ root={root}")
+    evidence.append(f"role từ root={root}; markers={markers}")
+    if root in _NOTICE_ROOTS and has_declaration:
+        role = "UNKNOWN"
+        conflicts.append("notice root contains declaration markers")
+    if profile.get("status") == "error":
+        role = "UNKNOWN"
+        conflicts.append("XML profile invalid: " + str(profile.get("error")))
 
     status = "OK"
     if conflicts:
@@ -144,6 +163,16 @@ def classify_artifact(
     elif tax_group == "UNKNOWN" or role == "UNKNOWN":
         status = "UNKNOWN"
 
+    present = set(profile.get("indicator_codes") or [])
+    expected = {item.indicator_code for item in mapping.fields.values()} if mapping else set()
+    coverage = {"status": "MAPPED" if mapping else "NEED_MAPPING",
+                "mapping_id": mapping.mapping_id if mapping else None,
+                "mapping_version": mapping.mapping_version if mapping else None,
+                "present_codes": sorted(present), "expected_codes": sorted(expected),
+                "missing_codes": sorted(expected - present),
+                "unmapped_codes": sorted(present - expected),
+                "present_count": len(present), "expected_count": len(expected),
+                "missing_count": len(expected - present)}
     return ArtifactClassification(
         artifact_id=artifact_id,
         source_zip=source_zip,
@@ -157,6 +186,8 @@ def classify_artifact(
         evidence=evidence,
         conflicts=conflicts,
         reason=reason,
+        namespace=profile.get("namespace"),
+        mapping_coverage=coverage,
     )
 
 
@@ -167,6 +198,7 @@ def classify_manifest(
     hooks: RunHooks | None = None,
 ) -> list[dict]:
     """Phân loại mọi XML trong manifest; giữ cả artifact lỗi/không XML."""
+    validate_payload(manifest, "containers")
     registry = registry if registry is not None else load_registry()
     results: list[dict] = []
     for container in manifest.get("containers", []):
@@ -182,8 +214,18 @@ def classify_manifest(
                 xml_profile=artifact.get("xml"),
                 registry=registry,
             )
+            classification.file_integrity = "ERROR" if artifact.get("status") == "error" or (artifact.get("xml") or {}).get("status") == "error" else "OK" if artifact.get("status") == "ok" else "UNKNOWN"
+            classification.acceptance_raw = (container.get("case") or {}).get("trang_thai")
+            if classification.acceptance_raw:
+                classification.acceptance_source = "inventory.case.trang_thai (unverified metadata)"
             results.append(classification.to_dict())
     return results
+
+
+def classification_payload(manifest: dict, rows: list[dict], registry: MappingRegistry) -> dict:
+    return {"schema_version": "artifact-classification-v1", "rule_version": CLASSIFY_VERSION,
+            "count": len(rows), "classifications": rows, "lineage": lineage(manifest),
+            "registry_sha256": registry.fingerprint}
 
 
 def _read_manifest(path: Path) -> dict:
@@ -193,6 +235,7 @@ def _read_manifest(path: Path) -> dict:
         raise GdtError(f"Không đọc được manifest {path}: {error}") from error
     if not isinstance(payload, dict):
         raise GdtError(f"Manifest {path} không phải object")
+    validate_payload(payload, "containers")
     return payload
 
 
@@ -228,6 +271,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", help="Thư mục ghi kết quả (mặc định: thư mục nguồn)")
     parser.add_argument("--manifest", help="Đường dẫn manifest")
     parser.add_argument("--forms-dir", help="Thư mục mapping mẫu biểu")
+    parser.add_argument("--summary-json", help="Ghi quality summary JSON, exit 0=đủ, 1=partial, 2=input lỗi")
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser
 
@@ -247,16 +291,11 @@ def main(argv: list[str] | None = None) -> int:
         manifest = _read_manifest(manifest_path)
         registry = load_registry(args.forms_dir, logger=log)
         results = classify_manifest(manifest, registry=registry)
-        payload = {
-            "schema_version": "artifact-classification-v1",
-            "rule_version": CLASSIFY_VERSION,
-            "count": len(results),
-            "classifications": results,
-        }
+        payload = classification_payload(manifest, results, registry)
         _atomic_write_json(output / CLASSIFICATION_NAME, payload)
     except GdtError as error:
         log.error("%s", error)
-        return 1
+        return 2
     ok = sum(1 for item in results if item["status"] == "OK")
     unknown = sum(1 for item in results if item["status"] == "UNKNOWN")
     conflict = sum(1 for item in results if item["status"] == "CONFLICT")
@@ -265,7 +304,12 @@ def main(argv: list[str] | None = None) -> int:
         len(results), ok, unknown, conflict,
     )
     log.info("Kết quả: %s", output / CLASSIFICATION_NAME)
-    return 0
+    summary = quality_summary("classify", results, complete_status="OK")
+    try:
+        return write_summary(args.summary_json, summary)
+    except GdtError as error:
+        log.error("%s", error)
+        return 2
 
 
 __all__ = [

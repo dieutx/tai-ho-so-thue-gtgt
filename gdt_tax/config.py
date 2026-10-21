@@ -25,11 +25,20 @@ from .dates import (
     ETAX_CUTOFF_DEFAULT,
     MAX_DAYS_PER_SEARCH_DEFAULT,
     parse_date,
-    split_periods,
 )
 from .errors import ConfigError
 from .headers import DEFAULT_PROFILE, PROFILES
 from .models import SearchPeriod
+from .portal_profiles import (
+    DVC_PROFILE,
+    ETAX_PROFILE,
+    LEGACY_PROFILES,
+    LegacyProfile,
+    PortalProfile,
+    RoutingPolicy,
+    compatibility_routing,
+    profile_for,
+)
 from .proxy import parse_proxy
 
 ENV_PREFIX = "GDT_"
@@ -140,6 +149,7 @@ class Settings:
     log_file: str = ""
     #: Thư mục lưu nguyên request/response để dựng fixture (``--dump-http``).
     http_dump_dir: str = ""
+    http_dump_private: bool = False
     #: Bộ header gửi đi: ``browser`` (mặc định) hoặc ``minimal``. Xem gdt_tax.headers.
     header_profile: str = DEFAULT_PROFILE
     #: Proxy cho mọi request (``--proxy``/``GDT_PROXY_URL``); trống là đi trực tiếp.
@@ -150,23 +160,21 @@ class Settings:
     legacy_etax: bool = True
     #: Tạm tắt toàn bộ request tới dichvucong.gdt.gov.vn, kể cả đăng nhập.
     dvc_enabled: bool = False
+    dvc_profile: PortalProfile = DVC_PROFILE
+    etax_profile: PortalProfile = ETAX_PROFILE
+    legacy_profiles: tuple[LegacyProfile, ...] = LEGACY_PROFILES
+    routing_policy: RoutingPolicy | None = None
 
     # --- Dẫn xuất ---
     def periods(self) -> list[SearchPeriod]:
         """Danh sách đoạn tra cứu cần chạy, theo thứ tự thời gian."""
-        planned = list(
-            split_periods(
-                self.from_date,
-                self.to_date,
-                cutoff=self.etax_cutoff,
-                max_days=self.max_days_per_search,
-            )
-        )
-        return [
-            SearchPeriod(p.start, p.end, SOURCE_ETAX_LEGACY)
-            if p.source == SOURCE_ETAX and (self.legacy_etax or not self.dvc_enabled) else p
-            for p in planned
-        ]
+        return self.execution_plan().periods
+
+    def execution_plan(self):
+        return (self.routing_policy or compatibility_routing(self)).plan(
+            self.from_date, self.to_date, max_days=self.max_days_per_search,
+            enabled=self.source_enabled, dvc_profile=self.dvc_profile,
+            source_limits={source: profile_for(self, source).max_days for source in ('DVC', 'ETAX', 'ETAX_LEGACY')})
 
     def source_enabled(self, source: str) -> bool:
         return source == SOURCE_ETAX_LEGACY or (
@@ -272,6 +280,7 @@ class Settings:
                 extra_headers=pick("extra_headers", env.text_map, "EXTRA_HEADERS") or {},
                 log_file=pick("log_file", env.text, "LOG_FILE"),
                 http_dump_dir=pick("http_dump_dir", env.text, "HTTP_DUMP_DIR"),
+                http_dump_private=pick("http_dump_private", env.boolean, "HTTP_DUMP_PRIVATE", False),
                 header_profile=pick("header_profile", env.text, "HEADER_PROFILE", DEFAULT_PROFILE),
                 proxy_url=pick("proxy_url", env.text, "PROXY_URL"),
                 legacy_etax=bool(pick("legacy_etax", env.boolean, "LEGACY_ETAX", True)),

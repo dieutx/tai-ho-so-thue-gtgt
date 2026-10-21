@@ -11,41 +11,51 @@ from decimal import Decimal, InvalidOperation
 
 from lxml import etree
 
-MAX_XML_BYTES = 32 * 1024 * 1024
-MAX_XML_DEPTH = 100
-MAX_XML_NODES = 200_000
+from ..xml_policy import MAX_XML_BYTES, MAX_XML_DEPTH, MAX_XML_NODES, XmlPolicy, XmlReadError
+from ..xml_policy import parse_xml as _parse_xml
 
 _WHITESPACE = re.compile(r"[\s\u00a0]")
 
 
-class XmlReadError(Exception):
-    """XML không đọc được (lỗi cú pháp, quá lớn, quá sâu...)."""
-
-
 def parse_xml(data: bytes) -> etree._Element:
     """Parse XML an toàn; ném :class:`XmlReadError` thay vì để lỗi lọt ra."""
-    if len(data) > MAX_XML_BYTES:
-        raise XmlReadError("XML_TOO_LARGE")
-    parser = etree.XMLParser(
-        resolve_entities=False,
-        load_dtd=False,
-        no_network=True,
-        huge_tree=False,
-        recover=False,
-    )
-    try:
-        root = etree.fromstring(data, parser=parser)
-    except (etree.XMLSyntaxError, ValueError, TypeError) as error:
-        raise XmlReadError(f"INVALID_XML: {error}") from error
-    if root is None:
-        raise XmlReadError("EMPTY_XML")
-    return root
+    return _parse_xml(data, XmlPolicy(MAX_XML_BYTES, MAX_XML_DEPTH, MAX_XML_NODES))
 
 
 def namespace_map(root: etree._Element) -> dict[str, str]:
     """Map tiền tố XPath cho namespace mặc định của root (nếu có)."""
-    default = root.nsmap.get(None)
-    return {"n": default} if default else {}
+    uri = etree.QName(root).namespace
+    return {"n": uri} if uri else {}
+
+
+def main_scope(root: etree._Element) -> tuple[etree._Element, etree._Element]:
+    """Select a single main declaration and its metadata, excluding appendices."""
+    roots = {'HSoThueDTu', 'TBao', 'TKhai'}
+    if localname(root) not in roots:
+        documents = [node for node in root.iterdescendants() if localname(node) in roots
+                     and not any(localname(parent) in roots for parent in node.iterancestors())]
+        if len(documents) > 1:
+            raise XmlReadError('AMBIGUOUS_MAIN_DECLARATION')
+        if documents:
+            root = documents[0]
+    uri = etree.QName(root).namespace
+    candidates = [node for node in root.iter() if isinstance(node.tag, str)
+                  and etree.QName(node).namespace == uri and localname(node) == 'HSoKhaiThue'
+                  and not in_appendix(node)]
+    if len(candidates) > 1:
+        raise XmlReadError('AMBIGUOUS_MAIN_DECLARATION')
+    primary = candidates[0] if candidates else root
+    common = [node for node in primary.iter() if isinstance(node.tag, str)
+              and etree.QName(node).namespace == uri and localname(node) == 'TTinChung'
+              and not in_appendix(node)]
+    if len(common) > 1:
+        raise XmlReadError('AMBIGUOUS_DECLARATION_METADATA')
+    return primary, common[0] if common else primary
+
+
+def in_appendix(node: etree._Element) -> bool:
+    return any((localname(parent) or '').casefold().startswith(('pluc', 'bangke', 'appendix'))
+               for parent in node.iterancestors())
 
 
 def localname(element: etree._Element) -> str | None:
@@ -80,29 +90,7 @@ def find_first(root: etree._Element, paths, ns: dict[str, str]) -> tuple[str | N
     return None, None
 
 
-def _split_decimal(text: str) -> str:
-    """Chuẩn hóa dấu phân cách của một chuỗi số về dạng ``1234567.89``."""
-    has_comma = "," in text
-    has_dot = "." in text
-    if has_comma and has_dot:
-        # Dấu xuất hiện sau cùng là dấu thập phân (1.234,56 hoặc 1,234.56).
-        if text.rfind(",") > text.rfind("."):
-            return text.replace(".", "").replace(",", ".")
-        return text.replace(",", "")
-    if has_comma or has_dot:
-        separator = "," if has_comma else "."
-        parts = text.split(separator)
-        if len(parts) > 2:
-            # Xuất hiện nhiều lần ⇒ toàn là dấu phân cách nghìn.
-            return "".join(parts)
-        # Một lần: theo sau đúng 3 chữ số ⇒ phân cách nghìn (1.234 / 1,234).
-        if len(parts[1]) == 3 and len(parts[0]) >= 1:
-            return "".join(parts)
-        return f"{parts[0]}.{parts[1]}" if parts[1] else parts[0]
-    return text
-
-
-def normalize_number(raw: str | None) -> tuple[str | None, str | None]:
+def normalize_number(raw: str | None, numeric_format: str = 'auto') -> tuple[str | None, str | None]:
     """Chuẩn hóa số: bỏ dấu phân cách nghìn, giữ dấu trừ và phần thập phân.
 
     Trả ``(value, warning)``. Không biến giá trị lỗi thành 0 — trả ``None`` kèm
@@ -118,12 +106,40 @@ def normalize_number(raw: str | None) -> tuple[str | None, str | None]:
         sign, text = text[0], text[1:]
     if not text or not text.replace(",", "").replace(".", "").isdigit():
         return None, "PARSE_VALUE_ERROR"
-    cleaned = sign + _split_decimal(text)
+    formats = {'xml_decimal', 'vi', 'en', 'auto'}
+    if numeric_format not in formats:
+        return None, 'UNSUPPORTED_NUMBER_FORMAT'
+    if numeric_format == 'auto':
+        if '.' in text and ',' in text:
+            numeric_format = 'vi' if text.rfind(',') > text.rfind('.') else 'en'
+        elif any(text.count(separator) > 1 for separator in ('.', ',')):
+            numeric_format = 'vi' if '.' in text else 'en'
+        elif re.fullmatch(r'\d+[.,]\d{3}', text):
+            return None, 'AMBIGUOUS_NUMBER_FORMAT'
+        else:
+            numeric_format = 'vi' if ',' in text else 'xml_decimal'
+    if numeric_format == 'xml_decimal':
+        if not re.fullmatch(r'(?:\d+(?:\.\d*)?|\.\d+)', text):
+            return None, 'PARSE_VALUE_ERROR'
+        cleaned = text
+    else:
+        group, decimal = ('.', ',') if numeric_format == 'vi' else (',', '.')
+        integer, separator, fraction = text.partition(decimal)
+        if separator and (decimal in fraction or (fraction and not fraction.isdigit())):
+            return None, 'PARSE_VALUE_ERROR'
+        if group in integer:
+            pattern = r'\d{1,3}(?:' + re.escape(group) + r'\d{3})+'
+            if not re.fullmatch(pattern, integer):
+                return None, 'PARSE_VALUE_ERROR'
+        elif not integer.isdigit():
+            return None, 'PARSE_VALUE_ERROR'
+        cleaned = integer.replace(group, '') + ('.'+fraction if separator and fraction else '')
+    cleaned = sign + cleaned
     try:
-        Decimal(cleaned)
+        number = Decimal(cleaned)
     except InvalidOperation:
         return None, "PARSE_VALUE_ERROR"
-    return cleaned, None
+    return format(number, 'f'), None
 
 
 def is_zero(value: str | None) -> bool:
@@ -144,6 +160,8 @@ __all__ = [
     "find_text",
     "is_zero",
     "localname",
+    "main_scope",
+    "in_appendix",
     "namespace_map",
     "normalize_number",
     "parse_xml",

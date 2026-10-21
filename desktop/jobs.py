@@ -18,6 +18,7 @@ from gdt_tax.captcha.base import CaptchaSolver, normalize_text
 from gdt_tax.captcha.ddddocr_solver import DdddOcrSolver
 from gdt_tax.errors import CaptchaError, StorageError
 from gdt_tax.proxy import parse_proxy
+from gdt_tax.redaction import redact_text
 from gdt_tax.run_hooks import RunCancelled, RunHooks
 
 from .documents import counters, verify_rows
@@ -40,7 +41,7 @@ class Redactor:
     def __call__(self, text: str) -> str:
         for value in self.secrets:
             text = text.replace(value, "***")
-        text = re.sub(r"(https?://[^\s?]+)\?[^\s]+", r"\1?***", text)
+        text = redact_text(text)
         text = re.sub(r"(?i)((?:password|matkhau|token|cookie|authorization|dse_sessionId|csrf)\s*[=:]\s*)[^\s,;]+", r"\1***", text)
         text = re.sub(r"(?<!\w)\d{10,}(?!\w)", "***", text)
         text = re.sub(r"(?i)([A-Z]:[\\/](?:Users|Documents and Settings)[\\/])[^\\/]+", r"\1***", text)
@@ -237,7 +238,8 @@ class Worker(QObject):
         except Exception as error:
             logging.getLogger('gdt_tax.desktop').error('Tác vụ thất bại: %s', self.redactor(str(error)))
             message = storage_message(error) if isinstance(error, (OSError, StorageError)) else str(error)
-            result = JobResult("ERROR", self.redactor(message), self.config.output)
+            result = JobResult("ERROR", self.redactor(message), self.config.output,
+                               error_code=getattr(error, 'code', ''))
         result.task_id = task_id
         if result.state == 'ERROR' and not result.issues:
             result.errors = max(1, result.errors)

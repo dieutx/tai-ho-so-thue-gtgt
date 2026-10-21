@@ -13,14 +13,17 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from dataclasses import replace
 
+from ..auth_outcomes import raise_terminal
 from ..captcha import fetch_captcha
 from ..constants import CASE_DETAIL, LANDING
+from ..contracts import Solver, Transport
 from ..csrf import csrf_token
 from ..headers import build_page_headers, build_xhr_headers
-from ..http import HttpClient
 from ..models import CaseRecord, PageResult, SearchPeriod
-from ..parsing import page_count, parse_records
+from ..parsing import page_count, parse_record_table
+from ..portal_profiles import PortalProfile, profile_for
 
 
 class Portal(ABC):
@@ -31,10 +34,14 @@ class Portal(ABC):
     #: Tham số ``loai`` của trang chi tiết hồ sơ.
     detail_loai: str = ""
 
-    def __init__(self, http: HttpClient, captcha, settings, logger: logging.Logger | None = None) -> None:
+    def __init__(self, http: Transport, captcha: Solver, settings, logger: logging.Logger | None = None) -> None:
         self.http = http
         self.captcha = captcha
         self.settings = settings
+        self.detail_html = ''
+        selected = profile_for(settings, self.source if self.source in {'DVC', 'ETAX'} else 'DVC')
+        assert isinstance(selected, PortalProfile)
+        self.capabilities = selected
         self.logger = logger or logging.getLogger(f"gdt_tax.portal.{self.source.lower()}")
 
     @property
@@ -82,23 +89,33 @@ class Portal(ABC):
         """Mở trang chi tiết và lấy token CSRF của form tải xuống."""
         url = self.detail_url(record)
         response = self.http.get(url, headers=self.page_headers(headers={"Referer": self.landing_url}))
+        raise_terminal(response, 'DVC', authenticated=True)
+        self.detail_html = response.text if response.status_code == 200 else ''
         csrf = csrf_token(response.text) if response.status_code == 200 else ""
         return url, csrf
 
     def _page_result(self, response) -> PageResult:
+        raise_terminal(response, 'DVC', authenticated=True)
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
+        scope = ('#' if self.capabilities.scope_kind == 'id' else '.') + self.capabilities.result_container
+        schema = replace(self.capabilities.response_contract, container=scope)
+        parsed = parse_record_table(response.text, self.source, schema=schema)
         result = PageResult(
-            records=parse_records(response.text, self.source),
+            records=parsed.records,
             total_pages=page_count(response.text, self.source),
             http_status=response.status_code,
+            diagnostics=parsed.diagnostics,
         )
         # Optional GUI feedback; CLI solvers keep their existing behavior.
-        valid = result.records or (result.total_pages is not None and result.total_pages >= 0)
-        method = "accepted" if valid else "rejected"
-        feedback = getattr(self.captcha, method, None)
-        if callable(feedback):
-            feedback()
+        if parsed.diagnostics.complete:
+            feedback = getattr(self.captcha, "accepted", None)
+            if callable(feedback):
+                feedback()
+        elif parsed.diagnostics.status == "CAPTCHA_INVALID":
+            feedback = getattr(self.captcha, "rejected", None)
+            if callable(feedback):
+                feedback()
         return result
 
 

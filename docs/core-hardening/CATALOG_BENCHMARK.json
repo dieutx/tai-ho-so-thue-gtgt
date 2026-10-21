@@ -1,0 +1,61 @@
+{
+  "environment": {
+    "platform": "Windows-10-10.0.22631-SP0",
+    "python": "3.11.15"
+  },
+  "method": "real fsync/atomic writes and real openpyxl saves; legacy policy simulated with current writer at N=100",
+  "large_baseline_operation_counts_only": [
+    {
+      "records": 100,
+      "workbook_saves": 100,
+      "catalog_commits": 100,
+      "rows_materialized": 5050
+    },
+    {
+      "records": 1000,
+      "workbook_saves": 1000,
+      "catalog_commits": 1000,
+      "rows_materialized": 500500
+    },
+    {
+      "records": 5000,
+      "workbook_saves": 5000,
+      "catalog_commits": 5000,
+      "rows_materialized": 12502500
+    }
+  ],
+  "measurements": [
+    {
+      "records": 100,
+      "mode": "per_record_reports",
+      "workbook_saves": 100,
+      "bytes_written": 4775145,
+      "catalog_commits": 100,
+      "elapsed_seconds": 5.2925
+    },
+    {
+      "records": 100,
+      "mode": "checkpointed",
+      "workbook_saves": 1,
+      "bytes_written": 147377,
+      "catalog_commits": 2,
+      "elapsed_seconds": 0.0928
+    },
+    {
+      "records": 1000,
+      "mode": "checkpointed",
+      "workbook_saves": 1,
+      "bytes_written": 4101143,
+      "catalog_commits": 11,
+      "elapsed_seconds": 1.5369
+    },
+    {
+      "records": 5000,
+      "mode": "checkpointed",
+      "workbook_saves": 1,
+      "bytes_written": 80372792,
+      "catalog_commits": 51,
+      "elapsed_seconds": 26.9205
+    }
+  ]
+}

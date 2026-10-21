@@ -34,10 +34,18 @@ class CaptchaError(GdtError):
 
 class PortalVerificationError(GdtError):
     """The portal returned an access verification page instead of app content."""
+    code = 'AUTH_ACCESS_VERIFICATION'
+
+    def __init__(self, message):
+        super().__init__(self.code + ': ' + message)
 
 
 class SearchError(GdtError):
     """Không tra cứu được trang kết quả sau nhiều lần thử."""
+
+
+class SchemaChangedError(SearchError):
+    """Result structure is unverified; retrying OCR cannot repair this page."""
 
 
 class DownloadError(GdtError):
@@ -55,6 +63,9 @@ class LegacyEtaxError(GdtError):
 class LegacyPageError(LegacyEtaxError):
     """Trang nghiệp vụ legacy không trả đúng form/màn hình sau khi đã đăng nhập.
 
-    Desktop dùng lỗi này để đóng phiên, đăng nhập lại **một lần** rồi thử lại;
-    nếu vẫn lỗi thì báo nguyên văn trang cổng trả về thay vì đoán là hết phiên.
+    Không phải bằng chứng hết phiên; dừng và báo cấu trúc chưa nhận diện.
     """
+    code = 'AUTH_SCHEMA_UNKNOWN'
+
+    def __init__(self, message):
+        super().__init__(self.code + ': ' + message)

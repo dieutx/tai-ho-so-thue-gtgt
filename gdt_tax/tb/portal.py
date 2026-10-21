@@ -12,14 +12,15 @@ GET kèm ``pn`` (đúng như ``gotoPage`` trên trang thật).
 
 from __future__ import annotations
 
-from ..constants import LEGACY_ETAX_BASE, TB_FORM_ID, TB_OPERATION, TB_RESULT_TABLE_ID
 from ..dates import format_date
 from ..errors import LegacyEtaxError
 from ..headers import build_page_headers
+from ..integrity import validate_pdf
+from ..legacy_navigation import LegacyBusinessPortal, form_fields
 from ..models import SearchPeriod
-from ..portals.etax_legacy import EtaxLegacyPortal, _form_fields
+from ..table_contracts import ParseDiagnostics
 from .models import TbPageResult, ThongBao
-from .parsing import parse_tb_records, tb_page_count
+from .parsing import parse_tb_table, tb_page_count
 
 #: Trang trả lại bảng rỗng kèm một trong các câu này khi không có thông báo nào.
 _EMPTY_MARKERS = (
@@ -41,11 +42,13 @@ _SESSION_KEYS = (
 
 def is_tb_pdf(data: bytes) -> bool:
     """Dữ liệu có phải PDF (không phải HTML lỗi/hết phiên)."""
-    return data.lstrip()[:5] == b"%PDF-"
+    return validate_pdf(data).ok
 
 
-class TbPortal(EtaxLegacyPortal):
+class TbPortal(LegacyBusinessPortal):
     """Portal thông báo: dùng lại đăng nhập legacy, thêm tra cứu/tải TB."""
+
+    source = 'TB'
 
     def _open_tb_page(self) -> None:
         """Mở trang tra cứu thông báo (form ``tKhaiForm``).
@@ -54,7 +57,7 @@ class TbPortal(EtaxLegacyPortal):
         chung của portal legacy thay vì chỉ so chuỗi ``tKhaiForm``.
         """
         response, form_id = self._open_operation_page(
-            TB_OPERATION, TB_FORM_ID, "thông báo"
+            self.capabilities.operation, self.capabilities.form_id, "thông báo"
         )
         self._search_form_id = form_id
         self._search_page_html = response.text
@@ -66,8 +69,8 @@ class TbPortal(EtaxLegacyPortal):
             self._search_form_id,
             self._search_page_url,
             {
-                "dse_operationName": TB_OPERATION,
-                "dse_nextEventName": "query",
+                "dse_operationName": self.capabilities.operation,
+                "dse_nextEventName": self.capabilities.query_event,
                 "pageNumber": "1",
                 "tuNgayNop": format_date(period.start),
                 "denNgayNop": format_date(period.end),
@@ -76,18 +79,18 @@ class TbPortal(EtaxLegacyPortal):
 
     def _query_page(self, page: int):
         """Phân trang: GET kèm ``pn`` theo các khóa phiên của trang kết quả hiện tại."""
-        _, fields = _form_fields(self._search_page_html, self._search_form_id)
+        _, fields = form_fields(self._search_page_html, self._search_form_id)
         params = {key: fields[key] for key in _SESSION_KEYS if fields.get(key)}
         params.update(
             {
-                "dse_operationName": TB_OPERATION,
+                "dse_operationName": self.capabilities.operation,
                 "dse_errorPage": "error_page.jsp",
-                "dse_nextEventName": "query",
-                "pn": str(page),
+                "dse_nextEventName": self.capabilities.query_event,
+                self.capabilities.page_parameter: str(page),
             }
         )
         return self.http.get(
-            f"{LEGACY_ETAX_BASE}/Request",
+            self.capabilities.request_url,
             params=params,
             headers=build_page_headers(profile=self.profile),
         )
@@ -101,24 +104,26 @@ class TbPortal(EtaxLegacyPortal):
         if response.status_code != 200:
             return TbPageResult(http_status=response.status_code)
         empty = any(marker in response.text for marker in _EMPTY_MARKERS)
-        form_id = self._form_id_for_operation(response.text, TB_OPERATION, self._search_form_id)
-        if not form_id or (TB_RESULT_TABLE_ID not in response.text and not empty):
+        form_id = self._form_id_for_operation(response.text, self.capabilities.operation, self._search_form_id)
+        if not form_id or (self.capabilities.table_id not in response.text and not empty):
             if self.session_state is not None:
                 raise LegacyEtaxError(
                     "Cổng trả HTTP 200 nhưng thiếu bảng/form thông báo. "
                     "Hãy thử lại; nếu vẫn lỗi, đăng xuất rồi đăng nhập hoặc xem nhật ký."
                 )
             self.logger.warning(
-                "Legacy không trả bảng thông báo/form tra cứu; có thể đã hết phiên"
+                "SCHEMA_CHANGED: legacy thiếu bảng hoặc form thông báo"
             )
-            return TbPageResult(http_status=response.status_code)
+            return TbPageResult(http_status=response.status_code, diagnostics=ParseDiagnostics(reasons=["RESULT_FORM_OR_TABLE_MISSING"]))
         self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
+        parsed = parse_tb_table(response.text, schema=self.capabilities.schema)
         return TbPageResult(
-            records=parse_tb_records(response.text),
-            total_pages=tb_page_count(response.text),
+            records=parsed.records,
+            total_pages=tb_page_count(response.text, table_id=self.capabilities.table_id),
             http_status=response.status_code,
+            diagnostics=parsed.diagnostics,
         )
 
     def download_tb(self, record: ThongBao) -> bytes | None:
@@ -131,8 +136,8 @@ class TbPortal(EtaxLegacyPortal):
             self._search_form_id,
             self._search_page_url,
             {
-                "dse_operationName": TB_OPERATION,
-                "dse_nextEventName": "download",
+                "dse_operationName": self.capabilities.operation,
+                "dse_nextEventName": self.capabilities.download_event,
                 "messageId": record.message_id,
                 "ma_tbao": record.ma_tbao,
             },

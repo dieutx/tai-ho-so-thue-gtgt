@@ -6,17 +6,17 @@ có sẵn HTML thật thì phải tự dò lại từ đầu. Vì vậy mọi re
 :class:`~gdt_tax.http.HttpClient` đều có thể:
 
 * được log một dòng ngắn ở mức ``INFO`` để nhìn thấy chuyện gì đang xảy ra,
-* được log đầy đủ header/body ở mức ``DEBUG`` (``-v``, hoặc luôn có trong file
-  log khi dùng ``--log-file``),
-* được lưu nguyên văn ra file khi chạy với ``--dump-http``.
+* được log metadata đã làm sạch ở mức ``DEBUG``,
+* được lưu metadata vào support dump khi chạy với ``--dump-http``.
 
-Header nhạy cảm (``Cookie``, ``Authorization``...) và trường nhạy cảm trong body
-(``matKhau``, ``_csrf``...) luôn bị che bằng ``***`` trước khi ghi ra log hay ra
-file, nên có thể gửi kèm log cho người khác mà không lộ phiên đăng nhập.
+Raw dump phải bật riêng, có nhãn PRIVATE và không thuộc gói hỗ trợ.
+Structured redaction không bảo đảm mọi dữ liệu ngoài đã sạch; support dump
+không ghi payload gốc.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -25,6 +25,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .redaction import MASK, SAFE_QUERY_FIELDS, SENSITIVE_FIELDS, redact_data, redact_text, safe_url
+
 LOGGER_NAME = "gdt_tax.traffic"
 
 #: Header chứa phiên đăng nhập hoặc khoá truy cập — luôn bị che.
@@ -32,11 +34,6 @@ SENSITIVE_HEADERS = frozenset(
     {"cookie", "set-cookie", "authorization", "proxy-authorization", "x-xsrf-token"}
 )
 #: Trường trong body bị che (so khớp không phân biệt hoa thường).
-SENSITIVE_FIELDS = frozenset(
-    {"matkhau", "mat_khau", "password", "_password", "pwd", "_csrf", "token", "api_key",
-     "dse_sessionid", "dse_processorid"}
-)
-MASK = "***"
 #: Độ dài tối đa của body khi in ra log.
 BODY_LOG_LIMIT = 500
 #: Giới hạn mặc định cho mỗi file dump (2 MB).
@@ -54,43 +51,34 @@ def mask_secrets(text: str, secrets: Iterable[str] = ()) -> str:
     for secret in secrets:
         if secret:
             masked = masked.replace(secret, MASK)
-    return masked
+    return redact_text(masked)
 
 
 def mask_headers(headers: Mapping[str, Any] | None) -> dict[str, str]:
     """Bản sao header đã che giá trị nhạy cảm; dùng cho cả log và file dump."""
     masked: dict[str, str] = {}
     for name, value in (headers or {}).items():
-        masked[str(name)] = MASK if str(name).lower() in SENSITIVE_HEADERS else str(value)
+        key = str(name).lower()
+        masked[str(name)] = (safe_url(str(value)) if key in {"referer", "location", "origin"}
+                             else str(value) if key in {"user-agent", "accept", "accept-language",
+                                 "accept-encoding", "content-type", "content-length"}
+                             else MASK)
     return masked
 
 
 def mask_data(data: Any) -> Any:
     """Che giá trị của các trường nhạy cảm trong dict/list, giữ nguyên phần còn lại."""
-    if isinstance(data, Mapping):
-        return {
-            key: (MASK if str(key).lower() in SENSITIVE_FIELDS else mask_data(value))
-            for key, value in data.items()
-        }
-    if isinstance(data, (list, tuple)):
-        if all(isinstance(item, (list, tuple)) and len(item) == 2 for item in data):
-            # form-urlencoded dạng danh sách (tên, giá trị)
-            return [
-                (key, MASK if str(key).lower() in SENSITIVE_FIELDS else value)
-                for key, value in data
-            ]
-        return [mask_data(item) for item in data]
-    return data
+    return redact_data(dict(data) if isinstance(data, Mapping) else data)
 
 
 def body_as_text(body: Any) -> str:
     """Đổi body bất kỳ thành chuỗi; cấu trúc dict/list được che rồi ghi dạng JSON."""
     if isinstance(body, bytes):
-        return body.decode("utf-8", errors="replace")
+        return redact_text(body.decode("utf-8", errors="replace"))
     if body is None:
         return ""
     if isinstance(body, str):
-        return body
+        return redact_text(body)
     return json.dumps(mask_data(body), ensure_ascii=False, default=str)
 
 
@@ -110,7 +98,7 @@ def describe_params(params: Any, *, limit: int = BODY_LOG_LIMIT) -> str:
     """
     if isinstance(params, Mapping):
         text = "&".join(
-            f"{key}={MASK if str(key).lower() in SENSITIVE_FIELDS else value}"
+            f"{key}={value if str(key).lower() in SAFE_QUERY_FIELDS else MASK}"
             for key, value in params.items()
         )
     else:
@@ -148,8 +136,8 @@ class TrafficDumper:
         <thời điểm>/0001-GET-ho-so-search.response.txt   mã trạng thái, header, body
         <thời điểm>/0001-GET-ho-so-search.response.body  body nguyên bản (nhị phân)
 
-    File ``.response.body`` giữ nguyên byte gốc nên có thể so sánh chính xác với
-    phản hồi thật, còn ``.response.txt`` để đọc bằng mắt.
+    Mặc định chỉ ghi metadata/hash. File ``.response.body`` chỉ xuất hiện với
+    private=True, trong thư mục PRIVATE, chứa bytes gốc và không được chia sẻ.
     """
 
     def __init__(
@@ -159,11 +147,18 @@ class TrafficDumper:
         max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
         logger: logging.Logger | None = None,
         clock: Callable[[], datetime] = datetime.now,
+        private: bool = False,
+        max_records: int = 100,
     ) -> None:
+        self.private = private
+        self.max_records = max_records
         self.max_body_bytes = max_body_bytes
         self.logger = logger or logging.getLogger(LOGGER_NAME)
-        self.root = Path(directory) / clock().strftime("%Y%m%d-%H%M%S")
+        base = Path(directory) / "PRIVATE" if private else Path(directory)
+        self.root = base / clock().strftime("%Y%m%d-%H%M%S")
         self.count = 0
+        self.clock = clock
+        self.started = clock()
 
     def record(
         self,
@@ -177,12 +172,16 @@ class TrafficDumper:
         elapsed: float = 0.0,
     ) -> list[Path]:
         """Ghi một request và phản hồi của nó; trả về danh sách file đã tạo."""
+        if self.count >= self.max_records or (self.clock() - self.started).total_seconds() >= 900:
+            return []
         self.count += 1
         if self.count == 1:
             self.root.mkdir(parents=True, exist_ok=True)
+            if self.private:
+                self._write_text(self.root / "PRIVATE.txt", "PRIVATE: raw payloads; do not include in support bundles. Delete after diagnosis.")
             self.logger.info("Lưu traffic HTTP vào %s", self.root)
 
-        stem = f"{self.count:04d}-{method.upper()}-{slug(url)}"
+        stem = f"{self.count:04d}-{method.upper()}-{slug(safe_url(url))}"
         paths = [self._write_request(stem, method, url, params, headers, body)]
         paths.extend(self._write_response(stem, response, elapsed))
         return paths
@@ -196,12 +195,12 @@ class TrafficDumper:
         headers: Mapping[str, Any] | None,
         body: Any,
     ) -> Path:
-        lines = [f"{method.upper()} {url}"]
+        lines = [f"{method.upper()} {safe_url(url)}"]
         if params:
             lines.append(f"tham số: {describe_params(params, limit=self.max_body_bytes)}")
         lines += ["", "[header]"]
         lines += [f"{name}: {value}" for name, value in mask_headers(headers).items()]
-        text = describe_body(body, limit=self.max_body_bytes)
+        text = describe_body(body, limit=self.max_body_bytes) if self.private else body_fingerprint(body)
         if text:
             lines += ["", "[body]", text]
         return self._write_text(self.root / f"{stem}.request.txt", "\n".join(lines))
@@ -218,12 +217,12 @@ class TrafficDumper:
             f"{name}: {value}"
             for name, value in mask_headers(getattr(response, "headers", {})).items()
         ]
-        body_text = describe_body(getattr(response, "text", ""), limit=self.max_body_bytes)
+        body_text = describe_body(getattr(response, "text", ""), limit=self.max_body_bytes) if self.private else body_fingerprint(content)
         if body_text:
             lines += ["", "[body]", body_text]
 
         paths = [self._write_text(self.root / f"{stem}.response.txt", "\n".join(lines))]
-        if content:
+        if content and self.private:
             body_path = self.root / f"{stem}.response.body"
             if len(content) > self.max_body_bytes:
                 truncated = content[: self.max_body_bytes]
@@ -245,6 +244,13 @@ class TrafficDumper:
     def _write_bytes(self, path: Path, data: bytes) -> Path:
         path.write_bytes(data)
         return path
+
+
+def body_fingerprint(body: Any) -> str:
+    if body is None or body == "" or body == b"":
+        return ""
+    data = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False, default=str).encode("utf-8")
+    return f"payload omitted; bytes={len(data)}; sha256={hashlib.sha256(data).hexdigest()}"
 
 
 __all__ = [

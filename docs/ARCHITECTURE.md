@@ -133,10 +133,11 @@ DVC ở đợt này. Test legacy mới và giới hạn suy luận được ghi 
 - **Cổng chặn theo IP quốc gia.** Đo thật từ Đức: `GET /tthc/login` hỏng ngay ở
   tầng kết nối (`Max retries exceeded`); cùng request qua proxy Hà Nội trả `200`
   kèm thẻ CSRF. Đây là lý do proxy Việt Nam là bắt buộc khi chạy trên VPS nước ngoài.
-- **Cổng không kiểm dấu vân tay trình duyệt** (chỉ 429 ở tầng ứng dụng + CAPTCHA ở
-  bước đăng nhập), nhưng công cụ vẫn mặc định gửi header như Chrome. Phần không sửa
-  được bằng header là HTTP/1.1 (không ALPN/HTTP2) và dấu vân tay TLS — xem mục
-  *Không bị nhận diện là Python* trong README.
+- **Chính sách kiểm tra trình duyệt có thể thay đổi.** Những quan sát lịch sử về
+  HTTP 429/CAPTCHA không chứng minh cổng hiện tại không kiểm fingerprint. Header
+  profile không bảo đảm được truy cập. Chưa có kiểm chứng live trong lượt sửa core
+  này; xem [playbook](core-hardening/PORTAL_PLAYBOOK.md) và báo cáo gdt-health để
+  tách public reachability khỏi năng lực đã xác thực.
 
 ## Ghi log và lưu traffic
 

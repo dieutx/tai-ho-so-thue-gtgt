@@ -93,13 +93,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--log-file",
         metavar="FILE",
-        help="Ghi thêm toàn bộ log ở mức chi tiết ra file (kèm header/body của request)",
+        help="Ghi log chẩn đoán đã làm sạch, không ghi payload gốc",
     )
     parser.add_argument(
         "--dump-http",
         metavar="THƯ_MỤC",
-        help="Lưu nguyên request/response ra thư mục để dựng fixture khi cổng đổi",
+        help="Lưu metadata/hash HTTP đã làm sạch vào thư mục chẩn đoán",
     )
+    parser.add_argument("--dump-http-private", action="store_true", default=None,
+                        help="Bật raw response trong thư mục PRIVATE; không dùng cho gói hỗ trợ")
     parser.add_argument(
         "--proxy",
         metavar="HOST:PORT:USER:PASS",
@@ -149,6 +151,7 @@ def _main(argv: list[str] | None = None) -> int:
             extra_headers=parse_headers(args.header) or None,
             log_file=args.log_file,
             http_dump_dir=args.dump_http,
+            http_dump_private=args.dump_http_private,
             header_profile=args.header_profile,
             proxy_url=args.proxy,
         )
@@ -193,6 +196,7 @@ def _main(argv: list[str] | None = None) -> int:
         logger=logger,
         extra_headers=settings.extra_headers,
         dump_dir=settings.http_dump_dir or None,
+        private_dump=settings.http_dump_private,
         header_profile=settings.header_profile,
         proxy=proxy,
     )

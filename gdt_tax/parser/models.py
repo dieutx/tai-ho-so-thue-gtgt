@@ -77,6 +77,10 @@ class ParsedDeclaration:
     mapping_version: str | None = None
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
+    mapping_sha256: str | None = None
+    registry_sha256: str | None = None
+    extraction_complete: bool | None = None
+    validation_status: str = 'UNKNOWN'
 
     def to_dict(self) -> dict:
         return asdict(self)

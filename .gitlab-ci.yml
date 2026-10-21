@@ -5,6 +5,7 @@
 stages:
   - test
   - lint
+  - windows
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -16,6 +17,8 @@ cache:
 
 test:
   stage: test
+  rules:
+    - when: on_success
   image: python:$PYTHON_VERSION
   parallel:
     matrix:
@@ -23,13 +26,44 @@ test:
   script:
     - python -m pip install --upgrade pip
     - python -m pip install .
-    - python -m unittest discover -s tests -t . -v
+    - python scripts/run_test_gate.py --profile minimal
+  artifacts:
+    when: always
+    paths:
+      - .cache/ci/minimal.json
 
 lint:
   stage: lint
+  rules:
+    - when: on_success
   image: python:3.12
   script:
     - python -m pip install --upgrade pip
     - python -m pip install ".[dev]"
     - ruff check .
-    - mypy gdt_tax
+    - mypy gdt_tax tests/test_core_contracts.py
+
+windows-full:
+  stage: windows
+  tags: [windows-x64]
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^desktop-v/'
+      when: on_success
+    - when: manual
+      allow_failure: true
+  script:
+    - py -3.11 -m venv .venv-release
+    - .venv-release/Scripts/python.exe -m pip install --no-deps -r requirements-desktop-windows-py311.lock
+    - .venv-release/Scripts/python.exe -m pip install --no-deps --no-build-isolation -e .
+    - .venv-release/Scripts/python.exe -m pip check
+    - .venv-release/Scripts/python.exe scripts/dependency_inventory.py verify --profile runtime
+    - powershell -NoProfile -File scripts/build_windows.ps1 -Python .venv-release/Scripts/python.exe -SkipInstall
+  artifacts:
+    when: always
+    paths:
+      - .cache/ci/
+      - .cache/smoke-*/source-report.json
+      - .cache/smoke-*/report-*.json
+      - .cache/optimization/gitlab-published.json
+      - dist/SHA256SUMS.txt
+      - dist/release-manifest.json

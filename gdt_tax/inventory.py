@@ -31,6 +31,7 @@ import sys
 import tempfile
 import zipfile
 from collections.abc import Iterable
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,13 +47,23 @@ from .archive_limits import (
 from .atomic import replace_with_retry
 from .errors import GdtError
 from .logging_setup import configure_streams
+from .outcomes import quality_summary, write_summary
+from .parser.xml_reader import in_appendix, main_scope
 from .run_hooks import RunHooks
+from .xml_policy import (
+    MAX_XML_BYTES,
+    MAX_XML_DEPTH,
+    MAX_XML_NODES,
+    XmlPolicy,
+    XmlReadError,
+    parse_xml,
+)
 
 LOGGER_NAME = "gdt_tax.inventory"
 
 #: Phiên bản schema manifest và thuật toán profile. Đổi khi thêm/bớt trường.
 INVENTORY_SCHEMA_VERSION = "artifact-inventory-v2"
-PROFILE_VERSION = "xml-profile-v2"
+PROFILE_VERSION = "xml-profile-v5"
 
 MANIFEST_NAME = "manifest_artifact.json"
 DISCOVERY_JSON = "bao_cao_discovery.json"
@@ -81,9 +92,6 @@ _DERIVED_NAMES = frozenset(
 )
 
 # --- Giới hạn tài nguyên (chống bomb/Zip Slip/XML quá lớn) ---
-MAX_XML_BYTES = 32 * 1024 * 1024
-MAX_XML_DEPTH = 100
-MAX_XML_NODES = 200_000
 MAX_STRUCTURE_PATHS = 20_000
 MAX_SIGNATURE_PATHS = 400
 
@@ -136,6 +144,9 @@ class XmlProfile:
     #: Băm của tập tên phần tử (bỏ path) — ổn định hơn khi thiếu bảng tùy chọn.
     structure_skeleton: str | None = None
     error: str | None = None
+    document_root: str | None = None
+    structural_markers: list[str] = field(default_factory=list)
+    indicator_codes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -189,6 +200,7 @@ class Manifest:
     summary: dict
     containers: list[Container]
     errors: list[dict]
+    cache_policy: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -215,19 +227,6 @@ def detect_format(data: bytes) -> str:
     if b"<" in data[:64]:
         return "xml"
     return "unknown"
-
-
-def _xml_parser() -> etree.XMLParser:
-    """Parser XML an toàn: không resolve entity/DTD, không gọi mạng."""
-    return etree.XMLParser(
-        resolve_entities=False,
-        load_dtd=False,
-        no_network=True,
-        huge_tree=False,
-        recover=False,
-        remove_comments=False,
-        remove_pis=False,
-    )
 
 
 def _localname(element: etree._Element) -> str | None:
@@ -298,11 +297,9 @@ def profile_xml(data: bytes) -> XmlProfile:
     if len(data) > MAX_XML_BYTES:
         return XmlProfile(status="error", error="XML_TOO_LARGE")
     try:
-        root = etree.fromstring(data, parser=_xml_parser())
-    except (etree.XMLSyntaxError, ValueError, TypeError) as error:
-        return XmlProfile(status="error", error=f"INVALID_XML: {error}")
-    if root is None:
-        return XmlProfile(status="error", error="EMPTY_XML")
+        root = parse_xml(data, XmlPolicy(MAX_XML_BYTES, MAX_XML_DEPTH, MAX_XML_NODES))
+    except XmlReadError as error:
+        return XmlProfile(status="error", error=str(error))
     try:
         first_by_name, paths, max_depth, node_count = _walk_xml(
             root, MAX_XML_DEPTH, MAX_XML_NODES
@@ -311,9 +308,24 @@ def profile_xml(data: bytes) -> XmlProfile:
         return XmlProfile(status="error", error=str(error))
 
     root_name = _localname(root)
-    default_ns = root.nsmap.get(None)
-    namespaces = sorted({uri for uri in root.nsmap.values() if uri})
+    namespaces = sorted({etree.QName(node).namespace for node in root.iter()
+                         if isinstance(node.tag, str) and etree.QName(node).namespace})
 
+    try:
+        primary, metadata = main_scope(root)
+    except XmlReadError as error:
+        return XmlProfile(status="error", error=str(error))
+    uri = etree.QName(primary).namespace
+    full_names = set(first_by_name)
+    first_by_name = {}
+    for node in metadata.iter():
+        if isinstance(node.tag, str) and etree.QName(node).namespace == uri and not in_appendix(node):
+            first_by_name.setdefault(_localname(node) or "", node)
+    document = next((node for node in (primary, *primary.iterancestors()) if _localname(node) in {"HSoThueDTu", "TBao", "TKhai"}), primary)
+    structural_markers = sorted({_localname(node) or "" for node in primary.iter()
+                                 if isinstance(node.tag, str) and etree.QName(node).namespace == uri
+                                 and (_localname(node) in {"CTieuTKhaiChinh", "HSoKhaiThue", "TBao"}
+                                      or (_localname(node) or "").startswith(("PLuc", "BangKe")))})
     form_code_el = _pick(first_by_name, ("maTKhai", "MSo", "maMauBieu"))
     form_name_el = _pick(first_by_name, ("tenTKhai", "Ten", "tenMauBieu"))
     version_el = _pick(first_by_name, ("pbanTKhaiXML", "PBan", "phienBan"))
@@ -344,7 +356,7 @@ def profile_xml(data: bytes) -> XmlProfile:
     basis_text = "\n".join(
         [
             root_name or "",
-            default_ns or "",
+            uri or "",
             _text(form_code_el) or "",
             _text(version_el) or "",
             "\n".join(signature_paths),
@@ -353,12 +365,12 @@ def profile_xml(data: bytes) -> XmlProfile:
     signature = sha256_bytes(basis_text.encode("utf-8"))
     # Skeleton = tập tên phần tử (không theo path), dùng để phát hiện thay đổi
     # cấu trúc thật thay vì chỉ khác do có/không bảng tùy chọn.
-    skeleton = sha256_bytes("\n".join(sorted(first_by_name)).encode("utf-8"))
+    skeleton = sha256_bytes("\n".join(sorted(full_names)).encode("utf-8"))
 
     return XmlProfile(
         status="ok",
         root_element=root_name,
-        namespace=default_ns,
+        namespace=uri,
         namespaces=namespaces,
         possible_form_code=_text(form_code_el),
         possible_form_name=form_name,
@@ -379,6 +391,12 @@ def profile_xml(data: bytes) -> XmlProfile:
         node_count=node_count,
         structure_signature=signature,
         structure_skeleton=skeleton,
+        document_root=_localname(document),
+        structural_markers=structural_markers,
+        indicator_codes=sorted({_localname(node) or "" for node in primary.iter()
+                                if isinstance(node.tag, str) and etree.QName(node).namespace == uri
+                                and not in_appendix(node)
+                                and re.fullmatch(r"ct[A-Za-z]?\d+[a-z]?", _localname(node) or "")}),
     )
 
 
@@ -566,32 +584,35 @@ def scan_directory(
     if not base.is_dir():
         raise GdtError(f"Thư mục nguồn không tồn tại hoặc không phải thư mục: {base}")
     cases = _load_cases(metadata_path) if metadata_path is not None else {}
+    valid_cache = isinstance(cache, InventoryCache) and cache.root == str(base.resolve()) and cache.policy == cache_policy()
     containers: list[Container] = []
     errors: list[dict] = []
     if selected_paths is not None and any(not path.resolve().is_relative_to(base.resolve()) for path in selected_paths):
         raise GdtError("Tệp được chọn nằm ngoài thư mục nguồn")
     candidates = base.rglob("*") if selected_paths is None else iter(dict.fromkeys(
         base / path.resolve().relative_to(base.resolve()) for path in selected_paths))
-    files = sorted(
-        path
-        for path in candidates
-        if path.is_file() and path.name not in _DERIVED_NAMES
-    )
+    files = sorted(path for path in candidates if path.name not in _DERIVED_NAMES
+                   and not path.name.endswith(".integrity.json")
+                   and not path.name.startswith(".gdt-")
+                   and _candidate_file(path))
     for path in files:
         (hooks or RunHooks()).check()
         rel_path = path.relative_to(base).as_posix()
-        stat = path.stat()
-        cached = (cache or {}).get(rel_path)
-        if (
-            not force
-            and cached is not None
-            and cached.size == stat.st_size
-            and abs(cached.mtime - stat.st_mtime) < 1e-6
-        ):
-            container = cached
-        else:
-            container = _scan_one(path, rel_path, log)
-        container.case = _case_view(cases[path.name]) if path.name in cases else None
+        try:
+            if path.is_symlink() or not path.resolve().is_relative_to(base.resolve()):
+                raise OSError("SYMLINK_OR_OUTSIDE_ROOT")
+            stat = path.stat()
+            cached = cache.get(rel_path) if valid_cache and cache is not None else None
+            if (not force and cached is not None and cached.status == "ok"
+                    and cached.size == stat.st_size
+                    and abs(cached.mtime - stat.st_mtime) < 1e-6):
+                container = deepcopy(cached)
+            else:
+                container = _scan_one(path, rel_path, log)
+        except OSError as error:
+            container = Container("", rel_path, 0, 0, None, "unknown", "error",
+                                  error=f"READ_ERROR: {error}")
+        container.case = _case_view(cases[path.name]) if len(cases.get(path.name, [])) == 1 else None
         containers.append(container)
         if container.status == "error":
             errors.append({"rel_path": rel_path, "error": container.error})
@@ -604,49 +625,73 @@ def scan_directory(
         summary=summary,
         containers=containers,
         errors=errors,
+        cache_policy=cache_policy(),
     )
 
 
-def _scan_one(path: Path, rel_path: str, log: logging.Logger) -> Container:
+def _candidate_file(path: Path) -> bool:
     try:
-        head = path.read_bytes()[:8] if path.stat().st_size < 8 else _read_head(path)
+        return path.is_symlink() or path.is_file()
+    except OSError:
+        # Retain the path so the per-file scan records the failed stat.
+        return True
+
+
+def _scan_one(path: Path, rel_path: str, log: logging.Logger) -> Container:
+    stat = path.stat()
+    try:
+        head = _read_head(path)
+        fmt = detect_format(head)
+        limit = MAX_XML_BYTES if fmt == "xml" else MAX_MEMBER_BYTES
+        if fmt != "zip" and stat.st_size > limit:
+            return Container("", rel_path, stat.st_size, stat.st_mtime, None, fmt,
+                             "error", error="SOURCE_TOO_LARGE")
+        digest = sha256_file(path)
     except OSError as error:
         return Container(
             container_id="",
             rel_path=rel_path,
-            size=path.stat().st_size,
-            mtime=path.stat().st_mtime,
+            size=stat.st_size,
+            mtime=stat.st_mtime,
             sha256=None,
             format="unknown",
             status="error",
             error=f"READ_ERROR: {error}",
         )
-    digest = sha256_file(path)
     if detect_format(head) == "zip":
         log.debug("Kiểm kê ZIP %s", rel_path)
         return scan_zip(path, rel_path, digest)
     try:
-        data = path.read_bytes()
+        with path.open("rb") as stream:
+            data = stream.read(limit + 1)
+        if len(data) > limit:
+            return Container(container_id=digest, rel_path=rel_path, size=len(data),
+                             mtime=stat.st_mtime, sha256=digest, format=detect_format(head),
+                             status="error", error="SOURCE_TOO_LARGE")
     except OSError as error:
         return Container(
             container_id=digest,
             rel_path=rel_path,
-            size=path.stat().st_size,
-            mtime=path.stat().st_mtime,
+            size=stat.st_size,
+            mtime=stat.st_mtime,
             sha256=digest,
             format=detect_format(head),
             status="error",
             error=f"READ_ERROR: {error}",
         )
+    if sha256_bytes(data) != digest:
+        return Container(digest, rel_path, stat.st_size, stat.st_mtime, digest, fmt,
+                         "error", error="SOURCE_CHANGED_DURING_SCAN")
     artifact = _artifact_from_bytes(None, path.name, data)
     return Container(
         container_id=digest,
         rel_path=rel_path,
-        size=path.stat().st_size,
-        mtime=path.stat().st_mtime,
+        size=stat.st_size,
+        mtime=stat.st_mtime,
         sha256=digest,
         format=artifact.format,
         status="ok" if artifact.status == "ok" else "error",
+        error=artifact.error,
         members=[artifact],
     )
 
@@ -721,6 +766,19 @@ def write_manifest(manifest: Manifest, output_dir: str | Path, name: str = MANIF
     return target
 
 
+class InventoryCache(dict[str, Container]):
+    def __init__(self, root: str, policy: str):
+        super().__init__()
+        self.root, self.policy = root, policy
+
+
+def cache_policy() -> str:
+    values = [PROFILE_VERSION, MAX_XML_BYTES, MAX_XML_DEPTH, MAX_XML_NODES,
+              MAX_MEMBER_BYTES, MAX_MEMBERS, MAX_TOTAL_UNCOMPRESSED, MAX_COMPRESSION_RATIO,
+              MAX_STRUCTURE_PATHS, MAX_SIGNATURE_PATHS]
+    return sha256_bytes(json.dumps(values).encode("utf-8"))
+
+
 def load_cache(path: str | Path) -> dict[str, Container]:
     """Nạp manifest cũ để tái sử dụng kết quả (incremental theo path+size+mtime)."""
     source = Path(path)
@@ -732,7 +790,11 @@ def load_cache(path: str | Path) -> dict[str, Container]:
         return {}
     if not isinstance(payload, dict) or payload.get("schema_version") != INVENTORY_SCHEMA_VERSION:
         return {}
-    cache: dict[str, Container] = {}
+    if payload.get("profile_version") != PROFILE_VERSION or payload.get("cache_policy") != cache_policy() or not isinstance(payload.get("root"), str):
+        return {}
+    if not isinstance(payload.get("containers"), list):
+        return {}
+    cache = InventoryCache(payload["root"], payload["cache_policy"])
     for raw in payload.get("containers", []):
         if not isinstance(raw, dict) or not isinstance(raw.get("rel_path"), str):
             continue
@@ -843,7 +905,8 @@ def build_discovery(manifest: Manifest) -> dict:
             }
         )
     acceptance_values = summary.get("acceptance_status_values", {})
-    has_acceptance = any("chấp nhận" in key.lower() for key in acceptance_values)
+    # Portal metadata is an unverified hint, not linked legal acceptance evidence.
+    has_acceptance = False
     report = {
         "schema_version": manifest.schema_version,
         "profile_version": manifest.profile_version,
@@ -853,6 +916,8 @@ def build_discovery(manifest: Manifest) -> dict:
         "structure_signatures": representatives,
         "ambiguities": ambiguities,
         "acceptance_evidence_available": has_acceptance,
+        "metadata_status_available": bool(acceptance_values),
+        "acceptance_policy": "UNKNOWN until independently verified evidence is linked to artifact",
         "open_questions": _open_questions(),
     }
     return report
@@ -993,6 +1058,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest-name", default=MANIFEST_NAME, help="Tên file manifest")
     parser.add_argument("--rehash", action="store_true", help="Bỏ qua cache, băm lại toàn bộ")
     parser.add_argument("--json-only", action="store_true", help="Chỉ ghi JSON, không ghi Markdown")
+    parser.add_argument("--summary-json", help="Ghi quality summary JSON, exit 0=đủ, 1=partial, 2=input lỗi")
     parser.add_argument("-v", "--verbose", action="store_true", help="Log chi tiết")
     return parser
 
@@ -1017,7 +1083,7 @@ def main(argv: list[str] | None = None) -> int:
         json_path, md_path = write_discovery(report, output)
     except GdtError as error:
         log.error("%s", error)
-        return 1
+        return 2
     summary = manifest.summary
     log.info(
         "Đã kiểm kê %s file, %s container, %s member, %s signature",
@@ -1028,7 +1094,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     log.info("Manifest: %s", manifest_path)
     log.info("Báo cáo: %s", json_path if args.json_only else md_path)
-    return 0
+    quality_rows = [{"status": c.status} for c in manifest.containers]
+    quality_rows.extend({"status": "error"} for c in manifest.containers for a in c.members
+                        if a.status == "error" or (a.xml is not None and a.xml.status == "error"))
+    outcome = quality_summary("inventory", quality_rows, complete_status="ok")
+    outcome["containers"] = len(manifest.containers)
+    outcome["scan_errors"] = len(manifest.errors)
+    if manifest.errors:
+        outcome["exit_code"] = 1
+    try:
+        return write_summary(args.summary_json, outcome)
+    except GdtError as error:
+        log.error("%s", error)
+        return 2
 
 
 __all__ = [

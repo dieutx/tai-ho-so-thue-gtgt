@@ -26,9 +26,23 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
+from gdt_tax.spreadsheet_values import append_row, csv_value
+
 from ..atomic import replace_with_retry
+from ..catalog import generation, serialized_catalog
 from ..constants import GNT_METADATA_CSV, GNT_METADATA_JSON, GNT_METADATA_XLSX
 from ..errors import StorageError
+from ..identity import key_from_row
+from ..integrity import (
+    candidate_paths,
+    matches_evidence,
+    read_bounded,
+    safe_destination,
+    source_reference,
+    validate_xml,
+    write_evidence,
+)
+from ..xml_policy import MAX_XML_BYTES
 from .models import GiayNopTien
 from .naming import gnt_xml_filename
 from .portal import is_gnt_xml
@@ -73,17 +87,19 @@ class GntStore:
 
     def find_existing(self, record: GiayNopTien) -> Path | None:
         """Trả về file XML đã có nếu hợp lệ (dùng để resume)."""
-        path = self.path_for(record)
-        if not path.is_file():
-            return None
-        try:
-            if not is_gnt_xml(path.read_bytes()):
-                return None
-        except OSError:
-            return None
-        record.tep_xml = path.name
-        self.logger.info("Bỏ qua GNT đã có: %s", path.name)
-        return path
+        for path in candidate_paths(self.path_for(record), record.tep_xml):
+            if not path.is_file():
+                continue
+            try:
+                content = read_bounded(path, MAX_XML_BYTES)
+                if not is_gnt_xml(content) or not matches_evidence(path, content, source_reference(record, "gnt")):
+                    continue
+            except OSError:
+                continue
+            record.tep_xml = path.name
+            self.logger.info("Bỏ qua GNT đã có: %s", path.name)
+            return path
+        return None
 
     def save(self, record: GiayNopTien, data: bytes) -> Path | None:
         """Ghi file XML sau khi kiểm tra nội dung."""
@@ -91,16 +107,19 @@ class GntStore:
             self.logger.error("Phản hồi không phải XML GNT hợp lệ: %s", record.ctu_id)
             return None
         self.directory.mkdir(parents=True, exist_ok=True)
-        path = self.path_for(record)
+        path = safe_destination(self.path_for(record), data, source_reference(record, "gnt"))
         _atomic_write(path, data)
+        write_evidence(path, validate_xml(data, "gnt"), source_reference(record, "gnt"))
         record.tep_xml = path.name
         self.logger.info("Đã lưu %s (%s bytes)", path.name, f"{len(data):,}")
         return path
 
 
+@serialized_catalog
 def write_gnt_metadata(
     directory: str | Path,
     records: Mapping[str, GiayNopTien] | Iterable[GiayNopTien],
+    *, materialize: bool = True,
 ) -> tuple[Path, Path] | None:
     """Gộp GNT với JSON cũ, xuất CSV/JSON/Excel; không ghi khi input rỗng."""
     if isinstance(records, Mapping):
@@ -114,25 +133,29 @@ def write_gnt_metadata(
     directory.mkdir(parents=True, exist_ok=True)
     json_path = directory / GNT_METADATA_JSON
     previous = _metadata_rows(json_path)
-    merged = {row["ctu_id"]: row for row in previous}
+    merged = {key_from_row(row, "GNT").serialize(): row for row in previous}
     for record in ordered:
-        key = record.ctu_id
+        key = record.record_key
         row = {**merged.get(key, {}), **record.to_dict()}
         # Tra cứu/dry-run không được xoá tham chiếu file đã tải lần trước.
         if not record.tep_xml and key in merged:
             row["tep_xml"] = merged[key].get("tep_xml", "")
         merged[key] = row
     rows = [merged[key] for key in sorted(merged)]
+    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
+    generation(json_path, [], ready=False)
+    if not materialize:
+        return directory / GNT_METADATA_CSV, json_path
     fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     csv_path = directory / GNT_METADATA_CSV
     with StringIO(newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({key: csv_value(value) for key, value in row.items()} for row in rows)
         csv_bytes = stream.getvalue().encode("utf-8-sig")
-    _atomic_write(json_path, json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8"))
     _atomic_write(csv_path, csv_bytes)
     write_gnt_excel_report(directory / GNT_METADATA_XLSX, rows)
+    generation(json_path, [csv_path, directory / GNT_METADATA_XLSX], ready=True)
     return csv_path, json_path
 
 
@@ -142,13 +165,13 @@ def write_gnt_excel_report(path: str | Path, rows: Iterable[Mapping[str, object]
     sheet = workbook.active
     sheet.title = "Danh sách giấy nộp tiền"
     sheet.freeze_panes = "A2"
-    sheet.append([header for header, _ in EXCEL_COLUMNS])
+    append_row(sheet, [header for header, _ in EXCEL_COLUMNS])
     for index, row in enumerate(rows, start=1):
         values: list[object] = [index]
         for _, field in EXCEL_COLUMNS[1:]:
             value = row.get(field, "") if field else ""
             values.append(_excel_value(value))
-        sheet.append(values)
+        append_row(sheet, values)
 
     header_fill = PatternFill("solid", fgColor="1F4E78")
     for cell in sheet[1]:

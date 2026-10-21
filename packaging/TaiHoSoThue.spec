@@ -29,7 +29,7 @@ datas = [(str(root / "gdt_tax" / "form_mappings" / "*.json"), "gdt_tax/form_mapp
          (str(root / "desktop" / "resources" / "release.json"), "desktop/resources"),
          (str(root / "LICENSE"), "licenses")]
 datas += ddddocr_data
-for package in ["PySide6", "PySide6-Essentials", "shiboken6", "ddddocr", "onnxruntime", "Pillow"]:
+for package in ["PySide6", "PySide6-Essentials", "shiboken6", "ddddocr", "onnxruntime", "Pillow", "pypdf"]:
     try:
         dist = distribution(package)
     except PackageNotFoundError:

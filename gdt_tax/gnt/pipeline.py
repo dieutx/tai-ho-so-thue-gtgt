@@ -11,11 +11,18 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from functools import partial
 
-from ..errors import NetworkError, SearchError
+from ..catalog import CatalogCheckpoint, flush_on_error
+from ..contracts import QueryOutcome
+from ..errors import NetworkError
 from ..http import HttpClient
-from ..run_hooks import RunHooks
-from .models import GiayNopTien, GntPageResult, GntSummary, gnt_periods
+from ..identity import account_fingerprint, scope_targets
+from ..orchestration import consume_record, pages, search_page
+from ..ownership import prepare_output
+from ..portal_profiles import profile_for
+from ..run_hooks import RunBudget, RunHooks
+from .models import GiayNopTien, GntSummary, gnt_periods
 from .portal import GntPortal
 from .storage import GntStore, write_gnt_metadata
 
@@ -41,15 +48,22 @@ class GntPipeline:
         target_ids: set[str] | None = None,
     ) -> None:
         self.settings = settings
+        self.portal_profile = profile_for(settings, "GNT")
         self.http = http
         self.captcha = captcha
         self.store = store or GntStore(settings.download_dir)
         self.portal_factory = portal_factory
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.sleep = sleep
-        self.hooks = hooks or RunHooks()
+        inherited_hooks = getattr(http, "hooks", None)
+        self.hooks: RunHooks = hooks or (inherited_hooks if isinstance(inherited_hooks, RunHooks) else RunHooks())
+        if self.hooks.budget is None:
+            self.hooks.budget = RunBudget()
         self.persist_metadata = persist_metadata
+        self.checkpoint = CatalogCheckpoint(write_gnt_metadata, settings.download_dir,
+                                            enabled=persist_metadata and not settings.dry_run)
         self.target_ids = target_ids
+        self.account_key = account_fingerprint(settings.username)
         self.record_errors: dict[str, str] = {}
         self.active_record_id = ""
         self.records: dict = {}
@@ -57,8 +71,8 @@ class GntPipeline:
         self.failed_ids: set[str] = set()
         self.reused_ids: set[str] = set()
 
-    def _persist(self, records):
-        return write_gnt_metadata(self.settings.download_dir, records) if self.persist_metadata else None
+    def _persist(self, records, **kwargs):
+        return self.checkpoint.persist(records, **kwargs)
 
     def _attempt_download(self, portal, record, downloaded):
         try:
@@ -66,17 +80,24 @@ class GntPipeline:
         except NetworkError as error:
             if self.target_ids is None:
                 raise
-            self.record_errors[record.ctu_id] = str(error)
+            self.record_errors[record.record_key] = str(error)
             self.logger.error("Không tải được GNT %s: %s", record.ctu_id, error)
 
+    @flush_on_error
     def run(self) -> GntSummary:
+        self.record_errors = {}
+        self.active_record_id = ""
         self.records = {}
         self.downloaded_ids = set()
         self.failed_ids = set()
         self.reused_ids = set()
+        if self.target_ids is not None:
+            self.target_ids = scope_targets(self.target_ids, account_key=self.account_key,
+                                           sources=["GNT"], document_kind="GNT")
+        prepare_output(self.settings)
         summary = GntSummary(dry_run=self.settings.dry_run)
         periods = gnt_periods(
-            self.settings.from_date, self.settings.to_date, self.settings.max_days_per_search
+            self.settings.from_date, self.settings.to_date, min(self.settings.max_days_per_search, self.portal_profile.max_days)
         )
         self.logger.info(
             "Bắt đầu tra cứu giấy nộp tiền: %s → %s (%s đoạn)",
@@ -95,16 +116,17 @@ class GntPipeline:
             summary.periods += 1
             self.logger.info("=== GNT: %s ===", period.label)
             self._search_period(portal, period, records, downloaded)
-            self._persist(records)
             if self.target_ids and self.target_ids.issubset(downloaded):
                 break
 
-        if self._persist(records):
+        if self._persist(records, materialize=True):
             self.logger.info(
                 "GNT: đã ghi danh sách giấy nộp tiền (CSV/JSON/Excel)"
             )
         summary.discovered = len(records)
         summary.downloaded = len(downloaded)
+        summary.expected = len(self.target_ids) if self.target_ids is not None else len(records)
+        summary.portal_profile_version = self.portal_profile.version
         return summary
 
     def _search_period(
@@ -114,96 +136,50 @@ class GntPipeline:
         records: dict[str, GiayNopTien],
         downloaded: set[str],
     ) -> None:
-        page = 1
-        total_pages: int | None = None
-        seen_ids: set[str] = set()
-        while total_pages is None or page <= total_pages:
-            self.hooks.check()
-            result = self._search_page(portal, period, page)
-            known_total = total_pages is not None
-            if result.total_pages is not None:
-                total_pages = result.total_pages
-            page_ids = {found.ctu_id for found in result.records}
-            new_ids = page_ids - seen_ids
-            self.logger.info("TRANG %s: %s giấy nộp tiền", page, len(result.records))
-            if page > 1 and not new_ids:
-                if known_total or result.records:
-                    raise SearchError(
-                        f"GNT trang {page}/{total_pages} rỗng hoặc lặp lại; "
-                        "không thể xác nhận đã tra cứu đủ"
-                    )
-                break
-            if not result.records and total_pages is not None and total_pages > 1:
-                raise SearchError(f"GNT trang {page}/{total_pages} không có giấy nộp tiền")
-            seen_ids.update(page_ids)
+        for page, result in pages(self, lambda number: self._search_page(portal, period, number), records, 'GNT'):
             for index, found in enumerate(result.records, start=1):
                 self.hooks.check()
-                record = records.setdefault(found.ctu_id, found)
+                found.account_key = self.account_key
+                found.portal_profile_version = self.portal_profile.version
+                found.routing_version = "direct-source-v1"
+                record = records.setdefault(found.record_key, found)
                 self.logger.info(
                     "TẢI trang=%s mục=%s/%s: %s",
                     page, index, len(result.records), found.so_gnt or found.ctu_id,
                 )
-                self.active_record_id = record.ctu_id
-                targeted = self.target_ids is None or record.ctu_id in self.target_ids
-                if targeted:
-                    self._attempt_download(portal, record, downloaded)
-                if not self.settings.dry_run and targeted:
-                    if record.ctu_id in downloaded:
-                        self.failed_ids.discard(record.ctu_id)
-                    else:
-                        self.failed_ids.add(record.ctu_id)
-                self._persist(records)
-                self.hooks.emit(record=record.to_dict(), discovered=len(records), downloaded=len(downloaded), errors=len(self.failed_ids), file_state="Đã có hợp lệ" if record.ctu_id in self.reused_ids else "Chỉ tra cứu" if self.settings.dry_run else "Đã tải" if record.ctu_id in downloaded else "Lỗi tải" if targeted else "Chưa tải")
+                consume_record(self, record, records, partial(self._attempt_download, portal, record, downloaded))
                 if self.target_ids and self.target_ids.issubset(downloaded):
-                    return
+                    if result.diagnostics is None or result.diagnostics.complete:
+                        return
                 self._pause(self.settings.pause_between_records)
-            if total_pages is None and not new_ids:
-                break
-            page += 1
-            if total_pages is None or page <= total_pages:
-                self._pause(self.settings.pause_between_pages)
 
     def _pause(self, seconds: float) -> None:
         jitter = self.settings.pause_jitter
         delay = seconds * (1 + random.uniform(0, jitter)) if jitter > 0 and seconds > 0 else seconds
         self.hooks.pause(delay, self.sleep)
 
-    def _search_page(self, portal: GntPortal, period, page: int) -> GntPageResult:
-        for attempt in range(1, self.settings.search_attempts + 1):
-            self.hooks.check()
-            result = portal.search_gnt(period, page)
-            self.logger.info(
-                "SEARCH GNT %s page=%s try=%s: HTTP=%s, records=%s, pages=%s",
-                period.label, page, attempt, result.http_status,
-                len(result.records), result.total_pages,
-            )
-            if result.http_status == 200 and (
-                result.records or (result.total_pages is not None and result.total_pages >= 0)
-            ):
-                return result
-            if attempt < self.settings.search_attempts:
-                self._pause(SEARCH_RETRY_PAUSE)
-        raise SearchError(f"Không đọc được trang GNT {page} sau {self.settings.search_attempts} lần thử")
+    def _search_page(self, portal: GntPortal, period, page: int) -> QueryOutcome[GiayNopTien]:
+        return search_page(self, lambda: portal.search_gnt(period, page), 'GNT', page)
 
     def _download(self, portal: GntPortal, record: GiayNopTien, downloaded: set[str]) -> None:
         if self.settings.dry_run:
             self.logger.info("Dry-run: bỏ qua tải GNT %s", record.so_gnt or record.ctu_id)
             return
-        if record.ctu_id in downloaded:
+        if record.record_key in downloaded:
             return
         if self.store.find_existing(record):
-            self.reused_ids.add(record.ctu_id)
-            downloaded.add(record.ctu_id)
+            self.reused_ids.add(record.record_key)
+            downloaded.add(record.record_key)
             return
         data = portal.download_gnt(record)
         if data is None:
-            self.record_errors[record.ctu_id] = getattr(portal, "last_download_error", "") or "Cổng không trả XML hoàn chỉnh. Kiểm tra kết nối/phiên đăng nhập rồi thử lại."
+            self.record_errors[record.record_key] = getattr(portal, "last_download_error", "") or "Cổng không trả XML hoàn chỉnh. Kiểm tra kết nối/phiên đăng nhập rồi thử lại."
             self.logger.error("LỖI TẢI GNT: %s", record.so_gnt or record.ctu_id)
             return
         if self.store.save(record, data) is not None:
-            downloaded.add(record.ctu_id)
+            downloaded.add(record.record_key)
         else:
-            self.record_errors[record.ctu_id] = "Dữ liệu nhận được không phải XML hoàn chỉnh/hợp lệ; tệp chưa được lưu."
+            self.record_errors[record.record_key] = "Dữ liệu nhận được không phải XML hoàn chỉnh/hợp lệ; tệp chưa được lưu."
 
 
 __all__ = ["GntPipeline"]

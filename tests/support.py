@@ -11,6 +11,7 @@ import tempfile
 import time
 import zipfile
 from collections import namedtuple
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 
@@ -37,12 +38,22 @@ def cleanup_temporary_directory(directory: tempfile.TemporaryDirectory) -> None:
                 raise
             time.sleep(0.1)
 
+
+@contextmanager
+def temporary_directory():
+    """Apply the same bounded Windows cleanup policy to context-managed fixtures."""
+    directory = tempfile.TemporaryDirectory()
+    try:
+        yield directory.name
+    finally:
+        cleanup_temporary_directory(directory)
+
 PNG_HEADER = b"\x89PNG\r\n\x1a\n"
 FAKE_CAPTCHA_BYTES = PNG_HEADER + b"0" * 600
 
 LOGIN_HTML = '<html><head><meta name="csrf-token" content="csrf-login"></head></html>'
 LANDING_HTML = '<html><body><input type="hidden" name="_csrf" value="csrf-landing"></body></html>'
-DETAIL_HTML = '<html><body><input type="hidden" name="_csrf" value="csrf-detail"></body></html>'
+DETAIL_HTML = '<html><body><input type="hidden" name="_csrf" value="csrf-detail"><div id="modalThongBao" data-empty="true">Không có thông báo</div></body></html>'
 
 
 def fixture(name: str) -> str:
@@ -50,7 +61,7 @@ def fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
-def sample_zip(payload: bytes = b"<to-khai/>") -> bytes:
+def sample_zip(payload: bytes = b"<HSoThueDTu/>") -> bytes:
     """Tạo một ZIP hợp lệ trong bộ nhớ."""
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
@@ -58,7 +69,7 @@ def sample_zip(payload: bytes = b"<to-khai/>") -> bytes:
     return buffer.getvalue()
 
 
-def zip_payload(payload: bytes = b"<to-khai/>") -> str:
+def zip_payload(payload: bytes = b"<HSoThueDTu/>") -> str:
     """ZIP mã hoá Base64, đúng dạng cổng trả về trong JSON."""
     return base64.b64encode(sample_zip(payload)).decode("ascii")
 

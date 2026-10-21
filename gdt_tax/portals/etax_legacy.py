@@ -20,7 +20,6 @@ Hai lớp trong module này:
 
 from __future__ import annotations
 
-import base64
 import logging
 import re
 import time
@@ -32,37 +31,23 @@ from typing import Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from bs4 import BeautifulSoup
-from lxml import etree
 
+from ..auth_outcomes import AuthFailure, AuthOutcome, classify_response, raise_terminal
 from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
+from ..contracts import DownloadArtifact, Solver, Transport
 from ..errors import LegacyEtaxError, LegacyPageError
 from ..headers import build_image_headers, build_page_headers, build_xhr_headers
-from ..http import HttpClient
 from ..legacy_session import LegacySessionState
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..naming import safe_filename_part
-from ..parsing import parse_records
+from ..parsing import parse_record_table
+from ..portal_profiles import LegacyProfile, profile_for
+from ..table_contracts import ParseDiagnostics
 from .base import Portal
 
-#: Thành công khi trang trả về luồng trang chủ doanh nghiệp.
-_LOGIN_OK_MARKER = "corporateHomeProc"
-#: Trang cũ trả lại form đăng nhập khi sai mã CAPTCHA hoặc hết phiên.
 _LOGIN_FORM_ID = "loginForm"
 _SEARCH_FORM_ID = "traCuuKhaiForm"
 _RESULT_TABLE_ID = "data_content_onday"
-
-_LEGACY_ALERT_RE = re.compile(r"alert\(\s*['\"](.*?)['\"]\s*\)", re.I | re.S)
-
-
-def _alerts(html: str) -> list[str]:
-    """Các câu thông báo mà trang cũ nhúng trong ``alert('...')``."""
-    messages = []
-    for match in _LEGACY_ALERT_RE.finditer(html):
-        text = re.sub(r"\s+", " ", match.group(1)).strip()
-        if text:
-            messages.append(text)
-    return messages
-
 
 def _form_node(html: str, form_id: str):
     """Tìm form theo ``id`` rồi tới ``name`` (một số màn hình legacy chỉ có name)."""
@@ -71,19 +56,6 @@ def _form_node(html: str, form_id: str):
     if form is None and form_id:
         form = soup.find("form", attrs={"name": form_id})
     return form
-
-
-def _credentials_rejected(html: str) -> bool:
-    """Only recognize displayed server errors, never validator JavaScript."""
-    soup = BeautifulSoup(html, 'html.parser')
-    for node in soup(['script', 'style', 'noscript', 'template']):
-        node.decompose()
-    visible = ' '.join(soup.stripped_strings).casefold()
-    return any(message in visible for message in (
-        'tên đăng nhập hoặc mật khẩu của bạn không chính xác',
-        'tên đăng nhập hoặc mật khẩu không đúng',
-        'sai tên đăng nhập hoặc mật khẩu',
-    ))
 
 
 def _form_data(form) -> tuple[str, dict[str, str]]:
@@ -119,17 +91,10 @@ def _operation_url(html: str, operation: str) -> str:
 
 
 def _page_detail(response) -> str:
-    """Câu ngắn cổng trả về (title/alert/chữ hiển thị) để lỗi có ngữ cảnh."""
-    text = getattr(response, "text", "") or ""
-    if not text:
-        return ""
-    soup = BeautifulSoup(text, "html.parser")
-    for node in soup(["script", "style"]):
-        node.decompose()
-    title = soup.title.get_text(" ", strip=True) if soup.title else ""
-    visible = " ".join(soup.stripped_strings)
-    detail = title or next(iter(_alerts(text)), "") or visible
-    return re.sub(r"\s+", " ", detail).strip()[:180]
+    """Metadata-only detail for an unrecognized business page."""
+    from ..schema_evidence import safe_schema_evidence
+    evidence = safe_schema_evidence(getattr(response, 'text', '') or '')
+    return 'SCHEMA_UNKNOWN fingerprint=' + evidence.get('fingerprint', 'LIMIT')
 
 
 def _js_redirect(html: str, required_text: str) -> str:
@@ -161,23 +126,17 @@ def _query_parameter(url: str, name: str) -> str:
     return values[0] if values else ""
 
 
-def _total_pages(html: str) -> int:
+def _total_pages(html: str, *, table_id: str = _RESULT_TABLE_ID) -> int:
     """Tổng số trang theo dòng ``Trang 1/ 5 . Có 43 bản ghi`` của trang legacy."""
     text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
     match = re.search(r"Trang\s*\d+\s*/\s*(\d+)", text, re.I)
     if match:
         return int(match.group(1))
-    return 1 if _RESULT_TABLE_ID in html else 0
+    return 1 if table_id in html else 0
 
 
-class EtaxLegacyPortal(Portal):
-    """Tra cứu và tải tờ khai trên trang Thuế điện tử cũ.
-
-    Luồng DSE khác hẳn DVC nhưng kết quả vẫn là :class:`PageResult` /
-    :class:`CaseRecord` nên pipeline dùng chung được. Trang cũ trả **XML**
-    (không phải ZIP): :meth:`download` gói XML vào ZIP trong bộ nhớ để phần lưu
-    file và metadata dùng chung mà không phải sửa gì.
-    """
+class LegacySessionNavigator:
+    """Authenticate a DSE session and navigate to a requested business operation."""
 
     source = SOURCE_ETAX_LEGACY
     detail_loai = SOURCE_ETAX_LEGACY
@@ -186,27 +145,28 @@ class EtaxLegacyPortal(Portal):
 
     def __init__(
         self,
-        http: HttpClient,
-        captcha,
+        http: Transport,
+        captcha: Solver,
         settings,
         logger: logging.Logger | None = None,
         *,
         login_attempts: int | None = None,
         session_state: LegacySessionState | None = None,
     ) -> None:
-        super().__init__(http, captcha, settings, logger)
+        self.http, self.captcha, self.settings = http, captcha, settings
+        self.logger = logger or logging.getLogger("gdt_tax.portal.legacy_navigation")
         self.login_attempts = (
             login_attempts if login_attempts is not None else settings.login_attempts
         )
         self.dse_session_id = ""
         self.home_page_id = ""
         self.home_page_html = ""
-        self._search_page_html = ""
-        self._search_page_url = ""
-        #: Form thực tế của trang nghiệp vụ; cổng có lúc đổi id/name của form.
-        self._search_form_id = _SEARCH_FORM_ID
         self._logged_in = False
         self.session_state = session_state
+
+    @property
+    def profile(self):
+        return self.settings.header_profile
 
     # --- Đăng nhập trang cũ ---
     def login(self) -> None:
@@ -230,6 +190,7 @@ class EtaxLegacyPortal(Portal):
             },
             headers=build_page_headers(profile=self.profile, site="none"),
         )
+        raise_terminal(response, 'ETAX_LEGACY')
         if response.status_code != 200:
             raise LegacyEtaxError(f"Mở EstablishSession lỗi HTTP {response.status_code}")
         first_url = _js_redirect(response.text, "dse_sessionId=")
@@ -261,6 +222,7 @@ class EtaxLegacyPortal(Portal):
             login_url,
             headers=build_page_headers(profile=self.profile, headers={"Referer": response.url}),
         )
+        raise_terminal(response, 'ETAX_LEGACY')
         if response.status_code != 200 or _form_node(response.text, _LOGIN_FORM_ID) is None:
             raise LegacyEtaxError("Trang legacy không trả về form đăng nhập")
 
@@ -272,12 +234,16 @@ class EtaxLegacyPortal(Portal):
             self.session_state.home_page_id = self.home_page_id
             self.session_state.home_page_html = self.home_page_html
             self.session_state.authenticated = True
-        self.logger.info("ĐĂNG NHẬP legacy THÀNH CÔNG (dse_sessionId=%s...)", self.dse_session_id[:6])
+        self.logger.info("ĐĂNG NHẬP legacy THÀNH CÔNG")
 
     def _submit_login(self, login_page):
         """Gửi tên đăng nhập/mật khẩu/CAPTCHA, thử lại khi đọc sai mã."""
         last_message = "không rõ"
+        last_outcome = AuthOutcome.SCHEMA_UNKNOWN
         for attempt in range(1, self.login_attempts + 1):
+            hooks = getattr(self.http, "hooks", None)
+            if hooks is not None and hooks.budget is not None:
+                hooks.budget.authenticate()
             image = self._legacy_captcha_image(login_page.url)
             code = self.captcha.solve(image) if image else ""
             if not code:
@@ -297,18 +263,17 @@ class EtaxLegacyPortal(Portal):
                     "_verifyCode": code,
                 },
             )
+            outcome = classify_response(response, 'ETAX_LEGACY')
+            last_outcome = outcome
             # Script alert strings include unexecuted empty-field validators.
             # They are not server-side authentication errors.
-            if _LOGIN_OK_MARKER in response.text and _form_node(response.text, _LOGIN_FORM_ID) is None:
+            if outcome == AuthOutcome.SUCCESS:
                 accepted = getattr(self.captcha, "accepted", None)
                 if callable(accepted):
                     accepted()
                 return response
-            if _credentials_rejected(response.text):
-                raise LegacyEtaxError(
-                    'Cổng Thuế báo tên đăng nhập hoặc mật khẩu không chính xác. '
-                    'Kiểm tra lại tài khoản và mật khẩu; đã dừng thử CAPTCHA.'
-                )
+            if outcome != AuthOutcome.CAPTCHA_INVALID:
+                raise AuthFailure(outcome)
             rejected = getattr(self.captcha, "rejected", None)
             if callable(rejected):
                 rejected()
@@ -318,7 +283,7 @@ class EtaxLegacyPortal(Portal):
             # The next image and POST must belong to the latest login page.
             if _form_node(response.text, _LOGIN_FORM_ID) is not None:
                 login_page = response
-        raise LegacyEtaxError(f"Không đăng nhập được trang legacy: {last_message}")
+        raise AuthFailure(last_outcome)
 
     def _open_home_page(self, login_result) -> None:
         """Đi qua ``corporateHomeProc`` để lấy ``dse_pageId`` của trang chủ."""
@@ -366,7 +331,7 @@ class EtaxLegacyPortal(Portal):
             'Origin': LEGACY_ETAX_ORIGIN,
             'Referer': referer,
         }
-        return self.http.post(
+        response = self.http.post(
             action,
             data={key: str(value) for key, value in fields.items()},
             headers=build_page_headers(profile=self.profile, headers=headers) if navigation else build_xhr_headers(
@@ -375,6 +340,9 @@ class EtaxLegacyPortal(Portal):
                 headers=headers,
             ),
         )
+        if self._logged_in:
+            raise_terminal(response, 'ETAX_LEGACY', authenticated=True)
+        return response
 
     # --- Mở trang nghiệp vụ (dùng chung cho tờ khai/GNT/thông báo) ---
     def _form_id_for_operation(self, html: str, operation: str, expected: str) -> str:
@@ -430,6 +398,7 @@ class EtaxLegacyPortal(Portal):
     def _settle_operation_page(self, response, operation: str, expected_form: str):
         """Đi qua tối đa hai bước chuyển tiếp cho tới khi thấy form nghiệp vụ."""
         for _ in range(3):
+            raise_terminal(response, 'ETAX_LEGACY', authenticated=True)
             if response.status_code == 200 and self._form_id_for_operation(response.text, operation, expected_form):
                 return response
             targets = self._transition_urls(response.text)
@@ -450,7 +419,7 @@ class EtaxLegacyPortal(Portal):
             break
         return response
 
-    def _open_operation_page(self, operation: str, expected_form: str, label: str):
+    def _open_operation_page(self, operation: str, expected_form: str, label: str, *, request_url=None):
         """Mở trang nghiệp vụ legacy và trả ``(response, form_id)`` thực tế.
 
         Ưu tiên liên kết mà trang chủ đã phát cho phiên hiện tại (mang đúng
@@ -474,7 +443,7 @@ class EtaxLegacyPortal(Portal):
                 )
             else:
                 response = self.http.get(
-                    f"{LEGACY_ETAX_BASE}/Request",
+                    request_url or f"{LEGACY_ETAX_BASE}/Request",
                     params={
                         "dse_sessionId": self.dse_session_id,
                         "dse_applicationId": "-1",
@@ -502,6 +471,20 @@ class EtaxLegacyPortal(Portal):
             "hoặc xem nhật ký kỹ thuật."
         )
 
+
+
+class EtaxLegacyPortal(LegacySessionNavigator, Portal):
+    """Declaration operations using the independent legacy navigator."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._search_page_html = ''
+        self._search_page_url = ''
+        self._search_form_id = _SEARCH_FORM_ID
+        selected = profile_for(self.settings, self.source)
+        assert isinstance(selected, LegacyProfile)
+        self.legacy_capabilities = selected
+
     # --- Giai đoạn 3: tra cứu ---
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         from ..dates import format_date
@@ -513,9 +496,9 @@ class EtaxLegacyPortal(Portal):
         response = self._post_form(
             self._search_page_html, self._search_form_id, self._search_page_url,
             {
-                "dse_operationName": "traCuuToKhaiProc",
-                "dse_nextEventName": "query",
-                "pn": page,
+                "dse_operationName": self.legacy_capabilities.operation,
+                "dse_nextEventName": self.legacy_capabilities.query_event,
+                self.legacy_capabilities.page_parameter: page,
                 "maTKhai": "00",
                 "tenTKhai": "",
                 "kieuKy": "",
@@ -528,28 +511,28 @@ class EtaxLegacyPortal(Portal):
             return PageResult(http_status=response.status_code)
         # Không thay form tốt bằng trang lỗi/hết phiên HTTP 200.
         empty_result = "Chưa có tờ khai nào" in response.text
-        form_id = self._form_id_for_operation(response.text, 'traCuuToKhaiProc', self._search_form_id)
+        form_id = self._form_id_for_operation(response.text, self.legacy_capabilities.operation, self._search_form_id)
         if not form_id or (
-            _RESULT_TABLE_ID not in response.text and not empty_result
+            self.legacy_capabilities.table_id not in response.text and not empty_result
         ):
             if self.session_state is not None:
                 raise LegacyEtaxError(
                     "Cổng trả HTTP 200 nhưng thiếu bảng/form tờ khai. "
                     "Hãy thử lại; nếu vẫn lỗi, đăng xuất rồi đăng nhập hoặc xem nhật ký."
                 )
-            self.logger.warning("Legacy không trả bảng kết quả/form tra cứu; có thể đã hết phiên")
-            return PageResult(http_status=response.status_code)
+            self.logger.warning("SCHEMA_CHANGED: legacy thiếu bảng hoặc form tra cứu")
+            return PageResult(http_status=response.status_code, diagnostics=ParseDiagnostics(reasons=["RESULT_FORM_OR_TABLE_MISSING"]))
         self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
-        records = parse_records(response.text, self.source)
-        return PageResult(records=records, total_pages=_total_pages(response.text),
-                          http_status=response.status_code)
+        parsed = parse_record_table(response.text, self.source, schema=self.legacy_capabilities.schema)
+        return PageResult(records=parsed.records, total_pages=_total_pages(response.text, table_id=self.legacy_capabilities.table_id),
+                          http_status=response.status_code, diagnostics=parsed.diagnostics)
 
     def _open_search_page(self) -> None:
         """Mở trang tra cứu tờ khai (nơi có form ``traCuuKhaiForm``)."""
         response, form_id = self._open_operation_page(
-            "traCuuToKhaiProc", _SEARCH_FORM_ID, "tờ khai"
+            self.legacy_capabilities.operation, self.legacy_capabilities.form_id, "tờ khai", request_url=self.legacy_capabilities.request_url
         )
         self._search_form_id = form_id
         self._search_page_html = response.text
@@ -572,13 +555,13 @@ class EtaxLegacyPortal(Portal):
         params = {key: fields[key] for key in keep if fields.get(key)}
         params.update(
             {
-                "dse_operationName": "traCuuToKhaiProc",
-                "dse_nextEventName": "downTkhai",
+                "dse_operationName": self.legacy_capabilities.operation,
+                "dse_nextEventName": self.legacy_capabilities.download_event,
                 "messageId": record.ma_ho_so,
             }
         )
         response = self.http.get(
-            f"{LEGACY_ETAX_BASE}/Request",
+            self.legacy_capabilities.request_url,
             params=params,
             headers=build_xhr_headers(
                 profile=self.profile,
@@ -589,22 +572,18 @@ class EtaxLegacyPortal(Portal):
         if response.status_code != 200:
             return response
         content_type = response.headers.get("content-type", "").lower()
-        parser = etree.XMLParser(resolve_entities=False, load_dtd=False, no_network=True)
-        try:
-            root = etree.fromstring(response.content, parser=parser)
-            xml_ok = (
-                etree.QName(root).localname.lower() not in {"html", "error"}
-                and not root.getroottree().docinfo.doctype
-            )
-        except (etree.XMLSyntaxError, ValueError, TypeError):
-            xml_ok = False
+        from ..integrity import validate_xml
+        xml_ok = validate_xml(response.content, "declaration").ok
         if "text/html" in content_type or not xml_ok:
             self.logger.error(
                 "Legacy không trả XML hợp lệ cho %s (hết phiên hoặc tờ khai không tải được)",
                 record.ma_ho_so,
             )
             return _HtmlInsteadOfFile(response)
-        return _XmlZipResponse(record, response.content)
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr(f'{safe_filename_part(record.ma_ho_so, 50)}.xml', response.content)
+        return DownloadArtifact(buffer.getvalue(), 'zip', 'DECLARATION', record.key)
 
 
 class _HtmlInsteadOfFile:
@@ -618,31 +597,6 @@ class _HtmlInsteadOfFile:
 
     def json(self):
         raise ValueError("Legacy trả HTML thay vì file")
-
-
-class _XmlZipResponse:
-    """ZIP chứa XML tờ khai, bọc dạng JSON base64 giống hình dạng cổng DVC trả.
-
-    ``decode_zip_bytes`` thử ``response.json()`` trước rồi mới kiểm tra chữ ký
-    ``PK``, nên trả JSON ``{"content": <base64>, "fileName": ...}`` là phần lưu
-    dùng chung được mà không cần sửa ``storage``.
-    """
-
-    def __init__(self, record: CaseRecord, xml: bytes) -> None:
-        buffer = BytesIO()
-        with zipfile.ZipFile(buffer, "w") as archive:
-            archive.writestr(f"{safe_filename_part(record.ma_ho_so, 50)}.xml", xml)
-        self.status_code = 200
-        self.headers = {"content-type": "application/json"}
-        self._payload = {
-            "content": base64.b64encode(buffer.getvalue()).decode("ascii"),
-            "fileName": f"{record.ma_ho_so}.zip",
-        }
-        self.content = buffer.getvalue()
-        self.text = ""
-
-    def json(self) -> dict[str, str]:
-        return dict(self._payload)
 
 
 class EtaxLegacyFallback(Portal):

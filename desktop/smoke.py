@@ -53,6 +53,9 @@ def captcha_retry_check() -> bool:
 
 def self_test(source: Path, output: Path, report: Path) -> int:
     result = {"version": __version__, "frozen": bool(getattr(__import__("sys"), "frozen", False))}
+    metadata = json.loads((Path(__file__).parent / 'resources/release.json').read_text(encoding='utf-8'))
+    result['source_sha'] = metadata.get('source_sha', '')
+    result['core_version'] = metadata.get('core_version', '1.0.0')
     try:
         def no_network(*_args, **_kwargs):
             raise AssertionError("Network accessed by offline smoke test")

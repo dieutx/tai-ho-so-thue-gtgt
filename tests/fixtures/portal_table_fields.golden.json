@@ -1,0 +1,264 @@
+{
+  "source_revision": "3068ea9",
+  "provenance": "inherited fixtures; original capture/anonymization unverified",
+  "cases": {
+    "etax_results.html": {
+      "source": "ETAX",
+      "rows": [
+        {
+          "ma_ho_so": "11320250292469209",
+          "nguon": "ETAX",
+          "ten_tthc": "",
+          "to_khai": "TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG (TT80/2021)(00-Hoạt động sản xuất kinh doanh thông thường-)",
+          "ky_tinh_thue": "12/2024",
+          "loai_to_khai": "Chính thức",
+          "lan_nop": "1",
+          "lan_bo_sung": "0",
+          "ngay_nop": "20/01/2025 17:11:35",
+          "noi_nop": "Thuế cơ sở 1 tỉnh Hà Tĩnh",
+          "trang_thai": "Cơ quan thuế chấp nhận hồ sơ khai thuế điện tử của NNT",
+          "ho_so_dinh_kem": "",
+          "tep_zip": "",
+          "nhom_to_khai": "UNKNOWN",
+          "loai_tai_lieu": "UNKNOWN",
+          "quy_tac_phan_loai": "",
+          "ly_do_phan_loai": ""
+        },
+        {
+          "ma_ho_so": "11320250292528963",
+          "nguon": "ETAX",
+          "ten_tthc": "",
+          "to_khai": "Tờ khai khấu trừ thuế thu nhập cá nhân (TT80/2021)",
+          "ky_tinh_thue": "12/2024",
+          "loai_to_khai": "Chính thức",
+          "lan_nop": "1",
+          "lan_bo_sung": "0",
+          "ngay_nop": "20/01/2025 17:12:02",
+          "noi_nop": "Thuế cơ sở 1 tỉnh Hà Tĩnh",
+          "trang_thai": "Cơ quan thuế chấp nhận hồ sơ khai thuế điện tử của NNT",
+          "ho_so_dinh_kem": "",
+          "tep_zip": "",
+          "nhom_to_khai": "UNKNOWN",
+          "loai_tai_lieu": "UNKNOWN",
+          "quy_tac_phan_loai": "",
+          "ly_do_phan_loai": ""
+        }
+      ]
+    },
+    "dvc_results_page1.html": {
+      "source": "DVC",
+      "rows": [
+        {
+          "ma_ho_so": "G12.18-260120-21010800254723",
+          "nguon": "DVC",
+          "ten_tthc": "1.007014 - Khai thuế GTGT đối với phương pháp khấu trừ đối với hoạt động sản xuất kinh doanh",
+          "to_khai": "01/GTGT - TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG Mẫu số 01/GTGT (TT80/2021)",
+          "ky_tinh_thue": "12/2025",
+          "loai_to_khai": "Chính thức",
+          "lan_nop": "1",
+          "lan_bo_sung": "0",
+          "ngay_nop": "20/01/2026 13:51",
+          "noi_nop": "10108 - Quận Hoàng Mai - Thuế cơ sở 13 Thành phố Hà Nội",
+          "trang_thai": "Đã chấp nhận",
+          "ho_so_dinh_kem": "1",
+          "tep_zip": "",
+          "nhom_to_khai": "UNKNOWN",
+          "loai_tai_lieu": "UNKNOWN",
+          "quy_tac_phan_loai": "",
+          "ly_do_phan_loai": ""
+        },
+        {
+          "ma_ho_so": "G12.18-260120-21010800167745",
+          "nguon": "DVC",
+          "ten_tthc": "1.008327 - Khai bổ sung hồ sơ khai thuế",
+          "to_khai": "05/KK-TNCN - Tờ khai thuế thu nhập cá nhân (TT80/2021)",
+          "ky_tinh_thue": "12/2025",
+          "loai_to_khai": "Bổ sung",
+          "lan_nop": "1",
+          "lan_bo_sung": "1",
+          "ngay_nop": "20/01/2026 13:51",
+          "noi_nop": "10108 - Quận Hoàng Mai - Thuế cơ sở 13 Thành phố Hà Nội",
+          "trang_thai": "Đã chấp nhận",
+          "ho_so_dinh_kem": "1",
+          "tep_zip": "",
+          "nhom_to_khai": "UNKNOWN",
+          "loai_tai_lieu": "UNKNOWN",
+          "quy_tac_phan_loai": "",
+          "ly_do_phan_loai": ""
+        }
+      ]
+    },
+    "dvc_results_page2.html": {
+      "source": "DVC",
+      "rows": []
+    },
+    "etax_legacy_results.html": {
+      "source": "ETAX_LEGACY",
+      "rows": [
+        {
+          "ma_ho_so": "11320200101110001",
+          "nguon": "ETAX_LEGACY",
+          "ten_tthc": "",
+          "to_khai": "01/GTGT-TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG (TT80/2021)(00-Hoạt động sản xuất kinh doanh)",
+          "ky_tinh_thue": "01/2020",
+          "loai_to_khai": "Chính thức",
+          "lan_nop": "1",
+          "lan_bo_sung": "0",
+          "ngay_nop": "05/02/2020 09:15:00",
+          "noi_nop": "Thuế cơ sở 1 tỉnh Hà Tĩnh",
+          "trang_thai": "Cơ quan thuế chấp nhận hồ sơ khai thuế điện tử của NNT",
+          "ho_so_dinh_kem": "",
+          "tep_zip": "",
+          "nhom_to_khai": "UNKNOWN",
+          "loai_tai_lieu": "UNKNOWN",
+          "quy_tac_phan_loai": "",
+          "ly_do_phan_loai": ""
+        },
+        {
+          "ma_ho_so": "11320200101110002",
+          "nguon": "ETAX_LEGACY",
+          "ten_tthc": "",
+          "to_khai": "Tờ khai khấu trừ thuế thu nhập cá nhân (TT80)",
+          "ky_tinh_thue": "01/2020",
+          "loai_to_khai": "Chính thức",
+          "lan_nop": "1",
+          "lan_bo_sung": "0",
+          "ngay_nop": "05/02/2020 09:20:00",
+          "noi_nop": "Thuế cơ sở 1 tỉnh Hà Tĩnh",
+          "trang_thai": "Cơ quan thuế chấp nhận hồ sơ khai thuế điện tử của NNT",
+          "ho_so_dinh_kem": "",
+          "tep_zip": "",
+          "nhom_to_khai": "UNKNOWN",
+          "loai_tai_lieu": "UNKNOWN",
+          "quy_tac_phan_loai": "",
+          "ly_do_phan_loai": ""
+        }
+      ]
+    },
+    "gnt_results_page1.html": {
+      "source": "GNT",
+      "rows": [
+        {
+          "ctu_id": "900000001",
+          "so_tham_chieu": "11220260417191212",
+          "ma_giao_dich_chi_tiet": "",
+          "lan_nop": "",
+          "so_gnt": "000000101234567-01309202600000001",
+          "so_tien": "17,500",
+          "loai_tien": "VND",
+          "trang_thai": "Nộp thuế thành công",
+          "so_chung_tu": "7559356",
+          "ngay_lap": "19/09/2026 14:52:44",
+          "ngay_gui": "19/09/2026 14:53:56",
+          "ngay_nop": "19/09/2026 14:54:02",
+          "co_ds_chi_tiet_tncn": "Có",
+          "co_ds_chi_tiet_tmdt": "",
+          "ngay_nop_ds_chi_tiet": "",
+          "hinh_thuc_nop": "Nộp tại cổng eTax của TCT",
+          "ngan_hang": "Ngân hàng TMCP Đầu tư và Phát triển Việt Nam",
+          "tai_khoan": "26810001228888",
+          "thong_bao": "",
+          "tep_xml": ""
+        },
+        {
+          "ctu_id": "900000002",
+          "so_tham_chieu": "11220260417069079",
+          "ma_giao_dich_chi_tiet": "",
+          "lan_nop": "",
+          "so_gnt": "000000101234567-01609202600000002",
+          "so_tien": "13,163,653",
+          "loai_tien": "VND",
+          "trang_thai": "Nộp thuế thành công",
+          "so_chung_tu": "7551708",
+          "ngay_lap": "18/09/2026 18:42:03",
+          "ngay_gui": "18/09/2026 18:42:46",
+          "ngay_nop": "18/09/2026 18:43:01",
+          "co_ds_chi_tiet_tncn": "",
+          "co_ds_chi_tiet_tmdt": "Có",
+          "ngay_nop_ds_chi_tiet": "18/09/2026",
+          "hinh_thuc_nop": "Nộp tại cổng eTax của TCT",
+          "ngan_hang": "Ngân hàng TMCP Công thương Việt Nam",
+          "tai_khoan": "102010001234567",
+          "thong_bao": "",
+          "tep_xml": ""
+        }
+      ]
+    },
+    "gnt_results_page2.html": {
+      "source": "GNT",
+      "rows": [
+        {
+          "ctu_id": "900000003",
+          "so_tham_chieu": "11220260416100001",
+          "ma_giao_dich_chi_tiet": "",
+          "lan_nop": "",
+          "so_gnt": "000000101234567-01709202600000003",
+          "so_tien": "1,000,000",
+          "loai_tien": "VND",
+          "trang_thai": "Nộp thuế thành công",
+          "so_chung_tu": "7550000",
+          "ngay_lap": "17/09/2026 09:00:00",
+          "ngay_gui": "17/09/2026 09:01:00",
+          "ngay_nop": "17/09/2026 09:02:00",
+          "co_ds_chi_tiet_tncn": "",
+          "co_ds_chi_tiet_tmdt": "",
+          "ngay_nop_ds_chi_tiet": "",
+          "hinh_thuc_nop": "Nộp tại cổng eTax của TCT",
+          "ngan_hang": "Ngân hàng TMCP Ngoại thương Việt Nam",
+          "tai_khoan": "0011000012345",
+          "thong_bao": "",
+          "tep_xml": ""
+        }
+      ]
+    },
+    "tb_results_page1.html": {
+      "source": "TB",
+      "rows": [
+        {
+          "message_id": "90000000000000001",
+          "ma_tbao": "608",
+          "ma_thong_bao": "01/TTN",
+          "ten_thong_bao": "01/TTN-Thông báo tiền thuế nợ (chậm nộp)",
+          "so_thong_bao": "25799/TB-TCS1-KDT",
+          "ngay_gui": "10/08/2026 05:40:49",
+          "co_quan_gui": "Thuế cơ sở 1 tỉnh Demo",
+          "trang_thai": "Chưa xem",
+          "co_van_ban_giai_trinh": "",
+          "co_phan_hoi_ra_soat": "",
+          "tep_pdf": ""
+        },
+        {
+          "message_id": "90000000000000002",
+          "ma_tbao": "604",
+          "ma_thong_bao": "01/CC",
+          "ten_thong_bao": "01/CC-Quyết định cưỡng chế bằng biện pháp trích tiền",
+          "so_thong_bao": "17884/QD-TCS25-KDT",
+          "ngay_gui": "21/08/2026 16:33:12",
+          "co_quan_gui": "Thuế cơ sở 25 Thành phố Demo",
+          "trang_thai": "Đã xem",
+          "co_van_ban_giai_trinh": "Có",
+          "co_phan_hoi_ra_soat": "Có",
+          "tep_pdf": ""
+        }
+      ]
+    },
+    "tb_results_page2.html": {
+      "source": "TB",
+      "rows": [
+        {
+          "message_id": "90000000000000003",
+          "ma_tbao": "608",
+          "ma_thong_bao": "01/TTN",
+          "ten_thong_bao": "01/TTN-Thông báo tiền thuế nợ (chậm nộp)",
+          "so_thong_bao": "153248/TB-TCS25-KDT",
+          "ngay_gui": "16/09/2026 14:57:52",
+          "co_quan_gui": "Thuế cơ sở 25 Thành phố Demo",
+          "trang_thai": "Chưa xem",
+          "co_van_ban_giai_trinh": "",
+          "co_phan_hoi_ra_soat": "",
+          "tep_pdf": ""
+        }
+      ]
+    }
+  }
+}

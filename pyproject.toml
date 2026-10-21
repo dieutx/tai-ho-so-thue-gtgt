@@ -21,6 +21,7 @@ dependencies = [
     "lxml>=5,<7",
     "openpyxl>=3.1,<4",
     "requests>=2.32,<3",
+    "pypdf>=6.21.1,<7",
 ]
 
 [project.optional-dependencies]
@@ -54,6 +55,9 @@ gdt-inventory = "gdt_tax.inventory:main"
 gdt-parse = "gdt_tax.parser.cli:main"
 gdt-classify = "gdt_tax.classify:main"
 gdt-export = "gdt_tax.export:main"
+gdt-health = "gdt_tax.health:main"
+gdt-migrate-identity = "gdt_tax.migrate_identity:main"
+gdt-rebuild-reports = "gdt_tax.rebuild_reports:main"
 
 [tool.setuptools.packages.find]
 include = ["gdt_tax*", "desktop*"]

@@ -16,22 +16,27 @@ có tên dạng mã chỉ tiêu, không lấy cấp sâu hơn.
 from __future__ import annotations
 
 import re
+from datetime import date
+from decimal import Decimal
 
 from lxml import etree
 
+from ..dates import parse_date
 from .models import Indicator, ParsedDeclaration, Period, Taxpayer
 from .registry import FormMapping, MappingRegistry
 from .xml_reader import (
     XmlReadError,
     find_first,
     find_text,
+    in_appendix,
     localname,
+    main_scope,
     namespace_map,
     normalize_number,
     parse_xml,
 )
 
-PARSER_VERSION = "declaration-parser-v2"
+PARSER_VERSION = "declaration-parser-v4"
 SCHEMA_VERSION = "parsed-declaration-v1"
 
 #: Node chứa chỉ tiêu tổng hợp trên tờ khai chính (không phải bảng kê chi tiết).
@@ -81,12 +86,15 @@ def _ns_path(path: str, has_ns: bool) -> str:
                      for segment in path.split("/"))
 
 
-def _normalize_mapped_value(raw: str, datatype: str) -> tuple[str | None, str | None]:
+def _normalize_mapped_value(raw: str, datatype: str, numeric_format: str = 'auto') -> tuple[str | None, str | None]:
     """Chuẩn hóa theo kiểu khai trong mapping, không ép nhãn text thành số."""
     if datatype == "string":
-        value = raw.strip()
-        return (value or None), None
-    return normalize_number(raw)
+        text = raw.strip()
+        return (text or None), None
+    value, warning = normalize_number(raw, numeric_format)
+    if value is not None and datatype == 'integer' and Decimal(value) != Decimal(value).to_integral_value():
+        return None, 'INTEGER_VALUE_REQUIRED'
+    return value, warning
 
 
 def _period_parts(raw: str | None, period_type: str | None) -> tuple[int | None, int | None, int | None]:
@@ -143,7 +151,7 @@ def _collect_indicators(
                 )
                 seen.add(code)
                 continue
-            value, warning = _normalize_mapped_value(raw, field.datatype)
+            value, warning = _normalize_mapped_value(raw, field.datatype, field.numeric_format)
             indicators.append(
                 Indicator(
                     code=code,
@@ -163,10 +171,11 @@ def _collect_indicators(
     # Bổ sung chỉ tiêu chưa có trong mapping (giữ NEED_MAPPING, không đoán).
     for node_name in MAIN_INDICATOR_NODES:
         for container in root.iter():
-            if localname(container) != node_name:
+            if (localname(container) != node_name or in_appendix(container)
+                    or etree.QName(container).namespace != etree.QName(root).namespace):
                 continue
             for child in container:
-                _collect_from(child, indicators, seen, mapping)
+                _collect_from(child, indicators, seen, mapping, etree.QName(root).namespace)
     return indicators
 
 
@@ -175,9 +184,12 @@ def _collect_from(
     indicators: list[Indicator],
     seen: set[str],
     mapping: FormMapping | None,
+    namespace_uri: str | None,
 ) -> None:
     name = localname(element)
     if name is None or name in seen:
+        return
+    if etree.QName(element).namespace != namespace_uri:
         return
     if _INDICATOR_CODE.match(name) and not _NON_INDICATOR.search(name):
         seen.add(name)
@@ -205,7 +217,7 @@ def _collect_from(
     if _NON_INDICATOR.search(name):
         return
     for child in element:
-        _collect_from(child, indicators, seen, mapping)
+        _collect_from(child, indicators, seen, mapping, namespace_uri)
 
 
 def extract_declaration(
@@ -220,6 +232,7 @@ def extract_declaration(
     """Parse một XML thành :class:`ParsedDeclaration`; lỗi trả ``status='error'``."""
     try:
         root = parse_xml(data)
+        root, metadata = main_scope(root)
     except XmlReadError as error:
         return ParsedDeclaration(
             schema_version=SCHEMA_VERSION,
@@ -242,28 +255,46 @@ def extract_declaration(
         )
 
     ns = namespace_map(root)
-    form_code, _ = find_first(root, (".//n:maTKhai", ".//n:MSo"), ns)
-    form_name, _ = find_first(root, (".//n:tenTKhai", ".//n:Ten"), ns)
-    form_version, _ = find_first(root, (".//n:pbanTKhaiXML", ".//n:PBan"), ns)
-    filing_type, _ = find_first(root, (".//n:loaiTKhai",), ns)
-    supplement, _ = find_first(root, (".//n:soLan",), ns)
-    tax_code, _ = find_first(root, (".//n:mst", ".//n:MST"), ns)
-    taxpayer_name, _ = find_first(root, (".//n:tenNNT", ".//n:TNNT"), ns)
-    address, _ = find_first(root, (".//n:dchiNNT", ".//n:DDanh"), ns)
-    period_raw, _ = find_first(root, (".//n:kyKKhai",), ns)
-    period_type, _ = find_first(root, (".//n:kieuKy",), ns)
-    period_from, _ = find_first(root, (".//n:kyKKhaiTuNgay",), ns)
-    period_to, _ = find_first(root, (".//n:kyKKhaiDenNgay",), ns)
+    form_code, _ = find_first(metadata, (".//n:maTKhai", ".//n:MSo"), ns)
+    form_name, _ = find_first(metadata, (".//n:tenTKhai", ".//n:Ten"), ns)
+    form_version, _ = find_first(metadata, (".//n:pbanTKhaiXML", ".//n:PBan"), ns)
+    filing_type, _ = find_first(metadata, (".//n:loaiTKhai",), ns)
+    supplement, _ = find_first(metadata, (".//n:soLan",), ns)
+    tax_code, _ = find_first(metadata, (".//n:mst", ".//n:MST"), ns)
+    taxpayer_name, _ = find_first(metadata, (".//n:tenNNT", ".//n:TNNT"), ns)
+    address, _ = find_first(metadata, (".//n:dchiNNT", ".//n:DDanh"), ns)
+    period_raw, _ = find_first(metadata, (".//n:kyKKhai",), ns)
+    period_type, _ = find_first(metadata, (".//n:kieuKy",), ns)
+    period_from, _ = find_first(metadata, (".//n:kyKKhaiTuNgay",), ns)
+    period_to, _ = find_first(metadata, (".//n:kyKKhaiDenNgay",), ns)
     period_year, period_month, period_quarter = _period_parts(period_raw, period_type)
 
-    mapping = registry.lookup(form_code, form_version) if registry is not None else None
-    indicators = _collect_indicators(root, mapping, ns)
     warnings: list[str] = []
+    mapping = registry.lookup(form_code, form_version) if registry is not None else None
+    as_of = None
+    if period_from:
+        try:
+            as_of = date.fromisoformat(period_from) if re.fullmatch(r'\d{4}-\d{2}-\d{2}', period_from) else parse_date(period_from)
+        except ValueError:
+            warnings.append('INVALID_PERIOD_START')
+    if mapping is not None and not mapping.matches_document(root, as_of):
+        mapping = None
+        warnings.append('MAPPING_DOCUMENT_OR_DATE_MISMATCH')
+    if registry is not None and registry.diagnostics:
+        warnings.append('MAPPING_REGISTRY_WARNINGS')
+    indicators = _collect_indicators(root, mapping, ns)
     status = "MAPPED" if mapping is not None else "NEED_MAPPING"
     if mapping is None and (form_code or form_name):
         warnings.append("MAPPING_NOT_FOUND")
     if not form_code:
         warnings.append("MISSING_FORM_CODE")
+    required_codes = {f.indicator_code for f in mapping.fields.values() if f.required} if mapping else set()
+    incomplete = any(item.warnings and (item.code in required_codes or 'MISSING_IN_XML' not in item.warnings)
+                     for item in indicators)
+    if required_codes and any(item.code in required_codes and item.value is None for item in indicators):
+        incomplete = True
+    if incomplete:
+        warnings.append('EXTRACTION_INCOMPLETE')
 
     return ParsedDeclaration(
         schema_version=SCHEMA_VERSION,
@@ -293,6 +324,10 @@ def extract_declaration(
         mapping_id=mapping.mapping_id if mapping else None,
         mapping_version=mapping.mapping_version if mapping else None,
         warnings=warnings,
+        mapping_sha256=mapping.fingerprint if mapping else None,
+        registry_sha256=registry.fingerprint if registry is not None else None,
+        extraction_complete=not incomplete if mapping else None,
+        validation_status='PARTIAL' if incomplete else 'EXTRACTED' if mapping else 'UNVERIFIED',
     )
 
 
