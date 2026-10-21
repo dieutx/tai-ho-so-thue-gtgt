@@ -35,12 +35,14 @@ from bs4 import BeautifulSoup
 from ..auth_outcomes import AuthFailure, AuthOutcome, classify_response, raise_terminal
 from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from ..contracts import DownloadArtifact, Solver, Transport
+from ..dvc_notices import DvcNotice, NoticeList, decode_notice_response
 from ..errors import LegacyEtaxError, LegacyPageError
 from ..headers import build_image_headers, build_page_headers, build_xhr_headers
+from ..legacy_notices import parse_legacy_notice_list
 from ..legacy_session import LegacySessionState
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..naming import safe_filename_part
-from ..parsing import parse_record_table
+from ..parsing import legacy_transaction_ids, parse_record_table
 from ..portal_profiles import LegacyProfile, profile_for
 from ..table_contracts import ParseDiagnostics
 from .base import Portal
@@ -48,6 +50,8 @@ from .base import Portal
 _LOGIN_FORM_ID = "loginForm"
 _SEARCH_FORM_ID = "traCuuKhaiForm"
 _RESULT_TABLE_ID = "data_content_onday"
+_NOTICE_FORM_ID = "tkhaiForm"
+_SESSION_FIELDS = ("dse_sessionId", "dse_applicationId", "dse_pageId", "dse_processorState", "dse_processorId")
 
 def _form_node(html: str, form_id: str):
     """Tìm form theo ``id`` rồi tới ``name`` (một số màn hình legacy chỉ có name)."""
@@ -321,11 +325,11 @@ class LegacySessionNavigator:
         fields.update({key: str(value) for key, value in overrides.items()})
         return self._post_fields(action, fields, referer)
 
-    def _post_fields(self, action: str, fields: Mapping[str, Any], referer: str):
+    def _post_fields(self, action: str, fields: Mapping[str, Any], referer: str, *, navigation: bool = False):
         """POST form đăng nhập điều hướng trang; nghiệp vụ legacy dùng XHR."""
         # loginForm's logon()/checkVerify() calls native form.submit().
         # Its POST navigates the document; other legacy operations remain XHR.
-        navigation = fields.get('dse_operationName') == 'corpUserLoginProc'
+        navigation = navigation or fields.get('dse_operationName') == 'corpUserLoginProc'
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Origin': LEGACY_ETAX_ORIGIN,
@@ -478,6 +482,11 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._transaction_ids: dict[str, str] = {}
+        self._notice_page_html = ''
+        self._notice_page_url = ''
+        self._notice_form_id = _NOTICE_FORM_ID
+        self._active_record: CaseRecord | None = None
         self._search_page_html = ''
         self._search_page_url = ''
         self._search_form_id = _SEARCH_FORM_ID
@@ -525,6 +534,7 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
         self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
+        self._transaction_ids = legacy_transaction_ids(response.text)
         parsed = parse_record_table(response.text, self.source, schema=self.legacy_capabilities.schema)
         return PageResult(records=parsed.records, total_pages=_total_pages(response.text, table_id=self.legacy_capabilities.table_id),
                           http_status=response.status_code, diagnostics=parsed.diagnostics)
@@ -541,7 +551,90 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
     # --- Giai đoạn 4: tải ---
     def fetch_detail_csrf(self, record: CaseRecord) -> tuple[str, str]:
         """Trang legacy không dùng CSRF; trả URL tham chiếu cho ``download``."""
+        self._active_record = record
         return f"{LEGACY_ETAX_BASE}/Request?messageId={record.ma_ho_so}", ""
+
+    def _transaction_id(self, record: CaseRecord) -> str:
+        """``ctMaGDich`` của hồ sơ, đọc lại từ trang kết quả nếu chưa có."""
+        transaction_id = self._transaction_ids.get(record.ma_ho_so, "")
+        if not transaction_id and self._search_page_html:
+            self._transaction_ids.update(legacy_transaction_ids(self._search_page_html))
+            transaction_id = self._transaction_ids.get(record.ma_ho_so, "")
+        return transaction_id
+
+    def fetch_notices(self) -> list[DvcNotice]:
+        return self.fetch_notice_list().notices
+
+    def fetch_notice_list(self) -> NoticeList:
+        # Never let a failed discovery reuse the previous declaration's form.
+        self._notice_page_html = ''
+        self._notice_page_url = ''
+        record = self._active_record
+        if record is None:
+            return NoticeList()
+        transaction_id = self._transaction_id(record)
+        if not transaction_id:
+            return NoticeList()
+        _, fields = _form_fields(self._search_page_html, self._search_form_id)
+        params = {key: fields[key] for key in _SESSION_FIELDS if fields.get(key)}
+        params.update(dse_operationName=self.legacy_capabilities.operation,
+                      dse_errorPage='error_page.jsp', dse_nextEventName='viewTBao',
+                      ctMaGDich=transaction_id)
+        response = self.http.get(self.legacy_capabilities.request_url, params=params,
+            headers=build_page_headers(profile=self.profile,
+                headers={'Referer': self._search_page_url or LEGACY_ETAX_BASE}))
+        raise_terminal(response, 'ETAX_LEGACY', authenticated=True)
+        if response.status_code != 200:
+            return NoticeList()
+        form_id = self._form_id_for_operation(response.text, self.legacy_capabilities.operation, _NOTICE_FORM_ID)
+        listing = parse_legacy_notice_list(response.text)
+        if not form_id:
+            return NoticeList()
+        self._notice_form_id = form_id
+        self._notice_page_html = response.text
+        self._notice_page_url = response.url
+        return listing
+
+    def download_notice(self, notice: DvcNotice, detail_url: str, csrf: str):
+        """Tải một thông báo đính kèm của hồ sơ legacy.
+
+        Trang danh sách dùng form ``tkhaiForm`` với ``downloadFile(messageId)``;
+        form này là điều hướng tài liệu nên gửi bằng page header, không phải
+        XHR. XML/PDF trả về được giải mã bằng helper dùng chung với DVC.
+        """
+        if not self._notice_page_html:
+            self.logger.warning(
+                "Chưa có trang thông báo để tải %s; bỏ qua", notice.id
+            )
+            return None
+        try:
+            action, fields = _form_fields(self._notice_page_html, self._notice_form_id)
+        except LegacyEtaxError as error:
+            self.logger.warning("Không đọc được form thông báo %s: %s", notice.id, error)
+            return None
+        fields.update(
+            {
+                "dse_operationName": "traCuuToKhaiProc",
+                "dse_nextEventName": "download",
+                "pn": "1",
+                "messageId": notice.id,
+            }
+        )
+        response = self._post_fields(
+            action,
+            fields,
+            self._notice_page_url or LEGACY_ETAX_BASE,
+            navigation=True,
+        )
+        raise_terminal(response, 'ETAX_LEGACY', authenticated=True)
+        payload = decode_notice_response(response)
+        if payload is None:
+            self.logger.warning(
+                "Thông báo đính kèm %s không tải được (HTTP=%s); có thể hết phiên hoặc cổng đổi định dạng.",
+                notice.id,
+                getattr(response, "status_code", "-"),
+            )
+        return payload
 
     def download(self, record: CaseRecord, detail_url: str, csrf: str):
         """Tải XML tờ khai rồi gói vào ZIP trong bộ nhớ.
@@ -572,7 +665,11 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
         if response.status_code != 200:
             return response
         content_type = response.headers.get("content-type", "").lower()
-        from ..integrity import validate_xml
+        from ..integrity import validate_tax_zip, validate_xml
+        if response.content.startswith(b"PK") and "text/html" not in content_type:
+            if validate_tax_zip(response.content).ok:
+                return DownloadArtifact(response.content, 'zip', 'DECLARATION', record.key)
+            return _HtmlInsteadOfFile(response)
         xml_ok = validate_xml(response.content, "declaration").ok
         if "text/html" in content_type or not xml_ok:
             self.logger.error(
@@ -620,14 +717,28 @@ class EtaxLegacyFallback(Portal):
         self.legacy = legacy
         self.settings = primary.settings
         self.logger = logger or logging.getLogger("gdt_tax.portal.etax_legacy_fallback")
+        self._active_portal: Portal | None = None
 
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         return self.primary.search(period, page)
 
     def fetch_detail_csrf(self, record: CaseRecord) -> tuple[str, str]:
+        self._active_portal = self.legacy if record.nguon == SOURCE_ETAX_LEGACY else self.primary
         if record.nguon == SOURCE_ETAX_LEGACY:
             return self.legacy.fetch_detail_csrf(record)
         return self.primary.fetch_detail_csrf(record)
+
+    def fetch_notice_list(self):
+        fetch = getattr(self._active_portal, 'fetch_notice_list', None)
+        return fetch() if callable(fetch) else NoticeList()
+
+    def fetch_notices(self):
+        fetch = getattr(self._active_portal, 'fetch_notices', None)
+        return fetch() if callable(fetch) else []
+
+    def download_notice(self, notice, detail_url: str, csrf: str):
+        download = getattr(self._active_portal, 'download_notice', None)
+        return download(notice, detail_url, csrf) if callable(download) else None
 
     def download(self, record: CaseRecord, detail_url: str, csrf: str):
         if record.nguon == SOURCE_ETAX_LEGACY:

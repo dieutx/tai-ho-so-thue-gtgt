@@ -265,6 +265,14 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.assertEqual(config.from_date, '01/06/2025')
         self.assertEqual(config.output, self.root)
 
+    def test_stale_proxy_index_is_rejected_instead_of_crashing(self):
+        rows = [CaseRecord(str(i), SOURCE_ETAX_LEGACY, to_khai=f'fixture {i}').to_dict() for i in range(4)]
+        self.window.model.reset('tax', rows)
+        stale = self.window.proxy_model.index(3, 1)
+        self.window.model.reset('tax', rows[:1])
+        self.assertIsNone(self.window.proxy_model.source_row(stale))
+        self.assertEqual(self.window.proxy_model.source_row(self.window.proxy_model.index(0, 1)), 0)
+
     def test_unknown_or_other_account_rows_require_new_query(self):
         self.window.controller.sessions.set_account('fixture-user', 'fixture-secret')
         account = account_fingerprint('fixture-user')

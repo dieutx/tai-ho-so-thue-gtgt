@@ -11,6 +11,7 @@ HTML = {
     'etax_results.html': ('ETAX', 2, 'PARSED'),
     'etax_legacy_results.html': ('ETAX_LEGACY', 2, 'PARSED'),
     'etax_legacy_empty.html': ('ETAX_LEGACY', 0, 'EMPTY_CONFIRMED'),
+    'etax_legacy_notices.html': ('ETAX_LEGACY', 2, 'PARSED'),
     'dvc_results_page1.html': ('DVC', 2, 'PARSED'),
     # Historical empty tbody has pagination but no reviewed empty evidence.
     'dvc_results_page2.html': ('DVC', 0, 'SCHEMA_CHANGED'),
@@ -34,7 +35,7 @@ def build():
         source, count, outcome = HTML.get(path.name, ('OFFLINE', None, 'GOLDEN_OR_BINARY'))
         synthetic = path.relative_to(FIXTURES).parts[0] == 'auth' or path.name in {'tb_notice.pdf', 'sample_captcha.png'}
         rows.append({'path': path.relative_to(FIXTURES).as_posix(), 'source': source,
-            'operation': 'search' if path.suffix == '.html' else 'auth_matrix' if path.parent.name == 'auth' else 'offline_fixture',
+            'operation': 'attachment_list' if path.name == 'etax_legacy_notices.html' else 'search' if path.suffix == '.html' else 'auth_matrix' if path.parent.name == 'auth' else 'offline_fixture',
             'provenance': 'synthetic' if synthetic else 'inherited_unverified',
             'sanitized_at': '2026-10-21' if synthetic else None,
             'adapter_version': 'auth-v1' if path.parent.name == 'auth' else 'portal-table-v1',

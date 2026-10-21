@@ -66,7 +66,7 @@ class DvcNotice:
     loai_tbao: str = ""
 
     def key(self, parent: RecordKey) -> AttachmentKey:
-        return AttachmentKey(parent, "tdt" if self.is_tdt else "dvc", self.id,
+        return AttachmentKey(parent, ("legacy" if parent.source == "ETAX_LEGACY" else "tdt" if self.is_tdt else "dvc"), self.id,
                              self.loai_tra_cuu, self.loai_tbao)
 
     @property
@@ -75,6 +75,8 @@ class DvcNotice:
         text = _fold(self.title)
         if "tiep nhan" in text or "tiep nhan ho so" in text:
             return LOAI_TIEP_NHAN
+        if "chap nhan/khong chap nhan" in text:
+            return LOAI_KHAC
         if "khong chap nhan" in text or "khong duoc chap nhan" in text:
             return LOAI_KHONG_CHAP_NHAN
         if "chap nhan" in text or "xac nhan" in text:
@@ -257,7 +259,7 @@ def _parent_key(case_id: str | RecordKey) -> RecordKey:
 def notice_source(case_id: str | RecordKey, notice: DvcNotice) -> dict:
     parent = _parent_key(case_id)
     return {"parent_remote_id": parent.remote_id, "parent_record_key": parent.serialize(),
-            "record_key": notice.key(parent).serialize(), "source": "tdt" if notice.is_tdt else "dvc",
+            "record_key": notice.key(parent).serialize(), "source": notice.key(parent).source,
             "kind": "attachment", "remote_id": notice.id,
             "loai_tra_cuu": notice.loai_tra_cuu, "loai_tbao": notice.loai_tbao,
             "account_key": parent.account_key}

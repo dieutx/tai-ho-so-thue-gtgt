@@ -39,7 +39,11 @@ def parse_xml(data: bytes, policy: XmlPolicy = DEFAULT_XML_POLICY) -> etree._Ele
         raise XmlReadError('INVALID_XML') from error
     if root is None:
         raise XmlReadError('EMPTY_XML')
-    if root.getroottree().docinfo.doctype:
+    # Historical declarations may name an external DTD. It is never loaded.
+    # Entity declarations/references remain forbidden, including UTF-16 input.
+    dtd = root.getroottree().docinfo.internalDTD
+    if (dtd is not None and any(dtd.iterentities())
+            or any(isinstance(node, etree._Entity) for node in root.iter())):
         raise XmlReadError('XML_DTD_NOT_ALLOWED')
     count = 0
     stack = [(root, 1)]

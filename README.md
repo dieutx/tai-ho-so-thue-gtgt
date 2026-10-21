@@ -23,6 +23,14 @@ CAPTCHA được thử tự động tối đa **5 lần**; nếu vẫn chưa th�
 DVC được bật mặc định. **Trạng thái thuế** và **trạng thái tệp** được hiển thị riêng;
 hồ sơ bị từ chối vẫn có thể đã tải thành công.
 
+Với hồ sơ DVC và legacy, app tải thêm **thông báo tiếp nhận / chấp nhận /
+không chấp nhận** đính kèm hồ sơ (XML/PDF) vào
+`thong-bao-dinh-kem/<mã hồ sơ>/` trong nơi lưu. Tệp đã có được bỏ qua; lỗi tải
+thông báo không làm mất ZIP đã tải thành công và được báo riêng là chưa đầy đủ.
+App không chặn ngày trước 01/01/2015; hỗ trợ XML cũ có DOCTYPE không ENTITY và
+ZIP trả trực tiếp. Khả năng lấy được hồ sơ thực tế còn phụ thuộc dữ liệu/quyền
+truy cập của cổng; chưa kiểm chứng hồ sơ thật trước 2015 trong bản sửa này.
+
 ## Đọc XML và xuất Excel
 
 Chọn **Phân tích XML** → chọn hoặc kéo thả XML/ZIP → chọn nơi xuất → chạy phân tích.

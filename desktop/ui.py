@@ -704,8 +704,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             self.open_path(Path(value))
 
     def selected_row(self) -> dict | None:
-        index = self.table.currentIndex()
-        return self.model.rows[self.proxy_model.mapToSource(index).row()] if index.isValid() else None
+        row = self.proxy_model.source_row(self.table.currentIndex())
+        return self.model.rows[row] if row is not None and row < len(self.model.rows) else None
 
     def show_subview(self, _index: int) -> None:
         pass  # Configuration and results remain visible together.

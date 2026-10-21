@@ -68,6 +68,9 @@ class AttachmentTests(unittest.TestCase):
             audit = json.loads(row['attachment_result'])
             self.assertTrue(audit['items'][0]['sha256'])
             self.assertTrue(audit['items'][0]['key'].startswith('ak1.'))
+            attachment_path = Path(audit['items'][0]['path'])
+            self.assertFalse(attachment_path.is_absolute())
+            self.assertTrue((self.root / attachment_path).is_file())
 
     def test_auth_network_and_save_failure_are_independent_from_zip(self):
         for failure in (NetworkError('fixture'), AuthFailure(AuthOutcome.EXPIRED_SESSION),

@@ -169,8 +169,11 @@ class SelectionHeader(QHeaderView):
             if model is not None and model.mode == 'offline':
                 self.checkbox.hide()
             return
-        visible = {document_id(model.mode, model.rows[proxy.mapToSource(proxy.index(i, 0)).row()])
-                   for i in range(proxy.rowCount())}
+        visible = set()
+        for row in range(proxy.rowCount()):
+            source_row = proxy_source_row(proxy, proxy.index(row, 0))
+            if source_row is not None and source_row < model.rowCount():
+                visible.add(document_id(model.mode, model.rows[source_row]))
         self.checkbox.setGeometry(rect.center().x() - 8, rect.center().y() - 8, 18, 18)
         self.checkbox.blockSignals(True)
         self.checkbox.setCheckState(Qt.CheckState.Checked if visible and visible.issubset(model.checked)
@@ -179,11 +182,31 @@ class SelectionHeader(QHeaderView):
         self.checkbox.show()
 
 
+def proxy_source_row(proxy: QSortFilterProxyModel, index: QModelIndex) -> int | None:
+    """Đổi chỉ số của proxy thành dòng nguồn, an toàn với chỉ số cũ.
+
+    Qt 6.8 có thể crash trong ``mapToSource`` khi bảng vừa được reset/lọc lại
+    (mapping bị xoá) mà chỉ số vẫn mang dòng của mapping cũ. Gọi ``rowCount()``
+    trước để Qt dựng lại mapping, rồi kiểm tra biên trước khi map.
+    """
+    if not index.isValid() or index.model() is not proxy:
+        return None
+    row, column = index.row(), index.column()
+    if row < 0 or column < 0 or row >= proxy.rowCount() or column >= proxy.columnCount():
+        return None
+    mapped = proxy.mapToSource(index)
+    return mapped.row() if mapped.isValid() else None
+
+
 class RecordsProxy(QSortFilterProxyModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.query_text = ''
         self.status_filter = 'all'
+
+    def source_row(self, index: QModelIndex) -> int | None:
+        """Dòng nguồn của một chỉ số proxy; ``None`` nếu chỉ số đã cũ/không hợp lệ."""
+        return proxy_source_row(self, index)
 
     def setFilterFixedString(self, text):
         self.query_text = text.casefold().strip()

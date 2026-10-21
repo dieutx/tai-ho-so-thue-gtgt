@@ -111,6 +111,9 @@ class DvcPortal(Portal):
     def fetch_notice_list(self):
         return parse_notice_list(self.detail_html)
 
+    def fetch_notices(self):
+        return self.fetch_notice_list().notices
+
     def download_notice(self, notice, detail_url: str, csrf: str):
         path = '/tchs/downloadthongbao-tdt' if notice.is_tdt else '/tchs/downloadthongbao'
         response = self.http.post(path,

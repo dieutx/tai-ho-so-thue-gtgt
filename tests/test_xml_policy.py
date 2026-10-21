@@ -33,6 +33,20 @@ class XmlPolicyTests(unittest.TestCase):
             parse_xml(data)
         self.assertEqual(profile_xml(data).status, 'error')
 
+    def test_legacy_external_doctype_is_not_loaded_and_shared_readers_agree(self):
+        from gdt_tax.integrity import validate_xml
+        data = RETURN_XML.replace(b'<HSoThueDTu', b'<!DOCTYPE HSoThueDTu SYSTEM "https://invalid.example/never-load.dtd"><HSoThueDTu', 1)
+        self.assertTrue(validate_xml(data, 'declaration').ok)
+        self.assertEqual(extract_declaration(data).form_code, extract_declaration(RETURN_XML).form_code)
+        self.assertEqual(profile_xml(data).namespace, profile_xml(RETURN_XML).namespace)
+
+    def test_entity_declarations_are_rejected_even_when_unused_or_utf16(self):
+        for text in ('<!DOCTYPE r [<!ENTITY e "value">]><r/>',
+                     '<!DOCTYPE r [<!ENTITY % e SYSTEM "https://invalid.example/entity">]><r/>'):
+            for encoding in ('utf-8', 'utf-16'):
+                with self.subTest(encoding=encoding), self.assertRaises(XmlReadError):
+                    parse_xml(text.encode(encoding))
+
     def test_prefix_and_default_namespace_extract_equivalent_values(self):
         prefixed = RETURN_XML.decode().replace('xmlns=', 'xmlns:p=')
         prefixed = re.sub(r'<(/?)([A-Za-z][A-Za-z0-9_]*)(?=[\s>])', r'<\1p:\2', prefixed).encode()

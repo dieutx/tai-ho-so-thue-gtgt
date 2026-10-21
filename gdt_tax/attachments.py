@@ -32,7 +32,7 @@ class AttachmentResult:
 def collect_attachments(portal, record, store, hooks, result: AttachmentResult):
     try:
         detail_url, csrf = portal.fetch_detail_csrf(record)
-        if not csrf:
+        if not csrf and not getattr(portal, "csrf_optional", False):
             result.discovery_failed = 1
             result.items.append({'code': 'ATTACHMENT_CSRF_MISSING', 'retryable': True})
             return
@@ -44,7 +44,7 @@ def collect_attachments(portal, record, store, hooks, result: AttachmentResult):
         for notice in listing.notices:
             hooks.check()
             item = {'key': notice.key(record.key).serialize(), 'parent_key': record.record_key,
-                    'source': 'tdt' if notice.is_tdt else 'dvc', 'remote_id': notice.id}
+                    'source': notice.key(record.key).source, 'remote_id': notice.id}
             try:
                 path = store.find_existing(record.key, notice)
                 reused = path is not None
@@ -57,7 +57,7 @@ def collect_attachments(portal, record, store, hooks, result: AttachmentResult):
                 else:
                     result.reused += int(reused)
                     result.downloaded += int(not reused)
-                    item.update(status='REUSED' if reused else 'DOWNLOADED', path=str(path),
+                    item.update(status='REUSED' if reused else 'DOWNLOADED', path=path.relative_to(store.root.parent).as_posix(),
                                 sha256=hashlib.sha256(path.read_bytes()).hexdigest(), size=path.stat().st_size,
                                 code='', retryable=False)
             except (GdtError, OSError) as error:

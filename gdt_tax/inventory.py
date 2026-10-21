@@ -63,7 +63,7 @@ LOGGER_NAME = "gdt_tax.inventory"
 
 #: Phiên bản schema manifest và thuật toán profile. Đổi khi thêm/bớt trường.
 INVENTORY_SCHEMA_VERSION = "artifact-inventory-v2"
-PROFILE_VERSION = "xml-profile-v5"
+PROFILE_VERSION = "xml-profile-v6"
 
 MANIFEST_NAME = "manifest_artifact.json"
 DISCOVERY_JSON = "bao_cao_discovery.json"

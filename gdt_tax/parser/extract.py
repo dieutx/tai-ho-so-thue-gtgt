@@ -36,7 +36,7 @@ from .xml_reader import (
     parse_xml,
 )
 
-PARSER_VERSION = "declaration-parser-v4"
+PARSER_VERSION = "declaration-parser-v5"
 SCHEMA_VERSION = "parsed-declaration-v1"
 
 #: Node chứa chỉ tiêu tổng hợp trên tờ khai chính (không phải bảng kê chi tiết).

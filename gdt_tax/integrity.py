@@ -19,7 +19,7 @@ from pypdf.errors import PyPdfError
 from .archive_limits import MAX_ARCHIVE_BYTES, MAX_MEMBER_BYTES
 from .xml_policy import MAX_XML_BYTES, XmlReadError, parse_xml
 
-VALIDATOR_VERSION = "download-integrity-v1"
+VALIDATOR_VERSION = "download-integrity-v2"
 DECLARATION_NS = "http://kekhaithue.gdt.gov.vn/TKhaiThue"
 
 
@@ -49,7 +49,7 @@ def validate_xml(data: bytes, kind: str) -> IntegrityResult:
         return _result(data, kind, str(error))
     name, namespace = etree.QName(root).localname, etree.QName(root).namespace
     roots = {"declaration": {"HSoThueDTu", "HSoKhaiThue", "TKhai"},
-             "gnt": {"CHUNGTU"}, "notice": {"TBao", "TBaoThue"}}
+             "gnt": {"CHUNGTU"}, "notice": {"TBao", "TBaoThue", "TBaoThueDTu"}}
     if name not in roots.get(kind, set()) or namespace not in {None, DECLARATION_NS}:
         return _result(data, kind, "UNSUPPORTED_XML_KIND_OR_NAMESPACE", unsupported=True)
     return _result(data, kind)

@@ -184,6 +184,19 @@ python -m gdt_tax --case-id MA_HO_SO
 
 `--case-id` tìm hồ sơ trong khoảng ngày đang cấu hình.
 
+Với hồ sơ DVC và legacy, mỗi hồ sơ tải xong còn được lấy các **thông báo đính
+kèm** (tiếp nhận, chấp nhận, không chấp nhận) và lưu vào
+`<nơi lưu>/thong-bao-dinh-kem/<mã hồ sơ>/`. Tệp đã có được bỏ qua; lỗi tải
+thông báo không làm hỏng ZIP đã tải; báo cáo ghi riêng trạng thái thông báo
+chưa đầy đủ, không coi trang lạ hoặc chỉ đọc được một phần là rỗng thành công.
+
+Chương trình không đặt mốc chặn ngày `01/01/2015`; khoảng ngày cũ vẫn gửi đến
+legacy theo từng đoạn tối đa 31 ngày. XML cũ có DOCTYPE không ENTITY và ZIP
+trả trực tiếp dùng chung bộ xác minh khi tải/lưu/resume/đọc offline.
+Kết quả rỗng không đủ chứng minh cổng đã xóa hồ sơ; cần đối chiếu tài khoản,
+quyền truy cập, khoảng ngày và kết quả tra cứu trên cổng. Lượt sửa này chỉ
+kiểm thử offline, chưa xác nhận lấy được hồ sơ thật trước 2015.
+
 Một số lệnh hữu ích:
 
 ```bash

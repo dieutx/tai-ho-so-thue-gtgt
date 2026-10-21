@@ -197,16 +197,21 @@ class V2InteractionMixin:
         index = self.table.currentIndex()
         if self.mode == 'offline' or self.controller.busy or not index.isValid():
             return
-        source = self.proxy_model.mapToSource(index)
-        key = document_id(self.mode, self.model.rows[source.row()])
-        self.model.setData(self.model.index(source.row(), 0), Qt.CheckState.Unchecked if key in self.model.checked else Qt.CheckState.Checked,
+        source_row = self.proxy_model.source_row(index)
+        if source_row is None or source_row >= len(self.model.rows):
+            return
+        key = document_id(self.mode, self.model.rows[source_row])
+        self.model.setData(self.model.index(source_row, 0), Qt.CheckState.Unchecked if key in self.model.checked else Qt.CheckState.Checked,
                            Qt.ItemDataRole.CheckStateRole)
 
     def select_visible_header(self, column):
         if column != 0 or self.mode == 'offline' or self.controller.busy:
             return
-        ids = {document_id(self.mode, self.model.rows[self.proxy_model.mapToSource(self.proxy_model.index(i, 0)).row()])
-               for i in range(self.proxy_model.rowCount())}
+        ids = set()
+        for row in range(self.proxy_model.rowCount()):
+            source_row = self.proxy_model.source_row(self.proxy_model.index(row, 0))
+            if source_row is not None and source_row < len(self.model.rows):
+                ids.add(document_id(self.mode, self.model.rows[source_row]))
         if ids and ids.issubset(self.model.checked):
             self.model.checked.difference_update(ids)
         else:

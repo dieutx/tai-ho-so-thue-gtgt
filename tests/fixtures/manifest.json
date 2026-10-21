@@ -55,6 +55,19 @@
       "sanitization": "Historical repository fixture; original capture and anonymization unverified. Do not distribute as sanitized live evidence."
     },
     {
+      "path": "etax_legacy_notices.html",
+      "source": "ETAX_LEGACY",
+      "operation": "attachment_list",
+      "provenance": "inherited_unverified",
+      "sanitized_at": null,
+      "adapter_version": "portal-table-v1",
+      "content_kind": "html",
+      "expected_rows": 2,
+      "expected_outcome": "PARSED",
+      "canonical_sha256": "4a489ce4d6ee9c5cd41efaff099d2ef14768af24ed23f486c2a531735f32fbf4",
+      "sanitization": "Historical repository fixture; original capture and anonymization unverified. Do not distribute as sanitized live evidence."
+    },
+    {
       "path": "etax_legacy_results.html",
       "source": "ETAX_LEGACY",
       "operation": "search",
@@ -64,7 +77,7 @@
       "content_kind": "html",
       "expected_rows": 2,
       "expected_outcome": "PARSED",
-      "canonical_sha256": "6928016db4248619d912922d82a245eb79cf540f808f59d17c917ae975a950d1",
+      "canonical_sha256": "cd940d7193cc16fae4eac4ab857918c5d475d935775b8f9681e365281e39fc29",
       "sanitization": "Historical repository fixture; original capture and anonymization unverified. Do not distribute as sanitized live evidence."
     },
     {
