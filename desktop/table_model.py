@@ -11,10 +11,11 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QCheckBox, QHeaderView
 
 from .documents import FILE_LABELS, display_amount, document_id, event_datetime, needs_review
+from .notices import STATE_LABELS
 
 COLUMNS = {
     'tax': [('_selected', 'Chọn'), ('to_khai', 'Hồ sơ / Tờ khai'), ('ky_tinh_thue', 'Kỳ tính thuế'),
@@ -92,7 +93,7 @@ class RecordsModel(QAbstractTableModel):
                 notices = row.get('_notices') or []
                 if not notices:
                     return 'Không có tệp thông báo XML đính kèm trong thư mục đã tải'
-                return '\n'.join(f"{item.get('kind_label', 'Thông báo')}: "
+                return 'Bấm để mở danh sách XML:\n' + '\n'.join(f"{item.get('kind_label', 'Thông báo')}: "
                                  f"{item.get('so_thong_bao') or item.get('name', '')}"
                                  + (f" — {item['ly_do']}" if item.get('ly_do') else '')
                                  for item in notices)
@@ -101,6 +102,10 @@ class RecordsModel(QAbstractTableModel):
             return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         if role == Qt.ItemDataRole.BackgroundRole and self.mode == 'tax' and row.get('_notice_state') == 'rejected':
             return REJECTED_ROW
+        if role == Qt.ItemDataRole.FontRole and key == '_notice_state' and row.get('_notices'):
+            font = QFont()
+            font.setUnderline(True)
+            return font
         if role == Qt.ItemDataRole.ForegroundRole:
             if key == '_file_status':
                 return QColor({'downloaded': '#15805B', 'failed': '#C94242'}.get(row.get(key), '#67768C'))
@@ -121,7 +126,11 @@ class RecordsModel(QAbstractTableModel):
         if key == '_file_status':
             return FILE_LABELS.get(row.get(key, 'not_downloaded'), 'Chưa tải')
         if key == '_notice_state':
-            return row.get('_notice_summary') or '—'
+            state = row.get(key)
+            if not state:
+                return '—'
+            count = len(row.get('_notices') or [])
+            return f"{STATE_LABELS.get(state, state)}\nMở {count} XML"
         if key == '_action':
             return 'Mở tệp' if row.get('_file_status') == 'downloaded' else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp'
         if key == 'so_tien':
@@ -148,6 +157,8 @@ class RecordsModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.ToolTipRole and section == 0 and self.mode != 'offline':
             return 'Chọn / bỏ chọn toàn bộ kết quả đang hiển thị sau tìm kiếm và bộ lọc'
         if role == Qt.ItemDataRole.ToolTipRole and orientation == Qt.Orientation.Horizontal:
+            if COLUMNS[self.mode][section][0] == '_notice_state':
+                return 'Thông báo của cơ quan thuế cho tờ khai; bấm vào ô để mở tệp XML đã tải'
             return COLUMNS[self.mode][section][1]
         return None
 

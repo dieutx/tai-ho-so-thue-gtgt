@@ -312,6 +312,10 @@ def build_workspace(window):
     tools = QHBoxLayout()
     tools.addWidget(button('Sao chép mã', self.copy_document_id))
     tools.addWidget(button('Metadata gốc', self.raw_details))
+    self.detail_notices = button('Mở thông báo', self.open_detail_notices,
+                                 'Mở tệp XML thông báo của cơ quan thuế cho tờ khai này')
+    self.detail_notices.hide()
+    tools.addWidget(self.detail_notices)
     drawer.addLayout(tools)
     actions = QHBoxLayout()
     self.detail_open = button('Mở tệp', self.open_detail_file)

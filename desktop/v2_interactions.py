@@ -316,6 +316,13 @@ class V2InteractionMixin:
             return
         self.notice_menu(row).exec(self.table.viewport().mapToGlobal(self.table.visualRect(index).bottomLeft()))
 
+    def open_detail_notices(self):
+        """Mở menu thông báo từ khung chi tiết."""
+        row = self.detail_row
+        if row and row.get('_notices'):
+            anchor = self.detail_notices.mapToGlobal(self.detail_notices.rect().bottomLeft())
+            self.notice_menu(row).exec(anchor)
+
     def details(self):
         row = self.selected_row()
         if row is None:
@@ -359,6 +366,10 @@ class V2InteractionMixin:
             parts.append('<p>Chỉ phân tích XML cục bộ; không xác thực chữ ký số hoặc tính đúng của nghĩa vụ thuế.</p>')
         self.detail_text.setHtml(''.join(parts))
         self.detail_open.setEnabled(bool(row.get('_file_path') and Path(row['_file_path']).is_file()))
+        notices = row.get('_notices') or []
+        self.detail_notices.setVisible(self.mode == 'tax')
+        self.detail_notices.setEnabled(bool(notices))
+        self.detail_notices.setText(f'Mở thông báo ({len(notices)})' if notices else 'Mở thông báo')
         self.sync_actions()
         self.position_drawer()
         self.drawer.show()
@@ -421,6 +432,8 @@ class V2InteractionMixin:
         row = self.selected_row()
         menu = QMenu(self)
         menu.addAction('Xem chi tiết', self.details)
+        if self.mode == 'tax' and row.get('_notices'):
+            menu.addAction('Mở thông báo XML…', lambda: (self.table.setCurrentIndex(index), self.open_notices(index)))
         if self.mode != 'offline':
             if row.get('_file_status') == 'downloaded':
                 menu.addAction('Mở tệp', lambda: (self.details(), self.open_detail_file()))
@@ -676,7 +689,7 @@ class V2InteractionMixin:
         for index, (key, _) in enumerate(columns):
             self.table.setColumnHidden(index, key in hidden)
             self.table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeMode.Interactive)
-            target = {'_selected': 34, '_action': 75, '_file_status': 83, '_notice_state': 118, 'ngay_nop': 128,
+            target = {'_selected': 34, '_action': 75, '_file_status': 83, '_notice_state': 138, 'ngay_nop': 128,
                       'ngay_lap': 128, 'ngay_gui': 128, 'trang_thai': 145,
                       'ky_tinh_thue': 95, 'so_tien': 120, 'form_code': 90,
                       'form_version': 80, 'status': 120}.get(key, 160)

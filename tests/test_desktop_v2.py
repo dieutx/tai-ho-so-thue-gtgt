@@ -334,12 +334,15 @@ class DesktopV2InteractionTests(unittest.TestCase):
         column = next(index for index, (key, _) in enumerate(COLUMNS['tax']) if key == '_notice_state')
         row = dict(CaseRecord('fixture', SOURCE_ETAX_LEGACY, trang_thai='Đã chấp nhận').to_dict(),
                    _notice_state='rejected', _notice_summary='Không chấp nhận (2)',
-                   _notices=[{'kind_label': 'Không chấp nhận', 'so_thong_bao': '298018/0109/2026/TB-TĐT',
-                              'ly_do': 'Hồ sơ không hợp lệ', 'name': 'fixture.xml'}])
+                   _notices=[{'kind_label': 'Tiếp nhận', 'so_thong_bao': '1109094948983/2026', 'name': 'tiep-nhan.xml'},
+                             {'kind_label': 'Không chấp nhận', 'so_thong_bao': '298018/0109/2026/TB-TĐT',
+                              'ly_do': 'Hồ sơ không hợp lệ', 'name': 'khong-chap-nhan.xml'}])
         self.window.model.reset('tax', [row])
         index = self.window.model.index(0, column)
-        self.assertEqual(index.data(), 'Không chấp nhận (2)')
+        self.assertEqual(index.data(), 'Không chấp nhận\nMở 2 XML')
+        self.assertIn('Bấm để mở danh sách XML', index.data(Qt.ItemDataRole.ToolTipRole))
         self.assertIn('298018/0109/2026/TB-TĐT', index.data(Qt.ItemDataRole.ToolTipRole))
+        self.assertTrue(index.data(Qt.ItemDataRole.FontRole).underline())
         self.assertEqual(index.data(Qt.ItemDataRole.BackgroundRole).name(), '#fdecea')
         self.assertEqual(index.data(Qt.ItemDataRole.ForegroundRole).name(), '#c94242')
         accepted = dict(row, _notice_state='accepted', _notice_summary='Chấp nhận (2)')
@@ -361,6 +364,10 @@ class DesktopV2InteractionTests(unittest.TestCase):
         with patch.object(self.window, 'open_path') as opener:
             menu.actions()[0].trigger()
         opener.assert_called_once_with(notice)
+        self.window.details()
+        self.assertFalse(self.window.detail_notices.isHidden())
+        self.assertTrue(self.window.detail_notices.isEnabled())
+        self.assertEqual(self.window.detail_notices.text(), 'Mở thông báo (1)')
 
     def test_stale_proxy_index_is_rejected_instead_of_crashing(self):
         rows = [CaseRecord(str(i), SOURCE_ETAX_LEGACY, to_khai=f'fixture {i}').to_dict() for i in range(4)]
