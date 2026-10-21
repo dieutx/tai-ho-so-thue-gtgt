@@ -1,5 +1,12 @@
 # Tiến trình sửa 26 mục core — 21/10/2026
 
+> Cập nhật tích hợp: toàn bộ chuỗi core !5–!28 và nhánh tài liệu !4 đã được
+> merge vào `main`, cùng nhánh legacy, sửa bảng Qt và phiên bản desktop 2.0.1.
+> Checkout tích hợp: `.cache/pr-worktrees/main-integration` ở repo làm việc.
+> Nội dung bên dưới là snapshot trước merge, giữ lại để truy vết MR/kiểm thử.
+> Chi tiết mới: `docs/LEGACY_NOTICES_PRE2015.md`; trạng thái hiện hành ở
+> `PROGRESS.md`. Không dùng bảng trạng thái lịch sử dưới đây làm backlog mới.
+
 **Đã triển khai đủ 26/26 mục trong các MR; chưa merge MR, build EXE hoặc phát hành.**
 
 `implemented_mr` nghĩa đã có code và kiểm thử trong MR, chưa có nghĩa thay đổi đã vào main/release.
