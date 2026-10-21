@@ -34,10 +34,9 @@ from bs4 import BeautifulSoup
 
 from ..auth_outcomes import AuthFailure, AuthOutcome, classify_response, raise_terminal
 from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
-from ..contracts import DownloadArtifact
+from ..contracts import DownloadArtifact, Solver, Transport
 from ..errors import LegacyEtaxError, LegacyPageError
 from ..headers import build_image_headers, build_page_headers, build_xhr_headers
-from ..http import HttpClient
 from ..legacy_session import LegacySessionState
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..naming import safe_filename_part
@@ -170,14 +169,8 @@ def _total_pages(html: str) -> int:
     return 1 if _RESULT_TABLE_ID in html else 0
 
 
-class EtaxLegacyPortal(Portal):
-    """Tra cứu và tải tờ khai trên trang Thuế điện tử cũ.
-
-    Luồng DSE khác hẳn DVC nhưng kết quả vẫn là :class:`PageResult` /
-    :class:`CaseRecord` nên pipeline dùng chung được. Trang cũ trả **XML**
-    (không phải ZIP): :meth:`download` gói XML vào ZIP trong bộ nhớ để phần lưu
-    file và metadata dùng chung mà không phải sửa gì.
-    """
+class LegacySessionNavigator:
+    """Authenticate a DSE session and navigate to a requested business operation."""
 
     source = SOURCE_ETAX_LEGACY
     detail_loai = SOURCE_ETAX_LEGACY
@@ -186,27 +179,28 @@ class EtaxLegacyPortal(Portal):
 
     def __init__(
         self,
-        http: HttpClient,
-        captcha,
+        http: Transport,
+        captcha: Solver,
         settings,
         logger: logging.Logger | None = None,
         *,
         login_attempts: int | None = None,
         session_state: LegacySessionState | None = None,
     ) -> None:
-        super().__init__(http, captcha, settings, logger)
+        self.http, self.captcha, self.settings = http, captcha, settings
+        self.logger = logger or logging.getLogger("gdt_tax.portal.legacy_navigation")
         self.login_attempts = (
             login_attempts if login_attempts is not None else settings.login_attempts
         )
         self.dse_session_id = ""
         self.home_page_id = ""
         self.home_page_html = ""
-        self._search_page_html = ""
-        self._search_page_url = ""
-        #: Form thực tế của trang nghiệp vụ; cổng có lúc đổi id/name của form.
-        self._search_form_id = _SEARCH_FORM_ID
         self._logged_in = False
         self.session_state = session_state
+
+    @property
+    def profile(self):
+        return self.settings.header_profile
 
     # --- Đăng nhập trang cũ ---
     def login(self) -> None:
@@ -510,6 +504,17 @@ class EtaxLegacyPortal(Portal):
             "nếu vẫn lỗi, kiểm tra tài khoản có chức năng này trên trang Thuế điện tử "
             "hoặc xem nhật ký kỹ thuật."
         )
+
+
+
+class EtaxLegacyPortal(LegacySessionNavigator, Portal):
+    """Declaration operations using the independent legacy navigator."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._search_page_html = ''
+        self._search_page_url = ''
+        self._search_form_id = _SEARCH_FORM_ID
 
     # --- Giai đoạn 3: tra cứu ---
     def search(self, period: SearchPeriod, page: int) -> PageResult:

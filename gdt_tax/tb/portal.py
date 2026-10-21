@@ -17,8 +17,8 @@ from ..dates import format_date
 from ..errors import LegacyEtaxError
 from ..headers import build_page_headers
 from ..integrity import validate_pdf
+from ..legacy_navigation import LegacyBusinessPortal, form_fields
 from ..models import SearchPeriod
-from ..portals.etax_legacy import EtaxLegacyPortal, _form_fields
 from .models import TbPageResult, ThongBao
 from .parsing import parse_tb_table, tb_page_count
 
@@ -45,7 +45,7 @@ def is_tb_pdf(data: bytes) -> bool:
     return validate_pdf(data).ok
 
 
-class TbPortal(EtaxLegacyPortal):
+class TbPortal(LegacyBusinessPortal):
     """Portal thông báo: dùng lại đăng nhập legacy, thêm tra cứu/tải TB."""
 
     def _open_tb_page(self) -> None:
@@ -77,7 +77,7 @@ class TbPortal(EtaxLegacyPortal):
 
     def _query_page(self, page: int):
         """Phân trang: GET kèm ``pn`` theo các khóa phiên của trang kết quả hiện tại."""
-        _, fields = _form_fields(self._search_page_html, self._search_form_id)
+        _, fields = form_fields(self._search_page_html, self._search_form_id)
         params = {key: fields[key] for key in _SESSION_KEYS if fields.get(key)}
         params.update(
             {

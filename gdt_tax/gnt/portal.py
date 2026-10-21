@@ -25,8 +25,8 @@ from ..constants import (
 from ..dates import format_date
 from ..errors import LegacyEtaxError
 from ..integrity import validate_xml
+from ..legacy_navigation import LegacyBusinessPortal
 from ..models import SearchPeriod
-from ..portals.etax_legacy import EtaxLegacyPortal
 from .models import GiayNopTien, GntPageResult
 from .parsing import gnt_page_count, parse_gnt_table
 
@@ -39,7 +39,7 @@ def is_gnt_xml(data: bytes) -> bool:
     return validate_xml(data, "gnt").ok
 
 
-class GntPortal(EtaxLegacyPortal):
+class GntPortal(LegacyBusinessPortal):
     """Portal giấy nộp tiền: dùng lại đăng nhập legacy, thêm tra cứu/tải GNT."""
 
     def _open_gnt_page(self) -> None:

@@ -27,3 +27,13 @@ parse. A partial page retains records, checkpoints them and raises SCHEMA_CHANGE
 tests/test_pipeline_contracts.py runs identical immediate-download, partial, repeated
 and target-stop traces through declaration, GNT and TB pipelines. No filenames,
 catalog schema, parallelism or payload buffering changed.
+
+## PR C: composed legacy navigator
+
+LegacySessionNavigator owns DSE authentication and operation navigation without
+declaration search/download methods or declaration form state. GNT and TB compose
+it through LegacyBusinessPortal; neither inherits declaration capabilities. The
+declaration adapter keeps a compatibility subclass and its own result form state.
+The shared LegacySessionState and desktop session lock still serialize one session.
+TB now uses the public form_fields boundary. Navigation compatibility properties
+are explicit; there is no catch-all delegation that hides missing capabilities.

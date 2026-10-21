@@ -37,6 +37,21 @@ if TYPE_CHECKING:
 
 
 class CoreContractTests(unittest.TestCase):
+    def test_business_adapters_compose_navigator_without_declaration_capabilities(self):
+        from unittest.mock import Mock
+
+        from gdt_tax.gnt.portal import GntPortal
+        from gdt_tax.portals.etax_legacy import EtaxLegacyPortal, LegacySessionNavigator
+        from gdt_tax.tb.portal import TbPortal
+        for adapter in (GntPortal, TbPortal):
+            navigator = Mock(spec=LegacySessionNavigator, logger=Mock())
+            portal = adapter(Mock(), StubCaptcha(), Mock(), navigator=navigator)
+            portal.login()
+            navigator.login.assert_called_once()
+            self.assertFalse(isinstance(portal, EtaxLegacyPortal))
+            self.assertFalse(hasattr(portal, 'download'))
+            self.assertFalse(hasattr(portal, 'search'))
+
     def test_fake_transport_needs_only_small_http_contract(self):
         http = FakeHttp(lambda *_: FakeResponse('synthetic'))
         self.assertIsInstance(http, Transport)
