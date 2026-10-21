@@ -32,6 +32,25 @@ riêng, đối chiếu SHA mã nguồn và checksum artifact trong receipt bàn 
 
 ## Lỗi bổ sung tái hiện bằng dữ liệu tổng hợp
 
+Kiểm thử tải bằng EXE tiếp tục phát hiện một biến thể **trên cổng thật**:
+JSON HTTP 200 `status=999`, `desc="Mã captcha không đúng, vui lòng thử lại."`.
+Classifier chỉ đọc message/error/description nên trả AUTH_SCHEMA_UNKNOWN và
+dừng trước lần OCR tiếp theo. Source đã tái hiện cùng lỗi trong bước tải
+10/2026. Nay đọc thêm trường desc nhưng vẫn yêu cầu nội dung CAPTCHA rõ ràng;
+không coi mọi status 999 là CAPTCHA. Regression kiểm lượt từ chối, token mới,
+lượt chấp nhận sau đó và thông điệp lạ phải tiếp tục SCHEMA_UNKNOWN.
+
+Bài kiểm tra online còn có giới hạn tổng 6 lượt xác thực, thấp hơn số tối
+thiểu cho ba vòng query/download/reuse khi DVC tạo phiên riêng cho mỗi job.
+Nâng riêng budget tổng của chẩn đoán lên 20, vẫn giữ 120 request/300 giây,
+15 trang và tối đa 6 lượt trong mỗi login. Không đổi giới hạn OCR tự động 5
+lần của ứng dụng. Test xác minh đủ vòng công việc nhưng lượt vượt trần vẫn
+bị chặn. `JobResult.downloaded` là số tệp primary hoàn tất, có bao gồm reuse;
+kiểm chứng tải mới phải xét thêm `reused`, không giả định giá trị này bằng 0
+trong lượt reuse.
+
+Các trường hợp dưới đây chỉ được xác nhận bằng dữ liệu tổng hợp:
+
 - **Thông báo legacy phụ thuộc vị trí/cách viết th/td:** đảo cột có tên đầy đủ
   hoặc đổi th thành td trong thead bị `SCHEMA_UNKNOWN`. Dùng chung bộ ánh xạ
   header có tên; vẫn từ chối cột trùng/thiếu hoặc ô dữ liệu gộp bất thường.

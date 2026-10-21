@@ -6,8 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from desktop.online_check import check_preferences, read_request
+from desktop.online_check import check_budget, check_preferences, read_request
 from desktop.services import RunConfig
+from gdt_tax.errors import NetworkError
 from tests.support import cleanup_temporary_directory
 
 
@@ -37,6 +38,17 @@ class OnlineCheckRequestTests(unittest.TestCase):
                            preferences=check_preferences())
         config.validate()
         self.assertEqual(config.settings().http_retries, 1)
+
+    def test_budget_covers_three_query_download_reuse_roundtrips_and_remains_bounded(self):
+        budget = check_budget()
+        # Initial legacy login, three DVC jobs per period and two OCR rejects.
+        for _ in range(1 + 3 * 3 + 2):
+            budget.authenticate()
+        self.assertEqual(budget.max_requests, 120)
+        while budget.auth_attempts < budget.max_auth_attempts:
+            budget.authenticate()
+        with self.assertRaisesRegex(NetworkError, 'authentication attempts'):
+            budget.authenticate()
 
     def test_only_reviewed_online_modes_are_accepted(self):
         for mode in ('tax', 'gnt', 'notice'):

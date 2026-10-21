@@ -15,6 +15,8 @@
   Chi tiết: [SCHEMA_REVIEW_20261022.md](docs/SCHEMA_REVIEW_20261022.md).
 - Sửa metadata EXE lấy nhầm phiên bản từ Python đã cài ở checkout cũ; đọc
   phiên bản từ đúng file source, buộc code/metadata/smoke/receipt khớp nhau.
+- Nhận phản hồi DVC `status=999` có `desc` xác nhận CAPTCHA sai để thử OCR
+  tiếp theo đúng giới hạn; không gán thông điệp lạ hoặc mọi status 999 là CAPTCHA.
 
 ## [2.0.3] — 2026-10-21
 

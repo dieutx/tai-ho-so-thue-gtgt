@@ -122,6 +122,22 @@ class AuthContractTests(unittest.TestCase):
             with self.assertRaises(RunCancelled):
                 portal._submit_login(first)
 
+    def test_live_dvc_desc_captcha_rejection_retries_then_accepts(self):
+        settings = Settings.from_env(environ={}, env_file=None, username='synthetic', password='fixture', login_attempts=2)
+        http, solver = Mock(hooks=RunHooks()), Mock()
+        solver.solve.return_value = 'abc12'
+        http.get.side_effect = [FakeResponse(f'<meta name="csrf-token" content="token-{n}">') for n in (1, 2)]
+        http.post.side_effect = [FakeResponse(json_payload={'status': '999', 'desc': 'Mã captcha không đúng, vui lòng thử lại.'}),
+                                 FakeResponse(json_payload={'status': '200'})]
+        with patch('gdt_tax.auth.fetch_captcha', return_value=b'synthetic'), patch('gdt_tax.auth.time.sleep'):
+            self.assertTrue(auth.login(http, solver, settings))
+        self.assertEqual(http.post.call_count, 2)
+        solver.rejected.assert_called_once()
+        solver.accepted.assert_called_once()
+        self.assertEqual([c.kwargs['headers']['X-XSRF-TOKEN'] for c in http.post.call_args_list], ['token-1', 'token-2'])
+        for desc in ('Unreviewed response', None, {'status': '200'}):
+            self.assertEqual(classify_response(FakeResponse(json_payload={'status': '999', 'desc': desc}), 'DVC'), AuthOutcome.SCHEMA_UNKNOWN)
+
     def test_cli_and_desktop_share_auth_code_before_pipeline_starts(self):
         failure = AuthFailure(AuthOutcome.INVALID_CREDENTIALS)
         with temporary_directory() as directory:

@@ -59,6 +59,14 @@ def check_preferences() -> Preferences:
                        jitter=0, retries=1, timeout=25, login_attempts=6, search_attempts=6)
 
 
+def check_budget() -> RunBudget:
+    # Up to three query/download/reuse jobs, each with its own DVC session,
+    # plus legacy login and bounded CAPTCHA retries. Six total auth attempts
+    # cannot cover even one rejection across that queue.
+    return RunBudget(max_seconds=300, max_requests=120, max_bytes=128 * 1024 * 1024,
+                     max_pages=15, max_auth_attempts=20)
+
+
 def online_check(path: Path) -> int:
     from PySide6.QtCore import QThread, QTimer
     from PySide6.QtWidgets import QApplication
@@ -77,8 +85,7 @@ def online_check(path: Path) -> int:
     if report.exists():
         raise ValueError('LIVE_REPORT_ALREADY_EXISTS')
     preferences = check_preferences()
-    budget = RunBudget(max_seconds=300, max_requests=120, max_bytes=128 * 1024 * 1024,
-                       max_pages=15, max_auth_attempts=6)
+    budget = check_budget()
     config = RunConfig('login', Path(request['output']), username=request['username'],
         password=credentials['GDT_PASSWORD'], preferences=preferences, budget=budget,
         dvc=request.get('dvc', False))

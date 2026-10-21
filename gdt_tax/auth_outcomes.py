@@ -67,7 +67,7 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
                     'OTP_REQUIRED': AuthOutcome.INTERACTIVE_AUTH_REQUIRED, 'SSO_REQUIRED': AuthOutcome.INTERACTIVE_AUTH_REQUIRED}
         if isinstance(code, str) and code in explicit:
             return explicit[code]
-        json_message = ' '.join(str(payload[key]) for key in ('message', 'error', 'description')
+        json_message = ' '.join(str(payload[key]) for key in ('message', 'error', 'description', 'desc')
                                 if isinstance(payload.get(key), str))
     if body.lstrip().startswith((b'<?xml', b'%PDF-', b'PK')):
         if authenticated and response.status_code == 401:

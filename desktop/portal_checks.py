@@ -15,6 +15,10 @@ def portal_regression_check() -> bool:
     response = SimpleNamespace(content=html.encode(), text=html, status_code=200, headers={})
     if classify_response(response, 'ETAX_LEGACY') != AuthOutcome.CAPTCHA_INVALID:
         raise AssertionError('Nested hidden authentication markup failed')
+    payload = {'status': '999', 'desc': 'Mã captcha không đúng, vui lòng thử lại.'}
+    response = SimpleNamespace(content=b'{}', text='{}', status_code=200, headers={}, json=lambda: payload)
+    if classify_response(response, 'DVC') != AuthOutcome.CAPTCHA_INVALID:
+        raise AssertionError('DVC desc CAPTCHA response regression failed')
     labels = list(SCHEMAS['GNT'].labels)
     labels[12:14] = [label for label, _ in SCHEMAS['GNT'].extra_labels]
     cells = ['1', 'synthetic-ref', '', '', '<a href="javascript:chiTietCT(900000001)">synthetic-gnt</a>',
