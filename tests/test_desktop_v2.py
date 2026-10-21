@@ -43,6 +43,16 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 HAS_QT = importlib.util.find_spec('PySide6') is not None
 
 
+def notice_xml(title: str, so: str, *, ly_do: str = '', ngay: str = '2026-09-11') -> str:
+    reason = f'<LyDo>{ly_do}</LyDo>' if ly_do else ''
+    return ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<TBaoThueDTu xmlns="http://kekhaithue.gdt.gov.vn/TBaoThue"><TBaoThue>'
+            f'<TTinTBaoThue><maTBao>844</maTBao><tenTBao>{title}</tenTBao>'
+            f'<soTBao>{so}</soTBao><ngayTBao>{ngay}</ngayTBao></TTinTBaoThue>'
+            f'<NDungTBao><trangThai>Y</trangThai>{reason}</NDungTBao>'
+            '</TBaoThue></TBaoThueDTu>')
+
+
 class DocumentStateTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -76,6 +86,58 @@ class DocumentStateTests(unittest.TestCase):
         result = verify_rows('gnt', [row], self.root)[0]
         self.assertTrue(result['_needs_review'])
         self.assertEqual(counters([result]), {'found': 1, 'downloaded': 0, 'failed': 0, 'pending': 1})
+
+    def test_tax_notice_xml_marks_rejection_and_lists_files(self):
+        case = 'fixture-case'
+        folder = self.root / 'thong-bao-dinh-kem' / case
+        folder.mkdir(parents=True)
+        (folder / f'112__tiep-nhan__{case}__Tiep-nhan-ho-so.xml').write_text(
+            notice_xml('V/v: Tiếp nhận hồ sơ thuế điện tử', '1109094948983/2026'), encoding='utf-8')
+        rejected = folder / f'113__khong-chap-nhan__{case}__Khong-chap-nhan-ho-so.xml'
+        rejected.write_text(notice_xml('V/v: Không chấp nhận hồ sơ khai thuế',
+                                       '298018/0109/2026/TB-TĐT', ly_do='Hồ sơ không hợp lệ'), encoding='utf-8')
+        row = verify_rows('tax', [CaseRecord(case, SOURCE_ETAX_LEGACY).to_dict()], self.root)[0]
+        self.assertEqual(row['_notice_state'], 'rejected')
+        self.assertEqual(row['_notice_summary'], 'Không chấp nhận (2)')
+        self.assertTrue(row['_needs_review'])
+        self.assertEqual([item['kind'] for item in row['_notices']], ['tiep-nhan', 'khong-chap-nhan'])
+        self.assertEqual(row['_notices'][1]['so_thong_bao'], '298018/0109/2026/TB-TĐT')
+        self.assertEqual(row['_notices'][1]['ly_do'], 'Hồ sơ không hợp lệ')
+
+    def test_tax_notice_legacy_combined_title_without_reason_is_accepted(self):
+        case = 'fixture-legacy-ok'
+        folder = self.root / 'thong-bao-dinh-kem' / case
+        folder.mkdir(parents=True)
+        (folder / f'901__khac__{case}__Chap-nhan-Khong-chap-nhan-ve-viec-nop-ho-so.xml').write_text(
+            notice_xml('V/v: Chấp nhận/Không chấp nhận về việc nộp hồ sơ', '0120145518684/2020'),
+            encoding='utf-8')
+        row = verify_rows('tax', [CaseRecord(case, SOURCE_ETAX_LEGACY).to_dict()], self.root)[0]
+        self.assertEqual(row['_notice_state'], 'accepted')
+        self.assertFalse(row['_needs_review'])
+
+    def test_tax_notice_legacy_ambiguous_title_reads_reason(self):
+        case = 'fixture-legacy'
+        folder = self.root / 'thong-bao-dinh-kem' / case
+        folder.mkdir(parents=True)
+        (folder / f'900__khac__{case}__Chap-nhan-Khong-chap-nhan-ve-viec-nop-ho-so.xml').write_text(
+            notice_xml('V/v: Chấp nhận/Không chấp nhận về việc nộp hồ sơ', '123/TB', ly_do='Sai mẫu tờ khai'),
+            encoding='utf-8')
+        row = verify_rows('tax', [CaseRecord(case, SOURCE_ETAX_LEGACY).to_dict()], self.root)[0]
+        self.assertEqual(row['_notice_state'], 'rejected')
+        self.assertEqual(row['_notice_summary'], 'Không chấp nhận')
+
+    def test_tax_accepted_notice_is_not_flagged_for_review(self):
+        case = 'fixture-accepted'
+        folder = self.root / 'thong-bao-dinh-kem' / case
+        folder.mkdir(parents=True)
+        (folder / f'112__tiep-nhan__{case}__Tiep-nhan.xml').write_text(
+            notice_xml('V/v: Tiếp nhận hồ sơ thuế điện tử', '1109094948983/2026'), encoding='utf-8')
+        (folder / f'113__chap-nhan__{case}__Xac-nhan-nop-ho-so.xml').write_text(
+            notice_xml('V/v: Xác nhận nộp hồ sơ thuế điện tử', '298018/0109/2026/TB-TĐT'), encoding='utf-8')
+        row = verify_rows('tax', [CaseRecord(case, SOURCE_ETAX_LEGACY).to_dict()], self.root)[0]
+        self.assertEqual(row['_notice_state'], 'accepted')
+        self.assertEqual(row['_notice_summary'], 'Chấp nhận (2)')
+        self.assertFalse(row['_needs_review'])
 
     def test_notice_seen_without_pdf_is_not_downloaded(self):
         row = verify_rows('notice', [{'message_id': 'fixture-notice', 'trang_thai': 'Đã xem'}], self.root)[0]
@@ -264,6 +326,41 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.assertEqual(set(config.target_ids), {document_id('tax', row) for row in rows[:2]})
         self.assertEqual(config.from_date, '01/06/2025')
         self.assertEqual(config.output, self.root)
+
+    def test_rejected_notice_column_shows_red_warning(self):
+        from PySide6.QtCore import Qt
+
+        from desktop.table_model import COLUMNS
+        column = next(index for index, (key, _) in enumerate(COLUMNS['tax']) if key == '_notice_state')
+        row = dict(CaseRecord('fixture', SOURCE_ETAX_LEGACY, trang_thai='Đã chấp nhận').to_dict(),
+                   _notice_state='rejected', _notice_summary='Không chấp nhận (2)',
+                   _notices=[{'kind_label': 'Không chấp nhận', 'so_thong_bao': '298018/0109/2026/TB-TĐT',
+                              'ly_do': 'Hồ sơ không hợp lệ', 'name': 'fixture.xml'}])
+        self.window.model.reset('tax', [row])
+        index = self.window.model.index(0, column)
+        self.assertEqual(index.data(), 'Không chấp nhận (2)')
+        self.assertIn('298018/0109/2026/TB-TĐT', index.data(Qt.ItemDataRole.ToolTipRole))
+        self.assertEqual(index.data(Qt.ItemDataRole.BackgroundRole).name(), '#fdecea')
+        self.assertEqual(index.data(Qt.ItemDataRole.ForegroundRole).name(), '#c94242')
+        accepted = dict(row, _notice_state='accepted', _notice_summary='Chấp nhận (2)')
+        self.window.model.reset('tax', [accepted])
+        self.assertIsNone(self.window.model.index(0, column).data(Qt.ItemDataRole.BackgroundRole))
+
+    def test_notice_menu_lists_and_opens_downloaded_xml(self):
+        from desktop.table_model import COLUMNS
+        target = self.root / 'thong-bao-dinh-kem' / 'fixture'
+        target.mkdir(parents=True)
+        notice = target / '113__khong-chap-nhan__fixture__Khong-chap-nhan.xml'
+        notice.write_text(notice_xml('V/v: Không chấp nhận hồ sơ', '298018/0109/2026/TB-TĐT'), encoding='utf-8')
+        column = next(index for index, (key, _) in enumerate(COLUMNS['tax']) if key == '_notice_state')
+        row = verify_rows('tax', [CaseRecord('fixture', SOURCE_ETAX_LEGACY).to_dict()], self.root)[0]
+        self.window.model.reset('tax', [row])
+        self.window.table.setCurrentIndex(self.window.proxy_model.index(0, column))
+        menu = self.window.notice_menu(row)
+        self.assertEqual(menu.actions()[0].text(), 'Không chấp nhận · 298018/0109/2026/TB-TĐT')
+        with patch.object(self.window, 'open_path') as opener:
+            menu.actions()[0].trigger()
+        opener.assert_called_once_with(notice)
 
     def test_stale_proxy_index_is_rejected_instead_of_crashing(self):
         rows = [CaseRecord(str(i), SOURCE_ETAX_LEGACY, to_khai=f'fixture {i}').to_dict() for i in range(4)]

@@ -18,7 +18,8 @@ from .documents import FILE_LABELS, display_amount, document_id, event_datetime,
 
 COLUMNS = {
     'tax': [('_selected', 'Chọn'), ('to_khai', 'Hồ sơ / Tờ khai'), ('ky_tinh_thue', 'Kỳ tính thuế'),
-            ('ngay_nop', 'Ngày nộp'), ('trang_thai', 'Trạng thái thuế'), ('_file_status', 'Tệp ZIP'), ('_action', 'Thao tác')],
+            ('ngay_nop', 'Ngày nộp'), ('trang_thai', 'Trạng thái thuế'), ('_notice_state', 'Thông báo'),
+            ('_file_status', 'Tệp ZIP'), ('_action', 'Thao tác')],
     'gnt': [('_selected', 'Chọn'), ('so_gnt', 'Số giấy nộp tiền'), ('ngay_lap', 'Ngày lập'),
             ('so_tien', 'Số tiền'), ('trang_thai', 'Trạng thái nộp / phê duyệt'), ('_file_status', 'Tệp XML'), ('_action', 'Thao tác')],
     'notice': [('_selected', 'Chọn'), ('ten_thong_bao', 'Số / Tên thông báo'), ('ngay_gui', 'Ngày gửi'),
@@ -27,6 +28,8 @@ COLUMNS = {
                 ('status', 'Kết quả phân tích'), ('source_zip', 'Nguồn')],
 }
 EMPTY = QModelIndex()
+NOTICE_COLORS = {'accepted': '#15805B', 'rejected': '#C94242', 'received': '#67768C'}
+REJECTED_ROW = QColor('#FDECEA')
 
 
 class RecordsModel(QAbstractTableModel):
@@ -85,12 +88,26 @@ class RecordsModel(QAbstractTableModel):
                 return 'Chọn tệp này; chọn toàn bộ kết quả đang hiển thị bằng tiêu đề Chọn'
             if key == '_file_status':
                 return '\n'.join(str(row.get(k) or '') for k in ['_file_state', '_file_path', '_file_reason', '_error_message']).strip()
+            if key == '_notice_state':
+                notices = row.get('_notices') or []
+                if not notices:
+                    return 'Không có tệp thông báo XML đính kèm trong thư mục đã tải'
+                return '\n'.join(f"{item.get('kind_label', 'Thông báo')}: "
+                                 f"{item.get('so_thong_bao') or item.get('name', '')}"
+                                 + (f" — {item['ly_do']}" if item.get('ly_do') else '')
+                                 for item in notices)
             return json.dumps(row, ensure_ascii=False, indent=2)
         if role == Qt.ItemDataRole.TextAlignmentRole and key == 'so_tien':
             return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        if role == Qt.ItemDataRole.BackgroundRole and self.mode == 'tax' and row.get('_notice_state') == 'rejected':
+            return REJECTED_ROW
         if role == Qt.ItemDataRole.ForegroundRole:
             if key == '_file_status':
                 return QColor({'downloaded': '#15805B', 'failed': '#C94242'}.get(row.get(key), '#67768C'))
+            if key == '_notice_state':
+                return QColor(NOTICE_COLORS.get(row.get(key), '#94A3B8'))
+            if key == 'trang_thai' and row.get('_notice_state') == 'rejected':
+                return QColor('#C94242')
             if key == 'trang_thai' and needs_review(row):
                 return QColor('#93631B')
             if key == 'trang_thai' and str(row.get(key, '')).casefold().startswith(('đã chấp nhận', 'nộp thuế thành công', 'đã xem')):
@@ -103,6 +120,8 @@ class RecordsModel(QAbstractTableModel):
             return ''
         if key == '_file_status':
             return FILE_LABELS.get(row.get(key, 'not_downloaded'), 'Chưa tải')
+        if key == '_notice_state':
+            return row.get('_notice_summary') or '—'
         if key == '_action':
             return 'Mở tệp' if row.get('_file_status') == 'downloaded' else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp'
         if key == 'so_tien':

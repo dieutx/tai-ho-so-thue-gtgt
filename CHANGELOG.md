@@ -2,6 +2,10 @@
 
 ## [2.0.4] — 2026-10-22
 
+- Tab Tờ khai có cột **Thông báo** đọc trực tiếp XML trong
+  `thong-bao-dinh-kem/<mã hồ sơ>/` (tiếp nhận / chấp nhận / không chấp nhận),
+  bấm để mở từng tệp; tờ khai bị từ chối được tô đỏ và vào nhóm "Cần kiểm tra".
+  Không đọc/ghi mạng, không sửa tệp đã tải.
 - Sửa `SCHEMA_CHANGED: REQUIRED_COLUMNS_MISSING_OR_AMBIGUOUS:lan_nop` trên DVC:
   nhận đúng tiêu đề `Lần nộp (Tờ khai)/File số (DLVC)`. Giữ kiểm tra cột bắt buộc,
   cột trùng, thứ tự cột và giá trị lần nộp; không đoán theo vị trí.

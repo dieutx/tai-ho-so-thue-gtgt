@@ -282,12 +282,39 @@ class V2InteractionMixin:
         if not index.isValid() or COLUMNS[self.mode][index.column()][0] == '_selected':
             return
         self.details()
-        if COLUMNS[self.mode][index.column()][0] == '_action':
+        key = COLUMNS[self.mode][index.column()][0]
+        if key == '_notice_state':
+            self.open_notices(index)
+        elif key == '_action':
             row = self.selected_row()
             if row and row.get('_file_status') == 'downloaded':
                 self.open_detail_file()
             elif row:
                 self.download_rows([row])
+
+    def notice_menu(self, row):
+        """Menu các tệp thông báo XML đã tải của một hồ sơ (không tự mở)."""
+        notices = row.get('_notices') or []
+        menu = QMenu(self)
+        if not notices:
+            menu.addAction('Chưa có tệp thông báo trong thư mục đã tải').setEnabled(False)
+        for item in notices:
+            label = item.get('kind_label') or 'Thông báo'
+            number = item.get('so_thong_bao') or item.get('name') or ''
+            path = item.get('path') or ''
+            action = menu.addAction(f'{label} · {number}', lambda target=path: self.open_path(Path(target)))
+            action.setToolTip(item.get('ly_do') or item.get('ten_thong_bao') or '')
+        if notices:
+            menu.addSeparator()
+            menu.addAction('Mở thư mục thông báo', lambda folder=str(Path(notices[0]['path']).parent): self.open_path(Path(folder)))
+        return menu
+
+    def open_notices(self, index):
+        """Mở menu thông báo của dòng đang chọn tại ô vừa bấm."""
+        row = self.selected_row()
+        if not row:
+            return
+        self.notice_menu(row).exec(self.table.viewport().mapToGlobal(self.table.visualRect(index).bottomLeft()))
 
     def details(self):
         row = self.selected_row()
@@ -315,6 +342,19 @@ class V2InteractionMixin:
                                  ('Chi tiết', row.get('_error_message') or row.get('_file_reason') or '—'),
                                  ('SHA-256', row.get('_file_hash') or '—')]:
                 parts.append(f'<p><span style="color:#67768C">{label}</span><br>{html.escape(str(value))}</p>')
+            notices = row.get('_notices') or []
+            if self.mode == 'tax':
+                parts.append('<hr><h3>Thông báo của cơ quan thuế</h3>')
+                if not notices:
+                    parts.append('<p><span style="color:#67768C">Chưa có tệp XML đính kèm trong thư mục đã tải.</span></p>')
+                for item in notices:
+                    title = ' · '.join(str(value) for value in
+                                       (item.get('kind_label'), item.get('so_thong_bao'), item.get('ngay_thong_bao')) if value)
+                    color = '#C94242' if item.get('state') == 'rejected' else '#15805B' if item.get('state') == 'accepted' else '#67768C'
+                    reason = (f'<br><span style="color:#C94242">{html.escape(item["ly_do"])}</span>'
+                              if item.get('ly_do') else '')
+                    parts.append(f'<p><b style="color:{color}">{html.escape(title or item.get("name", ""))}</b>{reason}'
+                                 f'<br><span style="color:#67768C">{html.escape(item.get("name", ""))}</span></p>')
         else:
             parts.append('<p>Chỉ phân tích XML cục bộ; không xác thực chữ ký số hoặc tính đúng của nghĩa vụ thuế.</p>')
         self.detail_text.setHtml(''.join(parts))
@@ -636,7 +676,7 @@ class V2InteractionMixin:
         for index, (key, _) in enumerate(columns):
             self.table.setColumnHidden(index, key in hidden)
             self.table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeMode.Interactive)
-            target = {'_selected': 34, '_action': 75, '_file_status': 83, 'ngay_nop': 128,
+            target = {'_selected': 34, '_action': 75, '_file_status': 83, '_notice_state': 118, 'ngay_nop': 128,
                       'ngay_lap': 128, 'ngay_gui': 128, 'trang_thai': 145,
                       'ky_tinh_thue': 95, 'so_tien': 120, 'form_code': 90,
                       'form_version': 80, 'status': 120}.get(key, 160)

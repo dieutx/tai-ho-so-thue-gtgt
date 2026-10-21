@@ -31,6 +31,8 @@ from gdt_tax.tb.models import ThongBao
 from gdt_tax.tb.naming import tb_pdf_filename
 from gdt_tax.tb.portal import is_tb_pdf
 
+from .notices import notice_state, notice_summary, read_notices
+
 KINDS = {
     'tax': (CaseRecord, 'ma_ho_so', 'tep_zip', 'ngay_nop', zip_filename, valid_declaration_zip),
     'gnt': (GiayNopTien, 'ctu_id', 'tep_xml', 'ngay_lap', gnt_xml_filename, is_gnt_xml),
@@ -184,7 +186,12 @@ def verify_rows(mode: str, rows: list[dict], output: Path, hooks: RunHooks | Non
                 row['_error_message'] = (errors or {}).get(key) or original.get('_error_message') or 'Tải chưa thành công. Kiểm tra kết nối/phiên và thử lại tệp này.'
             elif original.get('_file_status') == 'downloaded':
                 row['_file_reason'] = 'Tệp không còn ở nơi lưu hoặc không còn hợp lệ; có thể đã bị xóa/di chuyển'
+        if mode == 'tax':
+            # Thư mục thông báo đặt theo mã hồ sơ trên cổng, không theo RecordKey.
+            notices = read_notices(output, remote_document_id(mode, row))
+            row.update(_notices=notices, _notice_state=notice_state(notices),
+                       _notice_summary=notice_summary(notices))
         row['_file_state'] = FILE_LABELS[row['_file_status']]
-        row['_needs_review'] = needs_review(row)
+        row['_needs_review'] = needs_review(row) or row.get('_notice_state') == 'rejected'
         verified.append(row)
     return verified
