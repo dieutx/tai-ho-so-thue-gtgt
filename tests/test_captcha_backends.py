@@ -1,8 +1,8 @@
 """Smoke test cho từng backend OCR.
 
 Test chỉ chạy khi thư viện tương ứng đã được cài, nên CI nhẹ vẫn xanh. Ảnh mẫu
-là CAPTCHA thật của cổng thuế (150×38, 5 ký tự chữ-số) — không chứa thông tin
-của người nộp thuế.
+được tạo bằng scripts/synthetic_captcha.py (150×38, 5 ký tự chữ-số), không phải
+ảnh thu thập từ cổng.
 
 Vì CAPTCHA đổi nội dung theo từng phiên, test chỉ kiểm tra solver **đọc ra đúng
 định dạng** và không lỗi, không so khớp ký tự cụ thể.
@@ -42,7 +42,7 @@ class SolverSmokeTestCase(unittest.TestCase):
         if solver is not None:
             solver.close()
 
-    def test_doc_anh_captcha_that(self):
+    def test_doc_anh_tong_hop(self):
         text = self.solver.solve(sample_image())
         self.assertIsInstance(text, str)
         self.assertIn(len(text), (0, LENGTH))
