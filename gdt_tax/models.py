@@ -38,6 +38,8 @@ class CaseRecord:
     account_key: str = UNKNOWN
     attachment_status: str = 'NOT_REQUESTED'
     attachment_result: str = ''
+    portal_profile_version: str = ''
+    routing_version: str = ''
 
     @property
     def key(self) -> RecordKey:
@@ -90,6 +92,9 @@ class RunSummary:
     attachments_downloaded: int = 0
     attachments_reused: int = 0
     attachments_failed: int = 0
+    routing_version: str = ''
+    profile_versions: dict[str, str] = field(default_factory=dict)
+    routing_issues: list[dict] = field(default_factory=list)
 
     @property
     def complete(self) -> bool:

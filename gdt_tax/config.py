@@ -25,11 +25,11 @@ from .dates import (
     ETAX_CUTOFF_DEFAULT,
     MAX_DAYS_PER_SEARCH_DEFAULT,
     parse_date,
-    split_periods,
 )
 from .errors import ConfigError
 from .headers import DEFAULT_PROFILE, PROFILES
 from .models import SearchPeriod
+from .portal_profiles import DVC_PROFILE, PortalProfile, RoutingPolicy, compatibility_routing
 from .proxy import parse_proxy
 
 ENV_PREFIX = "GDT_"
@@ -151,23 +151,18 @@ class Settings:
     legacy_etax: bool = True
     #: Tạm tắt toàn bộ request tới dichvucong.gdt.gov.vn, kể cả đăng nhập.
     dvc_enabled: bool = False
+    dvc_profile: PortalProfile = DVC_PROFILE
+    routing_policy: RoutingPolicy | None = None
 
     # --- Dẫn xuất ---
     def periods(self) -> list[SearchPeriod]:
         """Danh sách đoạn tra cứu cần chạy, theo thứ tự thời gian."""
-        planned = list(
-            split_periods(
-                self.from_date,
-                self.to_date,
-                cutoff=self.etax_cutoff,
-                max_days=self.max_days_per_search,
-            )
-        )
-        return [
-            SearchPeriod(p.start, p.end, SOURCE_ETAX_LEGACY)
-            if p.source == SOURCE_ETAX and (self.legacy_etax or not self.dvc_enabled) else p
-            for p in planned
-        ]
+        return self.execution_plan().periods
+
+    def execution_plan(self):
+        return (self.routing_policy or compatibility_routing(self)).plan(
+            self.from_date, self.to_date, max_days=self.max_days_per_search,
+            enabled=self.source_enabled, dvc_profile=self.dvc_profile)
 
     def source_enabled(self, source: str) -> bool:
         return source == SOURCE_ETAX_LEGACY or (

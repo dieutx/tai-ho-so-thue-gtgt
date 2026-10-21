@@ -91,6 +91,16 @@ class Pipeline:
         self.reused_ids = set()
         self.attachments = {}
         summary = RunSummary(dry_run=self.settings.dry_run)
+        plan = self.settings.execution_plan()
+        summary.routing_version = plan.version
+        summary.profile_versions = {'DVC': self.settings.dvc_profile.version}
+        summary.routing_issues = plan.issues
+        summary.skipped_periods = sum(issue['code'] in {'ROUTING_GAP', 'ROUTING_OVERLAP'} for issue in plan.issues)
+        self.logger.info('EXECUTION_PLAN: routing=%s profile=%s periods=%s issues=%s',
+                         plan.version, self.settings.dvc_profile.version,
+                         json.dumps([{'source': p.source, 'start': p.start.isoformat(), 'end': p.end.isoformat()}
+                                     for p in plan.periods], sort_keys=True),
+                         json.dumps(plan.issues, sort_keys=True))
         self.logger.info(
             "Bắt đầu: %s → %s (cutoff %s; DVC %s)",
             format_date(self.settings.from_date), format_date(self.settings.to_date),
@@ -98,7 +108,7 @@ class Pipeline:
             "bật" if self.settings.dvc_enabled else "tạm tắt",
         )
         active = []
-        for period in self.settings.periods():
+        for period in plan.periods:
             if self.settings.source_enabled(period.source):
                 active.append(period)
             else:
@@ -178,6 +188,8 @@ class Pipeline:
                 if found.nguon != period.source:
                     raise SchemaChangedError("RECORD_SOURCE_OUTSIDE_PLAN")
                 found.account_key = self.account_key
+                found.portal_profile_version = (self.settings.dvc_profile.version if period.source == 'DVC' else 'legacy-v1')
+                found.routing_version = (self.settings.routing_policy or self.settings.execution_plan()).version
                 if self.case_targets is not None and found.record_key not in self.case_targets:
                     continue
                 record = records.setdefault(found.record_key, classify_record(found))

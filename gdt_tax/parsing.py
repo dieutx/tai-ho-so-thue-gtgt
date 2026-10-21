@@ -33,7 +33,7 @@ from bs4 import BeautifulSoup, Tag
 from .constants import ALL_SOURCES, SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
 from .csrf import attribute
 from .models import CaseRecord
-from .table_contracts import SCHEMAS, TableParse, parse_table
+from .table_contracts import SCHEMAS, TableParse, TableSchema, parse_table
 
 ETAX_MIN_CELLS = 10
 DVC_MIN_CELLS = 12
@@ -145,7 +145,7 @@ def parse_records(html: str, source: str) -> list[CaseRecord]:
     return parse_record_table(html, source).records
 
 
-def parse_record_table(html: str, source: str) -> TableParse:
+def parse_record_table(html: str, source: str, *, schema: TableSchema | None = None) -> TableParse:
     _check_source(source)
     def decode(row: Tag, cells: list[str]):
         if source == SOURCE_ETAX_LEGACY:
@@ -159,7 +159,7 @@ def parse_record_table(html: str, source: str) -> TableParse:
         if cells[2] != case_id:
             return None
         return dvc_record(cells, case_id)
-    return parse_table(html, SCHEMAS[source], decode, lambda record: record.ma_ho_so)
+    return parse_table(html, schema or SCHEMAS[source], decode, lambda record: record.ma_ho_so)
 
 
 def _int_attribute(soup: BeautifulSoup, element_id: str, attribute_name: str) -> int | None:

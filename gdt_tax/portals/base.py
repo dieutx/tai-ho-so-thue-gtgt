@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from dataclasses import replace
 
 from ..auth_outcomes import raise_terminal
 from ..captcha import fetch_captcha
@@ -22,6 +23,7 @@ from ..headers import build_page_headers, build_xhr_headers
 from ..http import HttpClient
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..parsing import page_count, parse_record_table
+from ..portal_profiles import DVC_PROFILE, PortalProfile
 
 
 class Portal(ABC):
@@ -37,6 +39,9 @@ class Portal(ABC):
         self.captcha = captcha
         self.settings = settings
         self.detail_html = ''
+        selected = getattr(settings, 'dvc_profile', DVC_PROFILE)
+        self.capabilities = selected if isinstance(selected, PortalProfile) else DVC_PROFILE
+        self.capabilities.validate()
         self.logger = logger or logging.getLogger(f"gdt_tax.portal.{self.source.lower()}")
 
     @property
@@ -93,7 +98,9 @@ class Portal(ABC):
         raise_terminal(response, 'DVC', authenticated=True)
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
-        parsed = parse_record_table(response.text, self.source)
+        schema = (replace(self.capabilities.response_contract, container='#' + self.capabilities.result_container)
+                  if self.source == 'DVC' else None)
+        parsed = parse_record_table(response.text, self.source, schema=schema)
         result = PageResult(
             records=parsed.records,
             total_pages=page_count(response.text, self.source),

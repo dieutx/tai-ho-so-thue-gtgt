@@ -7,12 +7,10 @@
 
 from __future__ import annotations
 
+from bs4 import BeautifulSoup
+
 from ..auth_outcomes import raise_terminal
 from ..constants import (
-    DVC_DOWNLOAD,
-    DVC_DOWNLOAD_FORM,
-    DVC_SEARCH,
-    DVC_VALIDATE,
     ORIGIN,
     SOURCE_DVC,
 )
@@ -30,7 +28,7 @@ class DvcPortal(Portal):
 
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         response = self.http.get(
-            DVC_SEARCH,
+            self.capabilities.search_endpoint,
             params={
                 "maNghiepVu": "",
                 "maTTHC": "",
@@ -41,24 +39,31 @@ class DvcPortal(Portal):
                 "scope_tdt1": "SELF",
                 "mstUyQuyen_tdt1": "",
                 "captcha": self.captcha_text(),
-                "page": page,
+                self.capabilities.page_parameter: page,
                 "size": self.settings.page_size,
             },
             headers=self.xhr_headers(
                 accept="text/html-partial",
                 headers={
                     "HX-Request": "true",
-                    "HX-Target": "table-container",
+                    "HX-Target": self.capabilities.result_container,
+                    "HX-Trigger": self.capabilities.form_id,
                     "HX-Current-URL": self.landing_url,
                     "Referer": self.landing_url,
                 },
             ),
         )
-        return self._page_result(response)
+        result = self._page_result(response)
+        soup = BeautifulSoup(response.text, 'lxml')
+        total = soup.find(id=self.capabilities.page_total_id)
+        control = soup.find(id=self.capabilities.page_input_id)
+        count = total.get_text(strip=True) if total else str(control.get('max', '')) if control else ''
+        result.total_pages = int(count) if count.isdigit() else None
+        return result
 
     def download(self, record: CaseRecord, detail_url: str, csrf: str):
         validation = self.http.get(
-            DVC_VALIDATE,
+            self.capabilities.validate_endpoint,
             params={"idTKhai": record.ma_ho_so},
             headers=self.xhr_headers(
                 headers={
@@ -72,7 +77,7 @@ class DvcPortal(Portal):
         raise_terminal(validation, 'DVC', authenticated=True)
         if validation.status_code == 200 and validation.text.strip() == "200":
             return self.http.post(
-                DVC_DOWNLOAD,
+                self.capabilities.download_endpoint,
                 json={"maHoSo": record.ma_ho_so},
                 headers=self.xhr_headers(
                     headers={
@@ -92,7 +97,7 @@ class DvcPortal(Portal):
 
         # Đây là form submit thật (không phải AJAX), nên dùng bộ header điều hướng.
         return self.http.post(
-            DVC_DOWNLOAD_FORM,
+            self.capabilities.download_form_endpoint,
             data={"_csrf": csrf, "mahoso": record.ma_ho_so},
             headers=self.page_headers(
                 headers={
