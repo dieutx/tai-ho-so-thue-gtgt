@@ -36,6 +36,8 @@ class Portal(ABC):
         self.captcha = captcha
         self.settings = settings
         self.logger = logger or logging.getLogger(f"gdt_tax.portal.{self.source.lower()}")
+        #: HTML trang chi tiết hồ sơ gần nhất (dùng để đọc thông báo đính kèm).
+        self.detail_html = ""
 
     @property
     def profile(self) -> str:
@@ -82,7 +84,9 @@ class Portal(ABC):
         """Mở trang chi tiết và lấy token CSRF của form tải xuống."""
         url = self.detail_url(record)
         response = self.http.get(url, headers=self.page_headers(headers={"Referer": self.landing_url}))
-        csrf = csrf_token(response.text) if response.status_code == 200 else ""
+        ok = response.status_code == 200
+        self.detail_html = response.text if ok else ""
+        csrf = csrf_token(response.text) if ok else ""
         return url, csrf
 
     def _page_result(self, response) -> PageResult:

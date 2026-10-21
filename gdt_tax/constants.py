@@ -31,6 +31,9 @@ DVC_SEARCH = "/ho-so/search"
 DVC_VALIDATE = "/tchs/validateIdTkhai"
 DVC_DOWNLOAD = "/tchs/downloadhoso"
 DVC_DOWNLOAD_FORM = "/downloadhoso"
+#: Thông báo đính kèm hồ sơ DVC (tiếp nhận/chấp nhận/không chấp nhận).
+DVC_NOTICE_DOWNLOAD = "/tchs/downloadthongbao"
+DVC_NOTICE_DOWNLOAD_TDT = "/tchs/downloadthongbao-tdt"
 
 # --- Giấy nộp tiền (GNT) trên trang Thuế điện tử cũ ---
 # Cùng máy chủ thuedientu nhưng là một operation DSE khác hẳn tờ khai:

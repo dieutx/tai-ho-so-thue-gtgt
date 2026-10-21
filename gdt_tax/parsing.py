@@ -47,6 +47,37 @@ def legacy_message_id(row_html: str, event: str = "downloadTkhai") -> str:
     return match.group(1) if match else ""
 
 
+def legacy_transaction_id(row_html: str) -> str:
+    """Lấy ``ctMaGDich`` từ lệnh ``thongBao('...')`` của hàng legacy.
+
+    Cột "Tải thông báo" gọi ``thongBao(ctMaGDich)``; mã này **khác**
+    ``messageId`` dùng để tải tờ khai, nên phải đọc riêng từ chính hàng đó
+    trước khi mở danh sách thông báo đính kèm.
+    """
+    match = re.search(r"thongBao\(\s*['\"]([^'\"]+)['\"]", row_html, re.I)
+    return match.group(1) if match else ""
+
+
+def legacy_transaction_ids(html: str) -> dict[str, str]:
+    """Bản đồ ``mã hồ sơ → ctMaGDich`` của bảng kết quả legacy.
+
+    Dùng trước khi gọi operation ``viewTBao``; hồ sơ không có liên kết thông
+    báo sẽ không xuất hiện trong bản đồ và được bỏ qua an toàn.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    table = soup.find("table", id=LEGACY_RESULT_TABLE_ID)
+    if table is None:
+        return {}
+    mapping: dict[str, str] = {}
+    for row in table.find_all("tr"):
+        row_html = str(row)
+        case_id = legacy_message_id(row_html)
+        transaction_id = legacy_transaction_id(row_html)
+        if case_id and transaction_id:
+            mapping.setdefault(case_id, transaction_id)
+    return mapping
+
+
 def _check_source(source: str) -> None:
     """Chặn nguồn lạ.
 
@@ -207,6 +238,8 @@ __all__ = [
     "etax_legacy_record",
     "etax_record",
     "legacy_message_id",
+    "legacy_transaction_id",
+    "legacy_transaction_ids",
     "page_count",
     "parse_records",
 ]

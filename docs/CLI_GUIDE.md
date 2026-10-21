@@ -184,6 +184,15 @@ python -m gdt_tax --case-id MA_HO_SO
 
 `--case-id` tìm hồ sơ trong khoảng ngày đang cấu hình.
 
+Với hồ sơ DVC và legacy, mỗi hồ sơ tải xong còn được lấy các **thông báo đính
+kèm** (tiếp nhận, chấp nhận, không chấp nhận) và lưu vào
+`<nơi lưu>/thong-bao-dinh-kem/<mã hồ sơ>/`. Tệp đã có được bỏ qua; lỗi tải
+thông báo chỉ ghi nhật ký và không làm hỏng ZIP đã tải.
+
+Hồ sơ nộp trước 2015 vẫn được tra cứu/tải bình thường. Chương trình không đặt
+mốc chặn ngày `01/01/2015`; nếu cổng trả rỗng cho khoảng ngày cũ, đó là dữ
+liệu cổng không còn lưu, không phải giới hạn của chương trình.
+
 Một số lệnh hữu ích:
 
 ```bash

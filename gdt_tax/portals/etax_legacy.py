@@ -34,14 +34,20 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from bs4 import BeautifulSoup
 from lxml import etree
 
-from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
+from ..constants import (
+    LEGACY_ETAX_BASE,
+    LEGACY_ETAX_ORIGIN,
+    SOURCE_ETAX_LEGACY,
+    TB_RESULT_TABLE_ID,
+)
+from ..dvc_notices import DvcNotice, decode_notice_response
 from ..errors import LegacyEtaxError, LegacyPageError
 from ..headers import build_image_headers, build_page_headers, build_xhr_headers
 from ..http import HttpClient
 from ..legacy_session import LegacySessionState
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..naming import safe_filename_part
-from ..parsing import parse_records
+from ..parsing import direct_cells, legacy_transaction_ids, parse_records
 from .base import Portal
 
 #: Thành công khi trang trả về luồng trang chủ doanh nghiệp.
@@ -49,7 +55,19 @@ _LOGIN_OK_MARKER = "corporateHomeProc"
 #: Trang cũ trả lại form đăng nhập khi sai mã CAPTCHA hoặc hết phiên.
 _LOGIN_FORM_ID = "loginForm"
 _SEARCH_FORM_ID = "traCuuKhaiForm"
+_NOTICE_FORM_ID = "tkhaiForm"
 _RESULT_TABLE_ID = "data_content_onday"
+#: Khóa phiên cần giữ khi mở lại trang nghiệp vụ/trang thông báo legacy.
+_SESSION_FIELDS = (
+    "dse_sessionId",
+    "dse_applicationId",
+    "dse_pageId",
+    "dse_processorState",
+    "dse_processorId",
+)
+_NOTICE_DOWNLOAD_RE = re.compile(
+    r"(?:downloadFile|layFileTBao)\(\s*['\"]([^'\"]+)['\"]", re.I
+)
 
 _LEGACY_ALERT_RE = re.compile(r"alert\(\s*['\"](.*?)['\"]\s*\)", re.I | re.S)
 
@@ -170,6 +188,45 @@ def _total_pages(html: str) -> int:
     return 1 if _RESULT_TABLE_ID in html else 0
 
 
+def legacy_notices(html: str) -> list[DvcNotice]:
+    """Đọc bảng thông báo đính kèm của một tờ khai legacy.
+
+    Trang ``viewTBao`` dùng cùng bảng ``tbl_tracuu`` với màn hình tra cứu
+    thông báo chung nhưng chỉ có 5 cột::
+
+        0 STT | 1 Số thông báo/Mã giao dịch VAN | 2 Thông báo
+        3 Ngày gửi | 4 Người gửi
+
+    Liên kết tải gọi ``downloadFile('<messageId>')``. Giữ nguyên mô hình
+    :class:`~gdt_tax.dvc_notices.DvcNotice` để dùng chung ``NoticeStore``.
+    """
+    if not html:
+        return []
+    soup = BeautifulSoup(html, "lxml")
+    table = soup.find("table", id=TB_RESULT_TABLE_ID)
+    if table is None:
+        return []
+    notices: list[DvcNotice] = []
+    seen: set[str] = set()
+    body = table.find("tbody") or table
+    for row in body.find_all("tr"):
+        cells = direct_cells(row)
+        if len(cells) < 4:
+            continue
+        match = _NOTICE_DOWNLOAD_RE.search(str(row))
+        if match is None:
+            continue
+        notice_id = match.group(1)
+        if not notice_id or notice_id in seen:
+            continue
+        seen.add(notice_id)
+        title = re.sub(r"(?i)^v/v\s*:\s*", "", cells[2]).strip()
+        notices.append(
+            DvcNotice(id=notice_id, title=title, sent_at=cells[3].strip())
+        )
+    return notices
+
+
 class EtaxLegacyPortal(Portal):
     """Tra cứu và tải tờ khai trên trang Thuế điện tử cũ.
 
@@ -205,6 +262,14 @@ class EtaxLegacyPortal(Portal):
         self._search_page_url = ""
         #: Form thực tế của trang nghiệp vụ; cổng có lúc đổi id/name của form.
         self._search_form_id = _SEARCH_FORM_ID
+        #: ``ctMaGDich`` theo từng mã hồ sơ, đọc từ cột "Tải thông báo".
+        self._transaction_ids: dict[str, str] = {}
+        #: Trang danh sách thông báo gần nhất (form ``tkhaiForm``).
+        self._notice_page_html = ""
+        self._notice_page_url = ""
+        self._notice_form_id = _NOTICE_FORM_ID
+        #: Hồ sơ đang được pipeline hỏi thông báo đính kèm.
+        self._active_record: CaseRecord | None = None
         self._logged_in = False
         self.session_state = session_state
 
@@ -356,11 +421,22 @@ class EtaxLegacyPortal(Portal):
         fields.update({key: str(value) for key, value in overrides.items()})
         return self._post_fields(action, fields, referer)
 
-    def _post_fields(self, action: str, fields: Mapping[str, Any], referer: str):
-        """POST form đăng nhập điều hướng trang; nghiệp vụ legacy dùng XHR."""
-        # loginForm's logon()/checkVerify() calls native form.submit().
-        # Its POST navigates the document; other legacy operations remain XHR.
-        navigation = fields.get('dse_operationName') == 'corpUserLoginProc'
+    def _post_fields(
+        self,
+        action: str,
+        fields: Mapping[str, Any],
+        referer: str,
+        *,
+        navigation: bool | None = None,
+    ):
+        """POST form đăng nhập/điều hướng; nghiệp vụ legacy khác dùng XHR.
+
+        ``navigation=None`` giữ hành vi cũ: chỉ form đăng nhập điều hướng trình
+        duyệt. Form ``tkhaiForm`` tải thông báo cũng mở tài liệu nên truyền
+        ``navigation=True``.
+        """
+        if navigation is None:
+            navigation = fields.get('dse_operationName') == 'corpUserLoginProc'
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Origin': LEGACY_ETAX_ORIGIN,
@@ -542,6 +618,7 @@ class EtaxLegacyPortal(Portal):
         self._search_form_id = form_id
         self._search_page_html = response.text
         self._search_page_url = response.url
+        self._transaction_ids.update(legacy_transaction_ids(response.text))
         records = parse_records(response.text, self.source)
         return PageResult(records=records, total_pages=_total_pages(response.text),
                           http_status=response.status_code)
@@ -558,7 +635,131 @@ class EtaxLegacyPortal(Portal):
     # --- Giai đoạn 4: tải ---
     def fetch_detail_csrf(self, record: CaseRecord) -> tuple[str, str]:
         """Trang legacy không dùng CSRF; trả URL tham chiếu cho ``download``."""
+        self._active_record = record
         return f"{LEGACY_ETAX_BASE}/Request?messageId={record.ma_ho_so}", ""
+
+    # --- Thông báo đính kèm hồ sơ ---
+    def _transaction_id(self, record: CaseRecord) -> str:
+        """``ctMaGDich`` của hồ sơ, đọc lại từ trang kết quả nếu chưa có."""
+        transaction_id = self._transaction_ids.get(record.ma_ho_so, "")
+        if not transaction_id and self._search_page_html:
+            self._transaction_ids.update(legacy_transaction_ids(self._search_page_html))
+            transaction_id = self._transaction_ids.get(record.ma_ho_so, "")
+        return transaction_id
+
+    def fetch_notices(self) -> list[DvcNotice]:
+        """Mở ``viewTBao`` của hồ sơ đang tải và đọc danh sách thông báo.
+
+        Pipeline gọi hàm này sau khi đã lấy ``detail_url``/CSRF; legacy không
+        dùng CSRF nên ``fetch_detail_csrf`` chỉ ghi nhớ hồ sơ hiện tại. Danh
+        sách thông báo là một trang DSE riêng (``dse_processorState=
+        dsTBaoViewPage``) và phải được giữ lại để tải từng tệp.
+        """
+        record = self._active_record
+        if record is None:
+            return []
+        try:
+            if not self._search_page_html:
+                self._open_search_page()
+            transaction_id = self._transaction_id(record)
+        except LegacyEtaxError as error:
+            self.logger.warning(
+                "Không mở được trang thông báo hồ sơ %s: %s", record.ma_ho_so, error
+            )
+            return []
+        if not transaction_id:
+            self.logger.info(
+                "Hồ sơ %s không có liên kết thông báo trên trang legacy", record.ma_ho_so
+            )
+            return []
+        try:
+            _, fields = _form_fields(self._search_page_html, self._search_form_id)
+        except LegacyEtaxError as error:
+            self.logger.warning(
+                "Không đọc được form tra cứu để mở thông báo %s: %s",
+                record.ma_ho_so,
+                error,
+            )
+            return []
+        params = {key: fields[key] for key in _SESSION_FIELDS if fields.get(key)}
+        params.update(
+            {
+                "dse_operationName": "traCuuToKhaiProc",
+                "dse_errorPage": "error_page.jsp",
+                "dse_nextEventName": "viewTBao",
+                "ctMaGDich": transaction_id,
+            }
+        )
+        response = self.http.get(
+            f"{LEGACY_ETAX_BASE}/Request",
+            params=params,
+            headers=build_page_headers(
+                profile=self.profile,
+                headers={"Referer": self._search_page_url or LEGACY_ETAX_BASE},
+            ),
+        )
+        if response.status_code != 200:
+            self.logger.warning(
+                "Không mở được thông báo hồ sơ %s: HTTP=%s",
+                record.ma_ho_so,
+                response.status_code,
+            )
+            return []
+        form_id = self._form_id_for_operation(
+            response.text, "traCuuToKhaiProc", _NOTICE_FORM_ID
+        )
+        notices = legacy_notices(response.text)
+        if not form_id and notices:
+            self.logger.warning(
+                "Trang thông báo hồ sơ %s thiếu form tải; không thể tải tệp",
+                record.ma_ho_so,
+            )
+            return []
+        if form_id:
+            self._notice_form_id = form_id
+            self._notice_page_html = response.text
+            self._notice_page_url = response.url
+        return notices
+
+    def download_notice(self, notice: DvcNotice, detail_url: str, csrf: str):
+        """Tải một thông báo đính kèm của hồ sơ legacy.
+
+        Trang danh sách dùng form ``tkhaiForm`` với ``downloadFile(messageId)``;
+        form này là điều hướng tài liệu nên gửi bằng page header, không phải
+        XHR. XML/PDF trả về được giải mã bằng helper dùng chung với DVC.
+        """
+        if not self._notice_page_html:
+            self.logger.warning(
+                "Chưa có trang thông báo để tải %s; bỏ qua", notice.id
+            )
+            return None
+        try:
+            action, fields = _form_fields(self._notice_page_html, self._notice_form_id)
+        except LegacyEtaxError as error:
+            self.logger.warning("Không đọc được form thông báo %s: %s", notice.id, error)
+            return None
+        fields.update(
+            {
+                "dse_operationName": "traCuuToKhaiProc",
+                "dse_nextEventName": "download",
+                "pn": "1",
+                "messageId": notice.id,
+            }
+        )
+        response = self._post_fields(
+            action,
+            fields,
+            self._notice_page_url or LEGACY_ETAX_BASE,
+            navigation=True,
+        )
+        payload = decode_notice_response(response)
+        if payload is None:
+            self.logger.warning(
+                "Thông báo đính kèm %s không tải được (HTTP=%s); có thể hết phiên hoặc cổng đổi định dạng.",
+                notice.id,
+                getattr(response, "status_code", "-"),
+            )
+        return payload
 
     def download(self, record: CaseRecord, detail_url: str, csrf: str):
         """Tải XML tờ khai rồi gói vào ZIP trong bộ nhớ.
@@ -568,8 +769,7 @@ class EtaxLegacyPortal(Portal):
         chung với hai nguồn còn lại.
         """
         _, fields = _form_fields(self._search_page_html, self._search_form_id)
-        keep = ("dse_sessionId", "dse_applicationId", "dse_pageId", "dse_processorState", "dse_processorId")
-        params = {key: fields[key] for key in keep if fields.get(key)}
+        params = {key: fields[key] for key in _SESSION_FIELDS if fields.get(key)}
         params.update(
             {
                 "dse_operationName": "traCuuToKhaiProc",
@@ -589,12 +789,19 @@ class EtaxLegacyPortal(Portal):
         if response.status_code != 200:
             return response
         content_type = response.headers.get("content-type", "").lower()
+        # Hồ sơ rất cũ có lúc trả thẳng ZIP thay vì XML; giữ nguyên ZIP để
+        # ZipStore kiểm tra/ghi như mọi nguồn khác. Không nhận HTML giả ZIP.
+        if response.content.startswith(b"PK") and "text/html" not in content_type:
+            return response
         parser = etree.XMLParser(resolve_entities=False, load_dtd=False, no_network=True)
         try:
             root = etree.fromstring(response.content, parser=parser)
+            # Hồ sơ trước 2015 có thể còn DOCTYPE của schema cũ. Parser không
+            # nạp DTD/không gọi mạng nên DOCTYPE vô hại; vẫn từ chối mọi khai
+            # báo ENTITY để không tạo đường XXE/entity expansion.
             xml_ok = (
                 etree.QName(root).localname.lower() not in {"html", "error"}
-                and not root.getroottree().docinfo.doctype
+                and b"<!entity" not in response.content.lower()
             )
         except (etree.XMLSyntaxError, ValueError, TypeError):
             xml_ok = False
@@ -666,19 +873,40 @@ class EtaxLegacyFallback(Portal):
         self.legacy = legacy
         self.settings = primary.settings
         self.logger = logger or logging.getLogger("gdt_tax.portal.etax_legacy_fallback")
+        self._active_record: CaseRecord | None = None
 
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         return self.primary.search(period, page)
 
     def fetch_detail_csrf(self, record: CaseRecord) -> tuple[str, str]:
+        self._active_record = record
         if record.nguon == SOURCE_ETAX_LEGACY:
             return self.legacy.fetch_detail_csrf(record)
         return self.primary.fetch_detail_csrf(record)
 
+    def fetch_notices(self) -> list[DvcNotice]:
+        """Đọc thông báo đính kèm của hồ sơ vừa mở, theo đúng nguồn của nó."""
+        record = self._active_record
+        if record is None:
+            return []
+        portal = self.legacy if record.nguon == SOURCE_ETAX_LEGACY else self.primary
+        fetch = getattr(portal, "fetch_notices", None)
+        return fetch() if callable(fetch) else []
+
+    def download_notice(self, notice: DvcNotice, detail_url: str, csrf: str):
+        """Tải thông báo bằng portal tương ứng với hồ sơ vừa mở."""
+        record = self._active_record
+        if record is None:
+            return None
+        portal = self.legacy if record.nguon == SOURCE_ETAX_LEGACY else self.primary
+        download = getattr(portal, "download_notice", None)
+        return download(notice, detail_url, csrf) if callable(download) else None
+
     def download(self, record: CaseRecord, detail_url: str, csrf: str):
+        self._active_record = record
         if record.nguon == SOURCE_ETAX_LEGACY:
             return self.legacy.download(record, detail_url, csrf)
         return self.primary.download(record, detail_url, csrf)
 
 
-__all__ = ["EtaxLegacyFallback", "EtaxLegacyPortal"]
+__all__ = ["EtaxLegacyFallback", "EtaxLegacyPortal", "legacy_notices"]

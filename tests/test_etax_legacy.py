@@ -29,10 +29,15 @@ from tests.support import (
     StubCaptcha,
     cleanup_temporary_directory,
     fixture,
+    sample_zip,
 )
 
 IMAGE_HEADERS = {"content-type": "image/png"}
 XML_BODY = b"<?xml version='1.0'?><HSoThueDTu>test</HSoThueDTu>"
+NOTICE_XML = (
+    b'<?xml version="1.0" encoding="UTF-8"?>'
+    b'<TBaoThueDTu><MaTB>11200000034293775</MaTB></TBaoThueDTu>'
+)
 
 # --- Trang HTML giả lập từng bước đăng nhập trang legacy ---
 FORM_HTML = "<html><form id='goProcForm' action='/etaxnnt/Request'><input name='x' value='1'></form></html>"
@@ -115,6 +120,12 @@ def make_legacy_handler(state: dict):
                             headers={"content-type": "application/octet-stream"},
                         ),
                     )
+                if event == "viewTBao":
+                    state.setdefault("notice_views", []).append(dict(params))
+                    return FakeResponse(
+                        state.get("notice_html", fixture("etax_legacy_notices.html")),
+                        url="https://thuedientu.gdt.gov.vn/etaxnnt/Request",
+                    )
         elif method == "POST":
             data = kwargs.get("data") or {}
             event = str(data.get("dse_nextEventName", ""))
@@ -133,6 +144,12 @@ def make_legacy_handler(state: dict):
                 return FakeResponse(
                     "<html><form id='loginForm'></form><script>alert('Sai mat khau')</script></html>",
                     url=url,
+                )
+            if event == "download" and data.get("dse_processorState") == "dsTBaoViewPage":
+                state["notice_downloads"] = state.get("notice_downloads", []) + [dict(data)]
+                return FakeResponse(
+                    content=NOTICE_XML,
+                    headers={"content-type": "application/octet-stream"},
                 )
             if event == "query":
                 state["queries"] = state.get("queries", []) + [dict(data)]
@@ -256,6 +273,48 @@ class LegacyPortalTests(unittest.TestCase):
                 "<form id='taxLookupForm'><input name='dse_operationName' value='traCuuToKhaiProc'></form>")
         self.assertEqual(portal._form_id_for_operation(html, 'traCuuToKhaiProc', 'traCuuKhaiForm'), 'taxLookupForm')
 
+    def test_tra_cuu_truoc_2015_khong_bi_chan_boi_moc_ngay(self):
+        portal = self.make_portal({"query_html": fixture("etax_legacy_empty.html")})
+        result = portal.search(
+            self.period(start=date(2013, 1, 1), end=date(2013, 1, 31)), page=1
+        )
+        self.assertEqual(result.records, [])
+        self.assertEqual(result.total_pages, 0)
+        self.assertEqual(self.state["queries"][0]["qryFromDate"], "01/01/2013")
+        self.assertEqual(self.state["queries"][0]["qryToDate"], "31/01/2013")
+
+    def test_ho_so_cu_tra_thang_zip_van_luu_duoc(self):
+        archive = sample_zip(b"<HSoThueDTu>old</HSoThueDTu>")
+        portal = self.make_portal({
+            "download_response": FakeResponse(
+                content=archive, headers={"content-type": "application/octet-stream"}
+            )
+        })
+        record = portal.search(self.period(), page=1).records[0]
+        response = portal.download(record, "", "")
+        self.assertEqual(decode_zip_bytes(response), archive)
+
+    def test_mo_danh_sach_va_tai_thong_bao_dinh_kem(self):
+        portal = self.make_portal()
+        record = portal.search(self.period(), page=1).records[0]
+        portal.fetch_detail_csrf(record)
+        notices = portal.fetch_notices()
+        self.assertEqual([notice.id for notice in notices],
+                         ["11200000034293775", "11200000034284609"])
+        self.assertEqual(notices[0].title,
+                         "Chấp nhận/Không chấp nhận về việc nộp hồ sơ khai thuế điện tử")
+        self.assertEqual(notices[0].sent_at, "20/01/2020 14:59:28")
+        views = self.state["notice_views"]
+        self.assertEqual(views[0]["ctMaGDich"], "11320200101119001")
+        self.assertEqual(views[0]["dse_nextEventName"], "viewTBao")
+
+        payload = portal.download_notice(notices[0], "", "")
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload.data, NOTICE_XML)
+        posts = self.state["notice_downloads"]
+        self.assertEqual(posts[0]["messageId"], "11200000034293775")
+        self.assertEqual(posts[0]["dse_processorState"], "dsTBaoViewPage")
+
     def test_tai_xml_duoc_goi_zip_hop_le(self):
         portal = self.make_portal()
         record = portal.search(self.period(), page=1).records[0]
@@ -283,6 +342,17 @@ class LegacyPortalTests(unittest.TestCase):
         record = parse_records(fixture("etax_legacy_results.html"), SOURCE_ETAX_LEGACY)[0]
         response = portal.download(record, "https://x", "")
         self.assertIsNone(decode_zip_bytes(response))
+
+    def test_xml_cu_co_doctype_nhung_khong_entity_van_nhan(self):
+        body = (
+            b'<?xml version="1.0" encoding="UTF-8"?>'
+            b'<!DOCTYPE HSoThueDTu SYSTEM "HSoThueDTu.dtd">'
+            b"<HSoThueDTu>old</HSoThueDTu>"
+        )
+        portal = self.make_portal({"download_response": FakeResponse(
+            content=body, headers={"content-type": "application/octet-stream"})})
+        record = portal.search(self.period(), page=1).records[0]
+        self.assertIsNotNone(decode_zip_bytes(portal.download(record, "", "")))
 
     def test_html_mime_sai_va_xml_hong_khong_duoc_goi_zip(self):
         for body in (b"<html><body>expired</body></html>", b"error", b"<HSoThueDTu>",
@@ -341,6 +411,21 @@ class LegacyFallbackTests(unittest.TestCase):
         other_record = CaseRecord(ma_ho_so="X", nguon=SOURCE_ETAX)
         fallback.fetch_detail_csrf(other_record)
         primary.fetch_detail_csrf.assert_called_once_with(other_record)
+
+    def test_thong_bao_di_theo_nguon_cua_ho_so(self):
+        fallback, primary, legacy = self.make_fallback()
+        legacy.fetch_notices.return_value = ["legacy-notice"]
+        primary.fetch_notices.return_value = ["dvc-notice"]
+
+        legacy_record = CaseRecord(ma_ho_so="L", nguon=SOURCE_ETAX_LEGACY)
+        fallback.fetch_detail_csrf(legacy_record)
+        self.assertEqual(fallback.fetch_notices(), ["legacy-notice"])
+        legacy.fetch_notices.assert_called_once_with()
+
+        dvc_record = CaseRecord(ma_ho_so="D", nguon=SOURCE_ETAX)
+        fallback.fetch_detail_csrf(dvc_record)
+        self.assertEqual(fallback.fetch_notices(), ["dvc-notice"])
+        primary.fetch_notices.assert_called_once_with()
 
 
 class PipelineLegacyRoutingTests(unittest.TestCase):
@@ -417,6 +502,34 @@ class PipelineLegacyRoutingTests(unittest.TestCase):
         self.assertEqual(summary.discovered, 0)
         self.assertEqual(summary.expected, 1)
         self.assertFalse(summary.search_complete)
+
+    def test_tai_thong_bao_dinh_kem_cho_tung_ho_so(self):
+        summary, _http, state = self.run_pipeline()
+        self.assertEqual(summary.downloaded, 2)
+        self.assertEqual(len(state["notice_views"]), 2)
+        self.assertEqual(len(state["notice_downloads"]), 4)
+        for case in ("11320200101110001", "11320200101110002"):
+            folder = self.directory / "thong-bao-dinh-kem" / case
+            names = sorted(path.name for path in folder.glob("*.xml"))
+            self.assertEqual(len(names), 2, names)
+            self.assertTrue(any("tiep-nhan" in name for name in names))
+
+    def test_lan_hai_khong_tai_lai_thong_bao_da_co(self):
+        self.run_pipeline()
+        _summary, _http, state = self.run_pipeline()
+        self.assertEqual(state.get("notice_downloads", []), [])
+
+    def test_khoang_truoc_2015_van_duoc_chia_doan_va_tra_cuu(self):
+        summary, _http, state = self.run_pipeline(
+            {"query_html": fixture("etax_legacy_empty.html")},
+            from_date=date(2013, 1, 1), to_date=date(2013, 3, 31))
+        self.assertEqual(summary.periods, 3)
+        self.assertTrue(summary.complete)
+        self.assertEqual(
+            [(q["qryFromDate"], q["qryToDate"]) for q in state["queries"]],
+            [("01/01/2013", "31/01/2013"), ("01/02/2013", "03/03/2013"),
+             ("04/03/2013", "31/03/2013")],
+        )
 
     def test_phan_loai_hai_nhom_tu_legacy(self):
         import json

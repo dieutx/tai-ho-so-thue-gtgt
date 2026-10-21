@@ -1,7 +1,11 @@
 import unittest
 
-from gdt_tax.constants import SOURCE_DVC, SOURCE_ETAX
-from gdt_tax.parsing import page_count, parse_records
+from gdt_tax.constants import SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
+from gdt_tax.parsing import (
+    legacy_transaction_ids,
+    page_count,
+    parse_records,
+)
 from tests.support import fixture
 
 
@@ -88,6 +92,26 @@ class RobustnessTests(unittest.TestCase):
     def test_so_trang_khi_cong_khong_bao(self):
         self.assertIsNone(page_count("<div></div>", SOURCE_DVC))
         self.assertIsNone(page_count("<div></div>", SOURCE_ETAX))
+
+
+class LegacyTransactionTests(unittest.TestCase):
+    def test_doc_cap_ma_ho_so_va_ctmagdich(self):
+        records = parse_records(fixture("etax_legacy_results.html"), SOURCE_ETAX_LEGACY)
+        mapping = legacy_transaction_ids(fixture("etax_legacy_results.html"))
+        self.assertEqual(
+            [record.ma_ho_so for record in records],
+            ["11320200101110001", "11320200101110002"],
+        )
+        self.assertEqual(mapping["11320200101110001"], "11320200101119001")
+        self.assertEqual(mapping["11320200101110002"], "11320200101119002")
+
+    def test_hang_khong_co_lien_ket_thong_bao_bi_bo_qua(self):
+        html = (
+            "<table id='data_content_onday'><tr>"
+            "<td><a onclick=\"downloadTkhai('ABC')\">Tải tờ khai</a></td>"
+            "</tr></table>"
+        )
+        self.assertEqual(legacy_transaction_ids(html), {})
 
 
 class UnknownSourceTests(unittest.TestCase):

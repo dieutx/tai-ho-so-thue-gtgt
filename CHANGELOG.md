@@ -1,5 +1,14 @@
 # Changelog
 
+## Chưa phát hành
+
+- Tải thêm thông báo đính kèm hồ sơ DVC và legacy (tiếp nhận / chấp nhận /
+  không chấp nhận) vào `thong-bao-dinh-kem/<mã hồ sơ>/`; legacy đọc danh sách
+  qua `viewTBao` rồi tải từng XML/PDF. Bỏ qua tệp đã có và không để lỗi thông
+  báo làm mất ZIP đã tải.
+- Nhận hồ sơ legacy cũ: cho phép XML có DOCTYPE schema cũ (không ENTITY) và
+  nhận ZIP trả trực tiếp; không đặt mốc chặn ngày 01/01/2015 khi tra cứu.
+
 ## [2.0.0] — 2026-10-19
 
 - Build local đăng nhập 20/10: nhận diện trang xác minh truy cập HTTP 200;

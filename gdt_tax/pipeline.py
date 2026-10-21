@@ -6,13 +6,15 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 from .auth import login, open_landing
 from .classification import classify_record
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX, SOURCE_ETAX_LEGACY
 from .csrf import csrf_token
 from .dates import format_date
-from .errors import LoginError, NetworkError, SearchError
+from .dvc_notices import NOTICE_DIRECTORY, NoticeStore
+from .errors import GdtError, LoginError, NetworkError, SearchError
 from .http import HttpClient
 from .models import CaseRecord, PageResult, RunSummary
 from .portals import build_portals
@@ -33,11 +35,17 @@ class Pipeline:
         hooks: RunHooks | None = None,
         persist_metadata: bool = True,
         target_ids: set[str] | None = None,
+        notice_store: NoticeStore | None = None,
+        download_notices: bool = True,
     ) -> None:
         self.settings = settings
         self.http = http
         self.captcha = captcha
         self.store = store or ZipStore(settings.download_dir)
+        self.download_notices = download_notices
+        self.notice_store = notice_store or NoticeStore(
+            Path(settings.download_dir) / NOTICE_DIRECTORY
+        )
         self.portal_factory = portal_factory
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.sleep = sleep
@@ -198,6 +206,7 @@ class Pipeline:
         if self.store.find_existing(record):
             self.reused_ids.add(record.ma_ho_so)
             succeeded.add(record.ma_ho_so)
+            self._download_notices(portal, record)
             return True
         detail_url, csrf = portal.fetch_detail_csrf(record)
         if not csrf and not getattr(portal, "csrf_optional", False):
@@ -213,7 +222,59 @@ class Pipeline:
             self.record_errors[record.ma_ho_so] = "Dữ liệu trả về không phải ZIP hoàn chỉnh/hợp lệ. Tệp chưa được lưu; có thể phiên đã hết hạn."
             return False
         succeeded.add(record.ma_ho_so)
+        self._download_notices(portal, record, detail_url, csrf)
         return True
+
+    def _download_notices(
+        self, portal, record: CaseRecord, detail_url: str = "", csrf: str = ""
+    ) -> None:
+        """Tải thông báo đính kèm của hồ sơ (DVC và legacy).
+
+        Lỗi tải thông báo chỉ ghi nhật ký: tệp ZIP đã lưu vẫn là kết quả hợp lệ,
+        và lần chạy sau sẽ thử lại các thông báo còn thiếu. Legacy không dùng
+        CSRF nhưng vẫn cần mở lại trang chi tiết để biết hồ sơ đang xét.
+        """
+        if not self.download_notices:
+            return
+        fetch = getattr(portal, "fetch_notices", None)
+        download = getattr(portal, "download_notice", None)
+        if not callable(fetch) or not callable(download):
+            return
+        try:
+            if not csrf:
+                detail_url, csrf = portal.fetch_detail_csrf(record)
+            if not csrf and not getattr(portal, "csrf_optional", False):
+                self.logger.warning(
+                    "Bỏ qua thông báo đính kèm %s: không lấy được CSRF của trang chi tiết",
+                    record.ma_ho_so,
+                )
+                return
+            notices = fetch()
+        except GdtError as error:
+            self.logger.warning("Không đọc được thông báo đính kèm %s: %s", record.ma_ho_so, error)
+            return
+        saved = 0
+        for notice in notices:
+            self.hooks.check()
+            try:
+                if self.notice_store.find_existing(record.ma_ho_so, notice.id):
+                    continue
+                payload = download(notice, detail_url, csrf)
+                if payload is None:
+                    continue
+                if self.notice_store.save(record.ma_ho_so, notice, payload):
+                    saved += 1
+            except GdtError as error:
+                self.logger.warning(
+                    "Không tải được thông báo %s của %s: %s",
+                    notice.id,
+                    record.ma_ho_so,
+                    error,
+                )
+        if notices:
+            self.logger.info(
+                "Thông báo đính kèm %s: %d/%d tệp mới", record.ma_ho_so, saved, len(notices)
+            )
 
 
 __all__ = ["Pipeline"]

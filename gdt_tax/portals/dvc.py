@@ -10,12 +10,15 @@ from __future__ import annotations
 from ..constants import (
     DVC_DOWNLOAD,
     DVC_DOWNLOAD_FORM,
+    DVC_NOTICE_DOWNLOAD,
+    DVC_NOTICE_DOWNLOAD_TDT,
     DVC_SEARCH,
     DVC_VALIDATE,
     ORIGIN,
     SOURCE_DVC,
 )
 from ..dates import format_date
+from ..dvc_notices import DvcNotice, NoticeFile, decode_notice_response, parse_notices
 from ..models import CaseRecord, PageResult, SearchPeriod
 from .base import Portal
 
@@ -53,6 +56,39 @@ class DvcPortal(Portal):
             ),
         )
         return self._page_result(response)
+
+    def fetch_notices(self) -> list[DvcNotice]:
+        """Đọc danh sách thông báo từ HTML trang chi tiết vừa mở."""
+        return parse_notices(self.detail_html)
+
+    def download_notice(
+        self, notice: DvcNotice, detail_url: str, csrf: str
+    ) -> NoticeFile | None:
+        """Tải một thông báo đính kèm; trả ``None`` khi cổng không trả tệp hợp lệ."""
+        path = DVC_NOTICE_DOWNLOAD_TDT if notice.is_tdt else DVC_NOTICE_DOWNLOAD
+        params = {"loaiTraCuu": notice.loai_tra_cuu} if notice.is_tdt else None
+        response = self.http.post(
+            path,
+            params=params,
+            json={"idTbao": notice.id, "loaiTBao": notice.loai_tbao},
+            headers=self.xhr_headers(
+                headers={
+                    "Content-Type": "application/json",
+                    "Origin": ORIGIN,
+                    "Referer": detail_url,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-XSRF-TOKEN": csrf,
+                }
+            ),
+        )
+        payload = decode_notice_response(response)
+        if payload is None:
+            self.logger.warning(
+                "Thông báo đính kèm %s không tải được (HTTP=%s); có thể hết phiên hoặc cổng đổi định dạng.",
+                notice.id,
+                getattr(response, "status_code", "-"),
+            )
+        return payload
 
     def download(self, record: CaseRecord, detail_url: str, csrf: str):
         validation = self.http.get(

@@ -1,0 +1,267 @@
+"""Thông báo đính kèm hồ sơ Dịch vụ công (tiếp nhận / chấp nhận / không chấp nhận).
+
+Trang chi tiết hồ sơ DVC (``/tchs/files/detail/<mã hồ sơ>``) chứa modal
+``#modalThongBao`` với danh sách thông báo của cơ quan thuế. Mỗi thông báo có
+một liên kết ``downloadThongBao(this)`` mang ``data-id``; tải bằng
+``POST /tchs/downloadthongbao`` (JSON ``{"idTbao": ..., "loaiTBao": ""}``,
+header ``X-XSRF-TOKEN``). Cổng trả JSON::
+
+    {"fileName": "Thong bao_10820260069828466.xml",
+     "fileType": "xml",
+     "content": "<base64>"}
+
+Module này chỉ đọc/tải và lưu tệp; không parse nội dung văn bản.
+"""
+
+from __future__ import annotations
+
+import base64
+import logging
+import os
+import re
+import tempfile
+import unicodedata
+from dataclasses import dataclass
+from pathlib import Path
+
+from bs4 import BeautifulSoup, Tag
+
+from .atomic import replace_with_retry
+from .errors import StorageError
+from .naming import safe_filename_part
+
+LOGGER_NAME = "gdt_tax.dvc_notices"
+#: Tên thư mục con trong nơi lưu, mỗi hồ sơ một thư mục.
+NOTICE_DIRECTORY = "thong-bao-dinh-kem"
+#: Chặn tệp quá lớn trước khi ghi ra đĩa.
+MAX_NOTICE_BYTES = 64 * 1024 * 1024
+LOAI_TIEP_NHAN = "tiep-nhan"
+LOAI_CHAP_NHAN = "chap-nhan"
+LOAI_KHONG_CHAP_NHAN = "khong-chap-nhan"
+LOAI_KHAC = "khac"
+_DATE = re.compile(r"\b\d{1,2}:\d{2}\s+\d{1,2}/\d{1,2}/\d{4}\b")
+_SPECIAL_LETTERS = str.maketrans({"đ": "d", "Đ": "D", "ð": "d", "Ð": "D"})
+
+
+@dataclass
+class DvcNotice:
+    """Một thông báo đính kèm của hồ sơ DVC."""
+
+    id: str
+    title: str = ""
+    sent_at: str = ""
+    #: Liên kết dùng endpoint ``downloadthongbao-tdt`` thay vì ``downloadthongbao``.
+    is_tdt: bool = False
+    loai_tra_cuu: str = ""
+    loai_tbao: str = ""
+
+    @property
+    def loai(self) -> str:
+        """Nhóm thông báo theo tiêu đề: tiếp nhận / chấp nhận / không chấp nhận."""
+        text = _fold(self.title)
+        if "tiep nhan" in text or "tiep nhan ho so" in text:
+            return LOAI_TIEP_NHAN
+        # Tiêu đề legacy thường gộp cả hai kết quả; không được gán nhầm thành
+        # "không chấp nhận" khi chưa đọc nội dung thông báo.
+        if "chap nhan/khong chap nhan" in text:
+            return LOAI_KHAC
+        if "khong chap nhan" in text or "khong duoc chap nhan" in text:
+            return LOAI_KHONG_CHAP_NHAN
+        if "chap nhan" in text or "xac nhan" in text:
+            return LOAI_CHAP_NHAN
+        return LOAI_KHAC
+
+
+@dataclass
+class NoticeFile:
+    """Nội dung tải về của một thông báo."""
+
+    file_name: str
+    data: bytes
+    file_type: str = ""
+
+    @property
+    def extension(self) -> str:
+        suffix = Path(self.file_name).suffix.lstrip(".").lower()
+        if re.fullmatch(r"[a-z0-9]{1,8}", self.file_type.lower()):
+            return self.file_type.lower()
+        if re.fullmatch(r"[a-z0-9]{1,8}", suffix):
+            return suffix
+        if self.data.lstrip()[:5] == b"%PDF-":
+            return "pdf"
+        if self.data.startswith(b"PK"):
+            return "zip"
+        if self.data.lstrip().startswith(b"<"):
+            return "xml"
+        return "bin"
+
+
+def _fold(value: str) -> str:
+    text = (value or "").translate(_SPECIAL_LETTERS)
+    text = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in text if not unicodedata.combining(char)).casefold()
+
+
+def _truthy(value) -> bool:
+    return str(value or "").strip().casefold() not in {"", "0", "false", "none"}
+
+
+def parse_notices(html: str) -> list[DvcNotice]:
+    """Đọc danh sách thông báo trong modal ``#modalThongBao`` của trang chi tiết."""
+    if not html:
+        return []
+    soup = BeautifulSoup(html, "lxml")
+    scope: Tag | BeautifulSoup = soup.find(id="modalThongBao") or soup
+    notices: list[DvcNotice] = []
+    seen: set[str] = set()
+    for anchor in scope.find_all("a"):
+        notice_id = str(anchor.get("data-id") or "").strip()
+        if not notice_id or "downloadThongBao" not in str(anchor.get("onclick") or ""):
+            continue
+        key = f"{'tdt' if _truthy(anchor.get('data-is-thue-dien-tu')) else 'dvc'}:{notice_id}"
+        if key in seen:
+            continue
+        seen.add(key)
+        row = anchor.find_parent("div", class_="row") or anchor.parent
+        title, sent_at = _notice_text(row)
+        notices.append(
+            DvcNotice(
+                id=notice_id,
+                title=title,
+                sent_at=sent_at,
+                is_tdt=_truthy(anchor.get("data-is-thue-dien-tu")),
+                loai_tra_cuu=str(anchor.get("data-loaitracuu") or "").strip(),
+                loai_tbao=str(anchor.get("data-loai-tbao") or anchor.get("data-loaibao") or "").strip(),
+            )
+        )
+    return notices
+
+
+def _notice_text(row) -> tuple[str, str]:
+    if row is None:
+        return "", ""
+    title = ""
+    block = row.select_one(".fw-bold")
+    if block is not None:
+        title = block.get_text(" ", strip=True)
+    sent_at = ""
+    column = row.select_one(".col-md-9") or row
+    for element in column.find_all("div", recursive=False):
+        text = element.get_text(" ", strip=True)
+        if _DATE.search(text):
+            sent_at = text
+            break
+    if not title:
+        texts = [d.get_text(" ", strip=True) for d in column.find_all("div", recursive=False)]
+        title = next((text for text in texts if text and not _DATE.search(text)), "")
+    return re.sub(r"(?i)^v/v\s*:\s*", "", title).strip(), sent_at
+
+
+def notice_filename(case_id: str, notice: DvcNotice, extension: str) -> str:
+    """Tên tệp ổn định, bắt đầu bằng ``messageId`` để lần sau bỏ qua tệp đã có."""
+    parts = [
+        safe_filename_part(notice.id, 50),
+        safe_filename_part(notice.loai, 30),
+        safe_filename_part(case_id, 40),
+    ]
+    if notice.title:
+        parts.append(safe_filename_part(notice.title, 60))
+    suffix = extension if re.fullmatch(r"[a-z0-9]{1,8}", extension.lower()) else "bin"
+    return "__".join(parts) + f".{suffix.lower()}"
+
+
+def decode_notice_response(response) -> NoticeFile | None:
+    """Giải mã phản hồi tải thông báo (JSON base64 hoặc tệp nhị phân trực tiếp)."""
+    if response is None or getattr(response, "status_code", 0) != 200:
+        return None
+    file_name = ""
+    file_type = ""
+    data = b""
+    payload = None
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    if isinstance(payload, dict):
+        if not payload.get("content"):
+            return None
+        try:
+            encoded = "".join(str(payload["content"]).split())
+            data = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError):
+            return None
+        file_name = str(payload.get("fileName") or "")
+        file_type = str(payload.get("fileType") or "")
+    else:
+        data = bytes(getattr(response, "content", b"") or b"")
+        stripped = data.lstrip()
+        if not (stripped[:5] == b"%PDF-" or data.startswith(b"PK") or stripped.startswith(b"<")):
+            return None
+    if not data or len(data) > MAX_NOTICE_BYTES:
+        return None
+    return NoticeFile(file_name=file_name, data=data, file_type=file_type)
+
+
+class NoticeStore:
+    """Lưu tệp thông báo đính kèm theo từng hồ sơ."""
+
+    def __init__(self, root: str | Path, logger: logging.Logger | None = None) -> None:
+        self.root = Path(root)
+        self.logger = logger or logging.getLogger(LOGGER_NAME)
+
+    def directory_for(self, case_id: str) -> Path:
+        return self.root / safe_filename_part(case_id, 60)
+
+    def find_existing(self, case_id: str, notice_id: str) -> Path | None:
+        directory = self.directory_for(case_id)
+        if not directory.is_dir():
+            return None
+        prefix = safe_filename_part(notice_id, 50) + "__"
+        for path in directory.glob(prefix + "*"):
+            try:
+                if path.is_file() and path.stat().st_size:
+                    return path
+            except OSError:
+                continue
+        return None
+
+    def save(self, case_id: str, notice: DvcNotice, payload: NoticeFile) -> Path | None:
+        directory = self.directory_for(case_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / notice_filename(case_id, notice, payload.extension)
+        try:
+            _atomic_write(path, payload.data)
+        except StorageError as error:
+            self.logger.error("Không ghi được thông báo %s: %s", notice.id, error)
+            return None
+        self.logger.info("Đã lưu thông báo đính kèm %s (%s bytes)", path.name, f"{len(payload.data):,}")
+        return path
+
+
+def _atomic_write(path: Path, data: bytes) -> None:
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.",
+                                         suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        replace_with_retry(temporary, path)
+    except OSError as error:
+        raise StorageError(f"Không ghi được {path}: {error}") from error
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+__all__ = [
+    "DvcNotice",
+    "NoticeFile",
+    "NoticeStore",
+    "MAX_NOTICE_BYTES",
+    "NOTICE_DIRECTORY",
+    "decode_notice_response",
+    "notice_filename",
+    "parse_notices",
+]
