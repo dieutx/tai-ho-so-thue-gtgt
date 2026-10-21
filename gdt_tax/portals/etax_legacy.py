@@ -20,7 +20,6 @@ Hai lớp trong module này:
 
 from __future__ import annotations
 
-import base64
 import logging
 import re
 import time
@@ -35,6 +34,7 @@ from bs4 import BeautifulSoup
 
 from ..auth_outcomes import AuthFailure, AuthOutcome, classify_response, raise_terminal
 from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
+from ..contracts import DownloadArtifact
 from ..errors import LegacyEtaxError, LegacyPageError
 from ..headers import build_image_headers, build_page_headers, build_xhr_headers
 from ..http import HttpClient
@@ -606,7 +606,10 @@ class EtaxLegacyPortal(Portal):
                 record.ma_ho_so,
             )
             return _HtmlInsteadOfFile(response)
-        return _XmlZipResponse(record, response.content)
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr(f'{safe_filename_part(record.ma_ho_so, 50)}.xml', response.content)
+        return DownloadArtifact(buffer.getvalue(), 'zip', 'DECLARATION', record.key)
 
 
 class _HtmlInsteadOfFile:
@@ -620,31 +623,6 @@ class _HtmlInsteadOfFile:
 
     def json(self):
         raise ValueError("Legacy trả HTML thay vì file")
-
-
-class _XmlZipResponse:
-    """ZIP chứa XML tờ khai, bọc dạng JSON base64 giống hình dạng cổng DVC trả.
-
-    ``decode_zip_bytes`` thử ``response.json()`` trước rồi mới kiểm tra chữ ký
-    ``PK``, nên trả JSON ``{"content": <base64>, "fileName": ...}`` là phần lưu
-    dùng chung được mà không cần sửa ``storage``.
-    """
-
-    def __init__(self, record: CaseRecord, xml: bytes) -> None:
-        buffer = BytesIO()
-        with zipfile.ZipFile(buffer, "w") as archive:
-            archive.writestr(f"{safe_filename_part(record.ma_ho_so, 50)}.xml", xml)
-        self.status_code = 200
-        self.headers = {"content-type": "application/json"}
-        self._payload = {
-            "content": base64.b64encode(buffer.getvalue()).decode("ascii"),
-            "fileName": f"{record.ma_ho_so}.zip",
-        }
-        self.content = buffer.getvalue()
-        self.text = ""
-
-    def json(self) -> dict[str, str]:
-        return dict(self._payload)
 
 
 class EtaxLegacyFallback(Portal):

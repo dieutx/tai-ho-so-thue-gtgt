@@ -18,9 +18,9 @@ from dataclasses import replace
 from ..auth_outcomes import raise_terminal
 from ..captcha import fetch_captcha
 from ..constants import CASE_DETAIL, LANDING
+from ..contracts import Solver, Transport
 from ..csrf import csrf_token
 from ..headers import build_page_headers, build_xhr_headers
-from ..http import HttpClient
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..parsing import page_count, parse_record_table
 from ..portal_profiles import DVC_PROFILE, PortalProfile
@@ -34,7 +34,7 @@ class Portal(ABC):
     #: Tham số ``loai`` của trang chi tiết hồ sơ.
     detail_loai: str = ""
 
-    def __init__(self, http: HttpClient, captcha, settings, logger: logging.Logger | None = None) -> None:
+    def __init__(self, http: Transport, captcha: Solver, settings, logger: logging.Logger | None = None) -> None:
         self.http = http
         self.captcha = captcha
         self.settings = settings

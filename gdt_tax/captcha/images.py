@@ -10,8 +10,8 @@ import logging
 import time
 
 from ..constants import LANDING, LOGIN_CAPTCHA, LOGIN_PAGE, SEARCH_CAPTCHA
+from ..contracts import Transport
 from ..headers import DEFAULT_PROFILE, build_image_headers
-from ..http import HttpClient
 
 LOGGER_NAME = "gdt_tax.captcha"
 KIND_LOGIN = "login"
@@ -21,7 +21,7 @@ MIN_IMAGE_BYTES = 500
 
 
 def fetch_captcha(
-    http: HttpClient,
+    http: Transport,
     kind: str = KIND_SEARCH,
     *,
     logger: logging.Logger | None = None,

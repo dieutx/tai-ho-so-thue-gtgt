@@ -13,6 +13,7 @@ from .auth import login, open_landing
 from .catalog import CatalogCheckpoint, flush_on_error
 from .classification import classify_record
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX, SOURCE_ETAX_LEGACY
+from .contracts import DownloadArtifact, checked_artifact
 from .csrf import csrf_token
 from .dates import format_date
 from .dvc_notices import NOTICE_DIRECTORY, NoticeStore
@@ -267,6 +268,16 @@ class Pipeline:
             self.logger.error("LỖI TẢI: không lấy được CSRF token cho %s", record.ma_ho_so)
             return False
         response = portal.download(record, detail_url, csrf)
+        if isinstance(response, DownloadArtifact):
+            if response.media_kind != 'zip':
+                raise SearchError('DOWNLOAD_ARTIFACT_KIND_MISMATCH')
+            path = self.store.save(record, checked_artifact(response, record))
+            if path is None:
+                self.record_errors[record.record_key] = 'DOWNLOAD_ARTIFACT_INVALID'
+                return False
+            succeeded.add(record.record_key)
+            self._download_attachments(portal, record)
+            return True
         if response is None or response.status_code != 200:
             self.record_errors[record.record_key] = f"Cổng trả HTTP {getattr(response, 'status_code', 'không có phản hồi')} khi tải tệp. Kiểm tra kết nối/phiên rồi thử lại."
             self.logger.error("LỖI TẢI: %s HTTP=%s", record.ma_ho_so, getattr(response, "status_code", "-"))

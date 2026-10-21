@@ -263,7 +263,7 @@ class LegacyPortalTests(unittest.TestCase):
         self.assertEqual(csrf, "")  # legacy không dùng CSRF
 
         response = portal.download(record, detail_url, csrf)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.media_kind, 'zip')
         data = decode_zip_bytes(response)
         self.assertIsNotNone(data)
         with zipfile.ZipFile(BytesIO(data)) as archive:

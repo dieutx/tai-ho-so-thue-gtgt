@@ -42,6 +42,7 @@ from .atomic import replace_with_retry
 from .catalog import generation, serialized_catalog
 from .classification import TAX_GROUPS
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX
+from .contracts import DownloadArtifact
 from .errors import StorageError
 from .identity import key_from_row
 from .integrity import (
@@ -103,6 +104,8 @@ def decode_zip_bytes(response) -> bytes | None:
     Cổng có lúc trả trực tiếp file nhị phân, có lúc trả JSON dạng
     ``{"content": "<base64>", "fileName": "..."}``.
     """
+    if isinstance(response, DownloadArtifact):
+        return response.data if response.media_kind == 'zip' and valid_zip(response.data) else None
     data = response.content
     if len(data) > (MAX_ARCHIVE_BYTES * 4 // 3 + 4096):
         return None
