@@ -97,6 +97,7 @@ def validate_tax_zip(data: bytes, *, required_kind="declaration") -> IntegrityRe
                     return _result(data, "zip", "ZIP_MEMBER_TOO_LARGE")
                 if payload.startswith(b"%PDF-"):
                     result = validate_pdf(payload)
+                    required |= result.ok and required_kind in {"notice", "any"}
                 else:
                     result = validate_xml(payload, required_kind)
                     required |= result.ok

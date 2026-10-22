@@ -50,7 +50,6 @@ from .integrity import (
     read_bounded,
     safe_destination,
     source_reference,
-    valid_declaration_zip,
     validate_tax_zip,
     write_evidence,
 )
@@ -58,6 +57,16 @@ from .models import CaseRecord
 from .naming import zip_filename
 
 LOGGER_NAME = "gdt_tax.storage"
+
+
+def _required_kind(record: CaseRecord) -> str:
+    """ZIP của hồ sơ thông báo (04/SS-HĐĐT...) chứa XML ``TBao``, không phải tờ khai."""
+    if getattr(record, "loai_tai_lieu", "") == "NOTICE":
+        return "notice"
+    title = (getattr(record, "to_khai", "") or "").casefold()
+    if "04/ss" in title or "thông báo" in title or "thong bao" in title:
+        return "notice"
+    return "declaration"
 
 EXCEL_COLUMNS = (
     ("STT", None),
@@ -129,6 +138,8 @@ class ZipStore:
     def __init__(self, directory: str | Path, logger: logging.Logger | None = None) -> None:
         self.directory = Path(directory)
         self.logger = logger or logging.getLogger(LOGGER_NAME)
+        #: Mã lỗi gần nhất để pipeline/UI báo đúng loại (ZIP hỏng vs sai loại hồ sơ).
+        self.last_error = ""
 
     def path_for(self, record: CaseRecord) -> Path:
         return self.directory / zip_filename(record)
@@ -154,7 +165,7 @@ class ZipStore:
                 if candidate.stat().st_size > MAX_ARCHIVE_BYTES:
                     continue
                 content = read_bounded(candidate, MAX_ARCHIVE_BYTES)
-                if not valid_declaration_zip(content) or not matches_evidence(candidate, content, source_reference(record, "zip")):
+                if not validate_tax_zip(content, required_kind=_required_kind(record)).ok or not matches_evidence(candidate, content, source_reference(record, "zip")):
                     continue
                 record.tep_zip = candidate.name
                 self.logger.info("Bỏ qua ZIP đã có: %s", candidate.name)
@@ -165,9 +176,15 @@ class ZipStore:
 
     def save(self, record: CaseRecord, data: bytes) -> Path | None:
         """Ghi ZIP xuống đĩa sau khi kiểm tra tính toàn vẹn."""
-        result = validate_tax_zip(data)
+        self.last_error = ""
+        required_kind = _required_kind(record)
+        result = validate_tax_zip(data, required_kind=required_kind)
         if not result.ok:
-            self.logger.error("Phản hồi không phải ZIP hợp lệ: %s", record.ma_ho_so)
+            self.last_error = result.code
+            self.logger.error(
+                "Phản hồi không phải ZIP %s hợp lệ: %s (%s)",
+                required_kind, record.ma_ho_so, result.code,
+            )
             return None
         self.directory.mkdir(parents=True, exist_ok=True)
         path = safe_destination(self.path_for(record), data, source_reference(record, "zip"))
@@ -178,8 +195,10 @@ class ZipStore:
         return path
 
     def save_from_response(self, record: CaseRecord, response) -> Path | None:
+        self.last_error = ""
         data = decode_zip_bytes(response)
         if data is None:
+            self.last_error = "ZIP_DECODE_FAILED"
             self.logger.error("Không giải mã được ZIP: %s", record.ma_ho_so)
             return None
         return self.save(record, data)

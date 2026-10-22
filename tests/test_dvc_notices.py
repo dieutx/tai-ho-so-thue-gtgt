@@ -28,6 +28,7 @@ from gdt_tax.dvc_notices import (
 )
 from gdt_tax.errors import AttachmentDownloadError
 from gdt_tax.http import HttpClient
+from gdt_tax.models import CaseRecord
 from gdt_tax.pipeline import Pipeline
 from gdt_tax.portals.dvc import DvcPortal
 from gdt_tax.storage import ZipStore
@@ -295,6 +296,26 @@ class NoticePipelineTests(unittest.TestCase):
         self.assertEqual(summary.downloaded, 2)
         posts = [call for call in http.calls if route_of(call.path) == DVC_NOTICE_DOWNLOAD]
         self.assertEqual(posts, [])
+
+
+class DvcDeclarationDownloadTests(unittest.TestCase):
+    def test_download_is_retry_safe_and_returns_json_zip(self):
+        def handler(method, path, kwargs):
+            route = route_of(path)
+            if route == DVC_VALIDATE:
+                return FakeResponse(text="200")
+            if route == DVC_DOWNLOAD:
+                return FakeResponse(json_payload={"content": zip_payload()})
+            return None
+
+        http = FakeHttp(handler)
+        portal = DvcPortal(http, StubCaptcha(), SimpleNamespace(header_profile="minimal"))
+        record = CaseRecord("G12.18-261005-00126831", "DVC")
+        response = portal.download(record, "https://example.test/tthc/tchs/files/detail/X", "csrf")
+        self.assertEqual(response.status_code, 200)
+        post = next(call for call in http.calls if call.method == "POST")
+        self.assertTrue(post.kwargs["operation"].retry_safe)
+        self.assertEqual(post.kwargs["operation"].minimum_attempts, 6)
 
 
 if __name__ == "__main__":

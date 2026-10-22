@@ -229,7 +229,17 @@ class Pipeline:
             self.logger.error("LỖI TẢI: %s HTTP=%s", record.ma_ho_so, getattr(response, "status_code", "-"))
             return False
         if self.store.save_from_response(record, response) is None:
-            self.record_errors[record.record_key] = "Dữ liệu trả về không phải ZIP hoàn chỉnh/hợp lệ. Tệp chưa được lưu; có thể phiên đã hết hạn."
+            code = getattr(self.store, "last_error", "")
+            if code and code != "ZIP_DECODE_FAILED":
+                self.record_errors[record.record_key] = (
+                    f"Tệp cổng trả về là ZIP hợp lệ nhưng không đúng loại hồ sơ ({code}); "
+                    "tệp chưa được lưu."
+                )
+            else:
+                self.record_errors[record.record_key] = (
+                    "Dữ liệu trả về không phải ZIP hoàn chỉnh/hợp lệ. "
+                    "Tệp chưa được lưu; có thể phiên đã hết hạn."
+                )
             return False
         succeeded.add(record.record_key)
         self._download_attachments(portal, record)

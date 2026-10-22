@@ -37,6 +37,8 @@ def issue_hint(message) -> str:
     if any(marker in text for marker in ('không phải zip', 'không phải xml', 'không phải pdf',
                                          'định dạng', 'không hợp lệ', 'giải mã')):
         return 'Tệp cổng trả về không hợp lệ: thử lại; nếu lặp lại, mở Nhật ký kỹ thuật để kiểm tra.'
+    if 'không đúng loại hồ sơ' in text:
+        return 'Tệp ZIP hợp lệ nhưng không đúng loại tờ khai/thông báo; kiểm tra lại loại hồ sơ.'
     if 'không còn trong kết quả' in text:
         return 'Hồ sơ không còn trong kết quả tra cứu: tra cứu lại đúng kỳ rồi tải lại.'
     return 'Thử lại tệp này; nếu vẫn lỗi, mở Nhật ký kỹ thuật để xem chi tiết.'

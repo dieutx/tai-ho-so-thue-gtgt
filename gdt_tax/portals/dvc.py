@@ -64,6 +64,10 @@ class DvcPortal(Portal):
         return result
 
     def download(self, record: CaseRecord, detail_url: str, csrf: str):
+        download_operation = OperationPolicy(
+            'declaration-download', DOWNLOAD_OPERATION.max_bytes,
+            retry_safe=True, minimum_attempts=6,
+        )
         validation = self.http.get(
             self.capabilities.validate_endpoint,
             params={"idTKhai": record.ma_ho_so},
@@ -78,8 +82,9 @@ class DvcPortal(Portal):
         )
         raise_terminal(validation, 'DVC', authenticated=True)
         if validation.status_code == 200 and validation.text.strip() == "200":
-            return self.http.post(
+            response = self.http.post(
                 self.capabilities.download_endpoint,
+                operation=download_operation,
                 json={"maHoSo": record.ma_ho_so},
                 headers=self.xhr_headers(
                     headers={
@@ -91,6 +96,8 @@ class DvcPortal(Portal):
                     }
                 ),
             )
+            raise_terminal(response, 'DVC', authenticated=True)
+            return response
 
         self.logger.warning(
             "Kiểm tra AJAX không khả dụng (HTTP=%s); thử form tải dự phòng.",
@@ -98,8 +105,9 @@ class DvcPortal(Portal):
         )
 
         # Đây là form submit thật (không phải AJAX), nên dùng bộ header điều hướng.
-        return self.http.post(
+        response = self.http.post(
             self.capabilities.download_form_endpoint,
+            operation=download_operation,
             data={"_csrf": csrf, "mahoso": record.ma_ho_so},
             headers=self.page_headers(
                 headers={
@@ -109,6 +117,8 @@ class DvcPortal(Portal):
                 }
             ),
         )
+        raise_terminal(response, 'DVC', authenticated=True)
+        return response
 
     def fetch_notice_list(self):
         return parse_notice_list(self.detail_html)

@@ -28,6 +28,19 @@ def make_record(case_id: str = "11320250292469209") -> CaseRecord:
     )
 
 
+NOTICE_XML = b'<TBao><MaTB>synthetic-notice</MaTB></TBao>'
+
+
+def make_notice_record(case_id: str = "G12.18-261005-00126831") -> CaseRecord:
+    return CaseRecord(
+        ma_ho_so=case_id,
+        nguon="DVC",
+        to_khai="04/SS-HĐĐT - Thông báo hóa đơn điện tử đã lập sai",
+        loai_tai_lieu="NOTICE",
+        nhom_to_khai="OTHER",
+    )
+
+
 class ValidZipTests(unittest.TestCase):
     def test_zip_hop_le(self):
         self.assertTrue(valid_zip(sample_zip()))
@@ -160,6 +173,34 @@ class ZipStoreTests(unittest.TestCase):
         record = make_record()
         response = FakeResponse(json_payload={"content": zip_payload()})
         self.assertIsNotNone(self.store.save_from_response(record, response))
+
+    def test_luu_zip_thong_bao_04_ss(self):
+        record = make_notice_record()
+        path = self.store.save(record, sample_zip(NOTICE_XML))
+        self.assertIsNotNone(path)
+        self.assertTrue(path.is_file())
+        self.assertEqual(record.tep_zip, path.name)
+
+    def test_zip_thong_bao_khong_duoc_luu_nhu_to_khai(self):
+        self.assertIsNone(self.store.save(make_record(), sample_zip(NOTICE_XML)))
+        self.assertEqual(self.store.last_error, "UNSUPPORTED_XML_KIND_OR_NAMESPACE")
+
+    def test_giai_ma_zip_loi_ghi_ma_loi(self):
+        response = FakeResponse(content=b"khong-phai-zip")
+        self.assertIsNone(self.store.save_from_response(make_record(), response))
+        self.assertEqual(self.store.last_error, "ZIP_DECODE_FAILED")
+
+    def test_tim_lai_zip_thong_bao_da_tai(self):
+        saved = self.store.save(make_notice_record(), sample_zip(NOTICE_XML))
+        self.assertIsNotNone(saved)
+        found = self.store.find_existing(make_notice_record())
+        self.assertEqual(found, saved)
+
+    def test_save_from_response_thong_bao_json(self):
+        record = make_notice_record()
+        response = FakeResponse(json_payload={"content": zip_payload(NOTICE_XML)})
+        self.assertIsNotNone(self.store.save_from_response(record, response))
+        self.assertTrue((self.directory / record.tep_zip).is_file())
 
     def test_khong_nham_ma_ho_so_la_chuoi_con(self):
         for name in ("9123.zip", "1234__ten.zip", "prefix123.zip"):

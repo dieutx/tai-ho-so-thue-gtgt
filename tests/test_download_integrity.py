@@ -69,6 +69,11 @@ class DownloadIntegrityTests(unittest.TestCase):
         self.assertTrue(valid_zip(data))
         self.assertFalse(validate_tax_zip(data).ok)
         self.assertTrue(validate_tax_zip(sample_zip()).ok)
+
+    def test_pdf_only_notice_zip_is_supported_but_not_declaration(self):
+        data = sample_zip(PDF)
+        self.assertTrue(validate_tax_zip(data, required_kind="notice").ok)
+        self.assertFalse(validate_tax_zip(data).ok)
         with fixture_directory() as tmp:
             self.assertIsNone(ZipStore(tmp).save(CaseRecord("id", "ETAX"), data))
 
