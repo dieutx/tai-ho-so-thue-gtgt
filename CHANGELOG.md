@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.0.1] — 2026-10-22
+
+Bản phát hành công khai kế tiếp sau 2.0.0; gộp các bản nội bộ 2.0.1–2.0.4 và bộ UX mới.
+
+- Bổ sung giao diện **Phản hồi CQT** dạng bảng con, **XML Viewer** hai chế độ,
+  tab **Thông báo thuế** độc lập, xuất **hồ sơ ZIP** có manifest và màn hình
+  **Đối soát/Xuất báo cáo**; giữ nguyên hai module Tờ khai/Phản hồi CQT và
+  Thông báo thuế.
+- Sửa parse bảng: hàng footer/tổng/không có handler được bỏ qua êm; hàng có
+  handler nhưng ID lệch vẫn báo lỗi để không giấu thay đổi schema.
+- Nhận đúng ZIP thông báo `04/SS-HĐĐT` (XML `<TBao>`), không còn báo nhầm
+  "không phải ZIP"; tờ khai vẫn bắt buộc XML declaration.
+- Giảm thời gian chờ HTTP 429 từ 15 giây xuống backoff **2s → 4s → 8s**
+  (tôn trọng `Retry-After` nếu cổng gửi); dùng lại trang chi tiết/CSRF giữa
+  file chính và thông báo để bớt một request mỗi hồ sơ.
+- Giữ lưu mật khẩu trong Windows Credential Manager, retry thông báo, định
+  danh tài khoản/hồ sơ và các bản sửa 2.0.4.
+- Kiểm thử: **855 tests OK (6 skip)**, ruff/mypy pass; tài khoản thật 4/4
+  hồ sơ `04/SS-HĐĐT` và 12/12 thông báo trong 14,23 giây.
+
 ## [2.0.4] — 2026-10-22
 
 - Tải thông báo DVC khi HTTP 429: cho phép retry riêng thao tác chỉ đọc này,
@@ -62,22 +82,6 @@
 - Chế độ chẩn đoán online opt-in trong EXE dùng Worker/OCR thật, đọc credential
   từ file cấu hình có sẵn; giới hạn ba khoảng ngày 31 ngày, request/thời gian/
   dung lượng, mỗi khoảng tối đa một hồ sơ kèm thông báo. Không chạy khi mở app.
-
-## [2.0.1] — 2026-10-21
-
-- Hợp nhất 26 mục core: định danh tài khoản/nguồn, kiểm tra bảng và độ đầy đủ,
-  xác minh tệp, lineage offline, báo cáo, chẩn đoán và kiểm soát build.
-- Sửa lỗi chỉ số bảng Qt cũ khi mở/chọn hồ sơ sau reset/lọc; giữ crash log
-  có giới hạn trong `%LOCALAPPDATA%\TaiHoSoThue\PRIVATE\crash.log`.
-
-- Tải thêm thông báo đính kèm hồ sơ DVC và legacy (tiếp nhận / chấp nhận /
-  không chấp nhận) vào `thong-bao-dinh-kem/<mã hồ sơ>/`; legacy đọc danh sách
-  qua `viewTBao` rồi tải từng XML/PDF. Bỏ qua tệp đã có và không để lỗi thông
-  báo làm mất ZIP đã tải.
-- Nhận hồ sơ legacy cũ: cho phép XML có DOCTYPE schema cũ (không ENTITY) và
-  nhận ZIP trả trực tiếp; không đặt mốc chặn ngày 01/01/2015 khi tra cứu.
-  Kiểm thử offline; chưa xác minh dữ liệu thật trước 2015. Thông báo có tiêu
-  đề gộp Chấp nhận/Không chấp nhận không bị tự gán là từ chối.
 
 ## [2.0.0] — 2026-10-19
 
