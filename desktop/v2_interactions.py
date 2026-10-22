@@ -15,9 +15,11 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMenu,
     QPlainTextEdit,
     QTableWidget,
@@ -34,7 +36,9 @@ from .documents import (
     document_label,
     remote_document_id,
 )
-from .notices import REFERENCE_LABELS, STATE_LABELS, attachment_totals, row_attachment_problem
+from .domain import INTEGRITY_LABELS, INTEGRITY_NOT_CHECKED, submission_key
+from .errors import issue_hint
+from .notices import STATE_LABELS, attachment_totals, row_attachment_problem
 from .state import TabState
 from .table_model import COLUMNS
 
@@ -81,21 +85,29 @@ class V2InteractionMixin:
         dates = self.result.date_range if self.result and all(self.result.date_range) else (
             self.from_date.date().toString('dd/MM/yyyy'), self.to_date.date().toString('dd/MM/yyyy'))
         path = self.result.output if self.result else Path(self.output.text())
-        self.summary_text.setText(f'Kỳ {dates[0]} – {dates[1]}  ·  Nơi lưu: {path.name}')
-        self.summary_text.setToolTip(f'Kết quả kỳ {dates[0]} – {dates[1]}\n{path}')
+        label = {'tax': 'Ngày nộp', 'gnt': 'Ngày lập', 'notice': 'Ngày gửi'}.get(self.mode, 'Khoảng tra cứu')
+        self.summary_text.setText(f'{label}: {dates[0]} – {dates[1]}  ·  Nơi lưu: {path.name}')
+        self.summary_text.setToolTip(f'Kết quả theo {label.lower()} {dates[0]} – {dates[1]}\n{path}')
         self.responsive()
 
     def save_tab(self):
-        if not hasattr(self, 'model'):
+        if not hasattr(self, 'model') or getattr(self, '_initializing', False):
             return
         state = self.tab_states[self.current_mode]
         state.rows, state.result = list(self.model.rows), self.result
         state.filter_text = self.search.text()
         state.status_filter = self.file_filter.currentData()
+        state.cqt_filter = self.cqt_filter.currentData() or 'all'
+        state.type_filter = self.type_filter.currentData() or ''
         state.scroll = self.table.verticalScrollBar().value()
         state.horizontal_scroll = self.table.horizontalScrollBar().value()
         state.sort_column = self.table.horizontalHeader().sortIndicatorSection()
         state.sort_descending = self.table.horizontalHeader().sortIndicatorOrder() == Qt.SortOrder.DescendingOrder
+        state.column_widths = {
+            key: self.table.columnWidth(index)
+            for index, (key, _) in enumerate(COLUMNS[self.current_mode])
+            if not self.table.isColumnHidden(index)
+        }
         state.message = self.status.text()
         state.conditions_collapsed = self.conditions_collapsed
         state.last_task = self.last_task
@@ -106,6 +118,8 @@ class V2InteractionMixin:
         from .ui import MODES
         self.save_tab()
         self.close_drawer()
+        if hasattr(self, 'feedback_panel'):
+            self.feedback_panel.clear()
         self.current_mode = MODES[index]
         self.navigation.setCurrentIndex(index)
         offline = self.mode == 'offline'
@@ -114,6 +128,8 @@ class V2InteractionMixin:
         self.query.setVisible(not offline)
         self.batch_action.setVisible(not offline)
         self.file_filter.setVisible(not offline)
+        self.cqt_filter.setVisible(self.mode == 'tax')
+        self.type_filter.setVisible(self.mode == 'notice')
         for widget in [self.account_label, self.source_badge, self.account_button, self.logout_button]:
             widget.setVisible(not offline)
         state = self.tab_states[self.mode]
@@ -123,6 +139,12 @@ class V2InteractionMixin:
         self.search.setText(state.filter_text)
         self.file_filter.setCurrentIndex(max(0, self.file_filter.findData(state.status_filter)))
         self.file_filter.view().setRowHidden(4, self.mode == 'notice')
+        self.cqt_filter.setCurrentIndex(max(0, self.cqt_filter.findData(state.cqt_filter)))
+        self.proxy_model.set_cqt_filter(state.cqt_filter)
+        self.refresh_type_filter()
+        index = self.type_filter.findData(state.type_filter)
+        self.type_filter.setCurrentIndex(index if index >= 0 else 0)
+        self.proxy_model.set_type_filter(self.type_filter.currentData() or '')
         column = state.sort_column
         if column < 0 or column >= len(COLUMNS[self.mode]):
             column = next((i for i, (key, _) in enumerate(COLUMNS[self.mode]) if key in {'ngay_nop', 'ngay_lap', 'ngay_gui'}), 0)
@@ -138,7 +160,56 @@ class V2InteractionMixin:
 
     def set_file_filter(self):
         self.proxy_model.set_status_filter(self.file_filter.currentData())
+        self.update_filtered_count()
         self.update_empty()
+
+    def set_cqt_filter(self, *_args):
+        if not hasattr(self, 'proxy_model'):
+            return
+        self.proxy_model.set_cqt_filter(self.cqt_filter.currentData() or 'all')
+        self.update_filtered_count()
+        self.update_empty()
+
+    def set_type_filter(self, *_args):
+        if not hasattr(self, 'proxy_model'):
+            return
+        self.proxy_model.set_type_filter(self.type_filter.currentData() or '')
+        self.update_filtered_count()
+        self.update_empty()
+
+    def update_filtered_count(self, *_args):
+        if not hasattr(self, 'filtered_label') or not hasattr(self, 'proxy_model'):
+            return
+        total = self.model.rowCount()
+        visible = self.proxy_model.rowCount()
+        self.filtered_label.setText(f'Hiển thị {visible}/{total}' if total else '')
+        self.filtered_label.setVisible(bool(total))
+
+    def refresh_type_filter(self, *_args):
+        """Nạp loại thông báo thực có trong tab; không bịa nhóm không có dữ liệu."""
+        if not hasattr(self, 'type_filter'):
+            return
+        current = self.type_filter.currentData() or ''
+        self.type_filter.blockSignals(True)
+        self.type_filter.clear()
+        self.type_filter.addItem('Tất cả loại thông báo', '')
+        if self.mode == 'notice':
+            values = sorted({str(row.get('ten_thong_bao') or row.get('ma_tbao') or '').strip()
+                             for row in self.model.rows} - {''})
+            for value in values:
+                self.type_filter.addItem(value, value)
+        index = self.type_filter.findData(current)
+        self.type_filter.setCurrentIndex(max(0, index))
+        self.type_filter.blockSignals(False)
+        if hasattr(self, 'proxy_model'):
+            self.proxy_model.set_type_filter(self.type_filter.currentData() or '')
+
+    def _remember_column_width(self, logical, _old, new):
+        if getattr(self, '_applying_widths', False) or not hasattr(self, 'model'):
+            return
+        if 0 <= logical < len(COLUMNS[self.mode]):
+            key = COLUMNS[self.mode][logical][0]
+            self.tab_states[self.mode].column_widths[key] = int(new)
 
     def can_target_download(self):
         account = self.controller.sessions.account
@@ -282,23 +353,45 @@ class V2InteractionMixin:
     def table_clicked(self, index):
         if not index.isValid() or COLUMNS[self.mode][index.column()][0] == '_selected':
             return
-        self.details()
         key = COLUMNS[self.mode][index.column()][0]
         if key == '_notice_state':
-            self.open_notices(index)
-        elif key == '_action':
             row = self.selected_row()
-            if row and row.get('_file_status') == 'downloaded':
+            if row:
+                self.show_feedback_panel(row)
+            return
+        self.details()
+        if key == '_action':
+            row = self.selected_row()
+            if not row:
+                return
+            if self.mode == 'notice':
+                if row.get('_file_status') == 'downloaded':
+                    self.open_notice_row(row)
+                else:
+                    self.download_rows([row])
+                return
+            if row.get('_file_status') == 'downloaded':
                 self.open_detail_file()
             elif row:
                 self.download_rows([row])
 
+    def open_notices(self, index):
+        """Mở bảng phản hồi của dòng đang chọn (CTA chính của cột)."""
+        row = self.selected_row()
+        if row:
+            self.show_feedback_panel(row)
+
+    def open_detail_notices(self):
+        """Mở bảng phản hồi từ khung chi tiết."""
+        if self.detail_row:
+            self.show_feedback_panel(self.detail_row)
+
     def notice_menu(self, row):
-        """Menu các tệp thông báo XML đã tải của một hồ sơ (không tự mở)."""
+        """Menu tương thích cho các tệp phản hồi đã tải (không tự mở)."""
         notices = row.get('_notices') or []
         menu = QMenu(self)
         if not notices:
-            menu.addAction('Chưa có tệp thông báo trong thư mục đã tải').setEnabled(False)
+            menu.addAction('Chưa có tệp phản hồi trong thư mục đã tải').setEnabled(False)
         for item in notices:
             label = STATE_LABELS.get(item.get('state'), 'Chưa xác định')
             number = item.get('so_thong_bao') or item.get('name') or ''
@@ -306,18 +399,19 @@ class V2InteractionMixin:
             action.setToolTip(item.get('ly_do') or item.get('ten_thong_bao') or '')
         if notices:
             menu.addSeparator()
-            menu.addAction('Mở thư mục thông báo', lambda notice=dict(notices[0]): self.open_notice(notice, folder=True))
+            menu.addAction('Mở thư mục phản hồi', lambda notice=dict(notices[0]): self.open_notice(notice, folder=True))
         return menu
 
     def open_notice(self, notice, *, folder=False):
+        """Mở tệp/thư mục phản hồi bằng ứng dụng mặc định (tương thích)."""
         value = notice.get('path')
         if not value:
-            self.error('Chưa có tệp thông báo trên máy; hãy tải lại thông báo của tờ khai.')
+            self.error('Chưa có tệp phản hồi trên máy; hãy tải lại.')
             return
         path = Path(value)
         target = path.parent if folder else path
         if not (target.is_dir() if folder else target.is_file()):
-            self.error('Tệp thông báo đã bị xóa hoặc di chuyển; hãy kiểm tra nơi lưu hoặc tải lại.')
+            self.error('Tệp phản hồi đã bị xóa hoặc di chuyển; hãy kiểm tra nơi lưu hoặc tải lại.')
             return
         self.open_path(target)
 
@@ -329,19 +423,178 @@ class V2InteractionMixin:
         if index < len(notices):
             self.open_notice(notices[index], folder=url.scheme() == 'notice-folder')
 
-    def open_notices(self, index):
-        """Mở menu thông báo của dòng đang chọn tại ô vừa bấm."""
-        row = self.selected_row()
-        if not row:
-            return
-        self.notice_menu(row).exec(self.table.viewport().mapToGlobal(self.table.visualRect(index).bottomLeft()))
+    def taxpayer_key(self) -> str:
+        return str(self.controller.sessions.account.username or '')
 
-    def open_detail_notices(self):
-        """Mở menu thông báo từ khung chi tiết."""
+    def show_feedback_panel(self, row: dict) -> None:
+        """Hiển thị bảng phản hồi con của **đúng** dòng được chọn."""
+        if not row or not hasattr(self, 'feedback_panel'):
+            return
+        self.feedback_panel.show_for(row, taxpayer_key=self.taxpayer_key())
+        self.feedback_panel.show()
+
+    def refresh_feedback_panel(self) -> None:
+        """Giữ bảng phản hồi đồng bộ sau khi tải/kiểm tra lại mà không đổi hồ sơ."""
+        if not hasattr(self, 'feedback_panel') or not self.feedback_panel.isVisible():
+            return
+        key = self.feedback_panel.submission_key
+        row = next((item for item in self.model.rows
+                    if submission_key(item, taxpayer_key=self.taxpayer_key()) == key), None)
+        if row is None:
+            self.feedback_panel.clear()
+        else:
+            self.feedback_panel.show_for(row, taxpayer_key=self.taxpayer_key())
+
+    def open_feedback_asset(self, item) -> None:
+        """Mở XML Viewer nội bộ cho đúng tệp của một phản hồi."""
+        path = Path(item.asset.path_or_handle)
+        if not path.is_file():
+            self.error('Tệp phản hồi đã bị xóa hoặc di chuyển; hãy kiểm tra nơi lưu hoặc tải lại.')
+            return
+        from .xml_viewer import XmlViewer
+        XmlViewer.show_asset(self, item.asset, source_kind=item.asset.owner_kind, summary=item.feedback)
+
+    def open_feedback_folder(self, item) -> None:
+        path = Path(item.asset.path_or_handle)
+        if path.is_file():
+            self.open_path(path.parent)
+        else:
+            self.error('Thư mục chứa tệp phản hồi không còn tồn tại; hãy kiểm tra nơi lưu.')
+
+    def open_notice_row(self, row: dict) -> None:
+        """Mở XML Viewer cho thông báo thuế độc lập (không dùng selector tờ khai)."""
+        from .domain import OWNER_TAX_NOTICE, tax_notice_from_row
+        from .feedback_service import find_tax_notice_asset
+        from .xml_viewer import XmlViewer
+        asset = find_tax_notice_asset(row, taxpayer_key=self.taxpayer_key())
+        if not asset or not Path(asset.path_or_handle).is_file():
+            self.error('Tệp thông báo chưa có trên máy hoặc đã bị di chuyển; hãy tải lại.')
+            return
+        summary = tax_notice_from_row(row, taxpayer_key=self.taxpayer_key())
+        XmlViewer.show_asset(self, asset, source_kind=OWNER_TAX_NOTICE, summary=summary)
+
+    def save_feedback_asset(self, item) -> None:
+        """Sao chép tệp phản hồi sang vị trí người dùng chọn; không sửa tệp gốc."""
+        source = Path(item.asset.path_or_handle)
+        if not source.is_file():
+            self.error('Tệp phản hồi đã bị xóa hoặc di chuyển; không thể lưu.')
+            return
+        is_xml = item.asset.content_type == 'application/xml'
+        suggested = str(Path.home() / (item.asset.original_filename or source.name))
+        path, _ = QFileDialog.getSaveFileName(
+            self, 'Lưu tệp phản hồi' if not is_xml else 'Lưu XML phản hồi',
+            suggested, 'XML (*.xml);;Tất cả (*)' if is_xml else 'Tất cả (*)')
+        if not path:
+            return
+        target = Path(path)
+        try:
+            if target.resolve() == source.resolve():
+                self.error('Chọn vị trí khác để không ghi đè tệp phản hồi gốc.')
+                return
+            target.write_bytes(source.read_bytes())
+        except OSError as error:
+            self.error(f'Không lưu được tệp phản hồi: {error}')
+            return
+        self.status.setText(f'Đã lưu tệp phản hồi: {target.name}')
+
+    def export_detail_bundle(self) -> None:
+        if self.detail_row:
+            self.export_submission(self.detail_row)
+
+    def export_submission(self, row: dict) -> None:
+        """Xuất ZIP tờ khai + chỉ phản hồi của chính lần nộp đang chọn."""
+        if self.mode != 'tax' or not row or not row.get('ma_ho_so'):
+            self.error('Chức năng Xuất hồ sơ chỉ áp dụng cho tờ khai đã tra cứu.')
+            return
+        if not self.result:
+            self.error('Chưa có kết quả tra cứu để xuất hồ sơ.')
+            return
+        from .bundle import export_submission_bundle, safe_archive_name
+        suggested = Path(self.result.output) / f'HoSo_{safe_archive_name(row.get("ma_ho_so") or "ho-so")}.zip'
+        path, _ = QFileDialog.getSaveFileName(self, 'Xuất gói hồ sơ ZIP', str(suggested), 'ZIP (*.zip)')
+        if not path:
+            return
+        target = Path(path)
+        if target.suffix.lower() != '.zip':
+            target = target.with_suffix('.zip')
+        try:
+            bundle = export_submission_bundle(row, target, taxpayer_key=self.taxpayer_key())
+        except (OSError, ValueError) as error:
+            self.error(f'Không xuất được gói hồ sơ: {error}')
+            return
+        message = f'Đã xuất {len(bundle.included)} tệp vào {target.name}.'
+        self.status.setText(message)
+        if bundle.missing:
+            names = '\n'.join(f"- {item.get('name', '')}: {item.get('reason', '')}"
+                              for item in bundle.missing[:8])
+            self.error(f'{message}\nThiếu {len(bundle.missing)} tệp:\n{names}')
+
+    def _technical_dialog(self, title: str, fields: list[tuple[str, str]], note: str = '') -> None:
+        from .ui import button, fit_dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        for label, value in fields:
+            line = QLineEdit(str(value or '—'))
+            line.setReadOnly(True)
+            line.setCursorPosition(0)
+            line.setToolTip(str(value or ''))
+            row = QHBoxLayout()
+            row.addWidget(line, 1)
+            row.addWidget(button('Sao chép', lambda _checked=False, text=str(value or ''):
+                                 QApplication.clipboard().setText(text), 'Sao chép giá trị này'))
+            form.addRow(label, row)
+        layout.addLayout(form)
+        if note:
+            note_label = QLabel(note)
+            note_label.setWordWrap(True)
+            layout.addWidget(note_label)
+        copy_all = button('Sao chép tất cả', lambda: QApplication.clipboard().setText(
+            '\n'.join(f'{label}: {value}' for label, value in fields)))
+        layout.addWidget(copy_all)
+        controls = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        controls.rejected.connect(dialog.reject)
+        layout.addWidget(controls)
+        fit_dialog(dialog, 760, 480)
+        dialog.exec()
+        dialog.deleteLater()
+
+    def technical_details(self) -> None:
+        if not self.detail_row:
+            return
         row = self.detail_row
-        if row and row.get('_notices'):
-            anchor = self.detail_notices.mapToGlobal(self.detail_notices.rect().bottomLeft())
-            self.notice_menu(row).exec(anchor)
+        fields = [
+            ('Tên tệp', Path(row.get('_file_path') or '').name),
+            ('Đường dẫn đầy đủ', row.get('_file_path') or ''),
+            ('Dung lượng', f"{int(row.get('_file_size') or 0):,} byte"),
+            ('SHA-256', row.get('_file_hash') or ''),
+            ('Nguồn tải', row.get('nguon') or ''),
+            ('Thời điểm cập nhật tệp', row.get('_file_updated') or ''),
+            ('Trạng thái tải', FILE_LABELS.get(row.get('_file_status'), 'Chưa tải')),
+            ('Kiểm tra toàn vẹn', row.get('_integrity_label')
+             or INTEGRITY_LABELS.get(INTEGRITY_NOT_CHECKED, 'Chưa kiểm tra')),
+        ]
+        self._technical_dialog('Thông tin kỹ thuật của hồ sơ', fields,
+                               'SHA-256 không phải chữ ký số và không xác nhận hiệu lực pháp lý.')
+
+    def show_feedback_technical(self, item) -> None:
+        asset = item.asset
+        fields = [
+            ('Loại chủ sở hữu', asset.owner_kind),
+            ('Khóa hồ sơ', asset.owner_key),
+            ('Khóa tệp phản hồi', asset.asset_key),
+            ('Tên tệp', asset.original_filename),
+            ('Đường dẫn đầy đủ', asset.path_or_handle),
+            ('Loại nội dung', asset.content_type or 'Chưa xác định'),
+            ('Mã nguồn', asset.source_id or ''),
+            ('SHA-256', asset.checksum or ''),
+            ('Dung lượng', f'{asset.size:,} byte'),
+            ('Tình trạng toàn vẹn', INTEGRITY_LABELS.get(asset.integrity_status, 'Chưa xác định')),
+        ]
+        self._technical_dialog('Thông tin kỹ thuật của phản hồi', fields,
+                               'SHA-256 là đối chiếu nội bộ, không phải chữ ký số hợp lệ.')
 
     def details(self):
         row = self.selected_row()
@@ -349,53 +602,52 @@ class V2InteractionMixin:
             return
         self.detail_row = row
         labels = {'tax': [('to_khai', 'Tờ khai'), ('ma_ho_so', 'Mã hồ sơ'), ('ky_tinh_thue', 'Kỳ tính thuế'),
-                          ('ngay_nop', 'Ngày nộp'), ('trang_thai', 'Trạng thái thuế')],
+                          ('ngay_nop', 'Ngày nộp'), ('trang_thai', 'Trạng thái CQT')],
                   'gnt': [('so_gnt', 'Số giấy nộp tiền'), ('ctu_id', 'Mã chứng từ'), ('ngay_lap', 'Ngày lập'),
                           ('so_tien', 'Số tiền'), ('trang_thai', 'Trạng thái nộp / phê duyệt')],
                   'notice': [('ten_thong_bao', 'Tên thông báo'), ('so_thong_bao', 'Số thông báo'),
+                             ('co_quan_gui', 'Cơ quan phát hành'), ('ma_tbao', 'Mã loại thông báo'),
                              ('message_id', 'Mã thông báo'), ('ngay_gui', 'Ngày gửi'), ('trang_thai', 'Trạng thái xem')],
                   'offline': [('form_name', 'Mẫu / Tệp'), ('form_code', 'Mã mẫu'), ('form_version', 'Phiên bản'),
                               ('status', 'Kết quả parse'), ('source_inner_file', 'Nguồn XML'), ('source_zip', 'Nguồn ZIP')]}
         parts = ['<h3>Thông tin nghiệp vụ</h3>']
         for key, label in labels[self.mode]:
-            value = display_amount(row.get(key), str(row.get('loai_tien', ''))) if key == 'so_tien' else str(row.get(key) or '—')
+            if key == 'trang_thai' and self.mode == 'tax':
+                value = self.model._cqt_status(row)
+            elif key == 'so_tien':
+                value = display_amount(row.get(key), str(row.get('loai_tien', '')))
+            else:
+                value = str(row.get(key) or '—')
             parts.append(f'<p><span style="color:#67768C">{label}</span><br><b>{html.escape(value)}</b></p>')
         if self.mode != 'offline':
             parts.append('<hr><h3>Tệp trên máy</h3>')
-            for label, value in [('Trạng thái tệp', FILE_LABELS.get(row.get('_file_status'), 'Chưa tải')),
-                                 ('Đường dẫn', row.get('_file_path') or row.get('tep_zip') or row.get('tep_xml') or row.get('tep_pdf') or 'Chưa có'),
-                                 ('Dung lượng', f"{row.get('_file_size', 0):,} byte"),
+            for label, value in [('Trạng thái tải', FILE_LABELS.get(row.get('_file_status'), 'Chưa tải')),
                                  ('Cập nhật tệp', row.get('_file_updated') or '—'),
-                                 ('Chi tiết', row.get('_error_message') or row.get('_file_reason') or '—'),
-                                 ('SHA-256', row.get('_file_hash') or '—')]:
+                                 ('Chi tiết', row.get('_error_message') or row.get('_file_reason') or '—')]:
                 parts.append(f'<p><span style="color:#67768C">{label}</span><br>{html.escape(str(value))}</p>')
-            notices = row.get('_notices') or []
+            parts.append('<p><span style="color:#67768C">Đường dẫn, dung lượng, SHA-256 và nguồn tải nằm trong Thông tin kỹ thuật.</span></p>')
             if self.mode == 'tax':
-                parts.append('<hr><h3>Thông báo của cơ quan thuế</h3>')
+                notices = row.get('_notices') or []
+                parts.append('<hr><h3>Phản hồi của cơ quan thuế</h3>')
                 if problem := row_attachment_problem(row):
                     parts.append(f'<p style="color:#93631B">{html.escape(problem)}</p>')
                 if not notices:
-                    parts.append('<p><span style="color:#67768C">Chưa có tệp thông báo trên máy; chưa kết luận cổng không có thông báo.</span></p>')
-                for notice_index, item in enumerate(notices):
-                    title = ' · '.join(str(value) for value in
-                                       (STATE_LABELS.get(item.get('state'), 'Chưa xác định'), item.get('so_thong_bao'), item.get('ngay_thong_bao')) if value)
-                    color = '#C94242' if item.get('state') == 'rejected' else '#15805B' if item.get('state') == 'accepted' else '#67768C'
-                    reason = (f'<br><span style="color:#C94242">{html.escape(item["ly_do"])}</span>'
-                              if item.get('ly_do') else '')
-                    reference = REFERENCE_LABELS.get(item.get('reference_status'), '')
-                    parts.append(f'<p><b style="color:{color}">{html.escape(title or item.get("name", ""))}</b>{reason}'
-                                 f'<br><span style="color:#67768C">{html.escape(item.get("relative_path") or item.get("name", ""))}'
-                                 f'<br>{html.escape(reference)}</span>'
-                                 f'<br><a href="notice-file:{notice_index}">Mở thông báo</a>'
-                                 f' · <a href="notice-folder:{notice_index}">Mở thư mục chứa tệp</a></p>')
+                    parts.append('<p><span style="color:#67768C">Chưa có phản hồi trong dữ liệu hiện có; chưa kết luận cổng không có thông báo.</span></p>')
+                else:
+                    parts.append(f'<p><b>{len(notices)} phản hồi</b> trong dữ liệu hiện có. '
+                                 'Bấm <b>Xem phản hồi</b> để mở bảng chi tiết.</p>')
         else:
             parts.append('<p>Chỉ phân tích XML cục bộ; không xác thực chữ ký số hoặc tính đúng của nghĩa vụ thuế.</p>')
         self.detail_text.setHtml(''.join(parts))
+        self.detail_open.setText('Xem tệp' if self.mode == 'notice' else 'Mở tệp')
         self.detail_open.setEnabled(bool(row.get('_file_path') and Path(row['_file_path']).is_file()))
         notices = row.get('_notices') or []
         self.detail_notices.setVisible(self.mode == 'tax')
         self.detail_notices.setEnabled(bool(notices))
-        self.detail_notices.setText(f'Mở thông báo ({len(notices)})' if notices else 'Mở thông báo')
+        self.detail_notices.setText(f'Xem phản hồi ({len(notices)})' if notices else 'Chưa có phản hồi')
+        if hasattr(self, 'detail_bundle'):
+            self.detail_bundle.setVisible(self.mode == 'tax')
+            self.detail_bundle.setEnabled(self.mode == 'tax' and bool(row.get('ma_ho_so')))
         self.sync_actions()
         self.position_drawer()
         self.drawer.show()
@@ -420,6 +672,9 @@ class V2InteractionMixin:
 
     def open_detail_file(self):
         if not self.detail_row:
+            return
+        if self.mode == 'notice':
+            self.open_notice_row(self.detail_row)
             return
         target = self.detail_row.get('_file_path')
         if target and Path(target).is_file():
@@ -459,14 +714,16 @@ class V2InteractionMixin:
         menu = QMenu(self)
         menu.addAction('Xem chi tiết', self.details)
         if self.mode == 'tax' and row.get('_notices'):
-            menu.addAction('Mở thông báo…', lambda: (self.table.setCurrentIndex(index), self.open_notices(index)))
+            menu.addAction('Xem phản hồi…', lambda: (self.table.setCurrentIndex(index), self.open_notices(index)))
+        if self.mode == 'tax' and row.get('ma_ho_so'):
+            menu.addAction('Xuất hồ sơ ZIP…', lambda: self.export_submission(row))
         if self.mode != 'offline':
             if row.get('_file_status') == 'downloaded':
                 menu.addAction('Mở tệp', lambda: (self.details(), self.open_detail_file()))
             else:
                 action = menu.addAction('Tải riêng tệp này', lambda: self.download_rows([row]))
                 action.setEnabled(self.can_target_download() and not self.controller.busy)
-            menu.addAction('Sao chép mã đầy đủ', lambda: QApplication.clipboard().setText(remote_document_id(self.mode, row)))
+            menu.addAction('Sao chép mã đầy đủ', lambda: QApplication.clipboard().setText(document_id(self.mode, row)))
         menu.addAction('Mở thư mục', self.open_output)
         menu.addAction('Sao chép metadata', lambda: QApplication.clipboard().setText(json.dumps(row, ensure_ascii=False)))
         menu.exec(self.table.viewport().mapToGlobal(position))
@@ -475,8 +732,8 @@ class V2InteractionMixin:
         self.files.clear()
         self.outputs_menu.clear()
         rows = self.model.rows
-        self.counts.setToolTip(('Kết quả kỳ ' + ' – '.join(result.date_range) + '\n' if result and all(result.date_range) else '')
-                              + 'Chỉ số theo toàn bộ danh sách của tài khoản/tab/kỳ đã tra cứu; không thay đổi theo bộ lọc bảng.')
+        self.counts.setToolTip(('Kết quả theo khoảng ngày ' + ' – '.join(result.date_range) + '\n' if result and all(result.date_range) else '')
+                              + 'Chỉ số theo toàn bộ danh sách của tài khoản/tab/khoảng ngày đã tra cứu; không thay đổi theo bộ lọc bảng.')
         if self.mode == 'offline':
             mapped = sum(r.get('status') == 'MAPPED' for r in rows)
             self.counts.setText(f"Bản ghi {len(rows) or (result.discovered if result else 0)}    Đã mapping {mapped}    Cần kiểm tra {result.skipped if result else 0}    Lỗi {result.errors if result else 0}")
@@ -501,8 +758,6 @@ class V2InteractionMixin:
         self.batch_action.setEnabled(not busy)
         self.stop_button.setEnabled(busy and state != 'STOPPING')
         self.progress.setRange(0, 0 if busy else 1)
-        if not busy:
-            self.progress.setValue(0)
         if state == 'STOPPING' and self.captcha_dialog:
             self.captcha_dialog.reject()
         self.sync_actions()
@@ -538,6 +793,7 @@ class V2InteractionMixin:
                 self.progress.setValue(done)
             self.populate_result(self.result)
             self.update_empty()
+            self.refresh_feedback_panel()
 
     def on_completed(self, result):
         config, self.active_config = self.active_config, None
@@ -575,6 +831,7 @@ class V2InteractionMixin:
                 selected = result
             self.result = selected
             self.model.reset(self.mode, selected.rows if selected else [])
+            self.refresh_feedback_panel()
             if config and config.action not in {'verify', 'export_report'} and config.mode not in {'saved', 'import'}:
                 self.history.insert(0, {'mode': config.mode, 'result': result, 'action': result.operation})
                 self.history = self.history[:100]
@@ -598,6 +855,8 @@ class V2InteractionMixin:
             self.update_empty()
         if self.captcha_dialog:
             self.captcha_dialog.reject()
+        self.progress.setRange(0, 1)
+        self.progress.setValue(1 if result.state in {'SUCCESS', 'PARTIAL', 'LOADED'} else 0)
         if self.close_pending:
             self.close()
         elif self.deferred_account_action:
@@ -618,6 +877,11 @@ class V2InteractionMixin:
                  f'<p>Phát hiện {result.discovered} · Yêu cầu tải {result.requested} · Tệp hoàn tất trong tác vụ {result.downloaded} · Đã có hợp lệ {result.reused} · Lỗi {result.errors}</p>',
                  f'<p>Đoạn/nguồn chưa xử lý: {result.skipped}. Tệp đã có hợp lệ được giữ; không gộp bỏ qua nguồn thành tệp tải thành công.</p>',
                  f'<p>Nơi lưu: {html.escape(str(result.output))}</p>']
+        for issue in result.issues:
+            message = issue.get('message', '')
+            parts.append(f'<p><b>{html.escape(document_label(issue.get("document_id") or ""))}</b><br>'
+                         f'{html.escape(message)}<br><span style="color:#93631B">'
+                         f'{html.escape(issue_hint(message))}</span></p>')
         attachments = getattr(result, 'attachment_results', {})
         if attachments:
             totals = attachment_totals(attachments)
@@ -625,8 +889,6 @@ class V2InteractionMixin:
                          f'<p>Phát hiện {totals["discovered"]} · Tải mới {totals["downloaded"]}'
                          f' · Có sẵn {totals["reused"]} · Lỗi tải {totals["failed"]}'
                          f' · Chưa đọc được danh sách {totals["discovery_failed"]} hồ sơ</p>')
-        for issue in result.issues:
-            parts.append(f'<p><b>{html.escape(document_label(issue.get("document_id") or ""))}</b><br>{html.escape(issue.get("message", ""))}</p>')
         body.setHtml(''.join(parts))
         layout.addWidget(body)
         actions = QHBoxLayout()
@@ -648,31 +910,206 @@ class V2InteractionMixin:
         dialog = QDialog(self)
         dialog.setWindowTitle('Lịch sử tải trong phiên làm việc — tài khoản hiện tại')
         layout = QVBoxLayout(dialog)
-        layout.addWidget(QLabel('100 tác vụ gần nhất trong phiên. Dữ liệu cũ: Công cụ nâng cao → Đọc dữ liệu cũ.'))
-        table = QTableWidget(len(entries), 7)
-        table.setHorizontalHeaderLabels(['Thời gian', 'Nhóm', 'Kỳ', 'Tệp hoàn tất', 'Có sẵn', 'Lỗi', 'Kết quả'])
+        layout.addWidget(QLabel('100 tác vụ gần nhất trong phiên. Chọn một dòng để xem lỗi '
+                                'hoặc thử lại mục lỗi cùng tab.'))
+        table = QTableWidget(len(entries), 8)
+        table.setHorizontalHeaderLabels(['Thời gian', 'Nhóm', 'Kỳ', 'Tìm thấy',
+                                         'Tệp hoàn tất', 'Có sẵn', 'Lỗi', 'Kết quả'])
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         for index, entry in enumerate(entries):
             result = entry['result']
-            values = [result.ended_at[:19].replace('T', ' ') + ' UTC', TITLES[MODES.index(entry['mode'])] if entry['mode'] in MODES else 'Nhiều nhóm',
-                      ' – '.join(result.date_range), str(result.downloaded), str(result.reused), str(result.errors), result.state]
+            values = [result.ended_at[:19].replace('T', ' ') + ' UTC',
+                      TITLES[MODES.index(entry['mode'])] if entry['mode'] in MODES else 'Nhiều nhóm',
+                      ' – '.join(result.date_range), str(result.discovered), str(result.downloaded),
+                      str(result.reused), str(result.errors), result.state]
             for column, value in enumerate(values):
                 table.setItem(index, column, QTableWidgetItem(value))
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(table, 1)
+
+        def failed_rows(result):
+            return [row for row in result.rows if row.get('_file_status') == 'failed']
+
+        def can_retry() -> bool:
+            if table.currentRow() < 0:
+                return False
+            entry = entries[table.currentRow()]
+            return (entry['mode'] == self.mode and bool(failed_rows(entry['result']))
+                    and entry['result'].account_key == account_key)
+
         actions = QHBoxLayout()
-        actions.addWidget(button('Xem tổng kết / lỗi', lambda: self.show_issues(entries[table.currentRow()]['result']) if table.currentRow() >= 0 else None))
-        open_folder = button('Mở thư mục', lambda: self.open_path(entries[table.currentRow()]['result'].output) if table.currentRow() >= 0 else None)
+        actions.addWidget(button('Xem tổng kết / lỗi',
+                                 lambda: self.show_issues(entries[table.currentRow()]['result'])
+                                 if table.currentRow() >= 0 else None))
+
+        def retry_selected() -> None:
+            if table.currentRow() < 0:
+                return
+            result = entries[table.currentRow()]['result']
+            dialog.accept()
+            QTimer.singleShot(0, lambda: self.retry_history_errors(result))
+
+        retry = button('Thử lại mục lỗi', retry_selected,
+                       'Chỉ thử lại các tệp lỗi của tác vụ đang chọn trong tab hiện tại')
+        retry.setEnabled(False)
+        actions.addWidget(retry)
+        open_folder = button('Mở thư mục',
+                             lambda: self.open_path(entries[table.currentRow()]['result'].output)
+                             if table.currentRow() >= 0 else None)
         open_folder.setEnabled(False)
-        table.currentCellChanged.connect(lambda *_args: open_folder.setEnabled(table.currentRow() >= 0 and entries[table.currentRow()]['result'].output.is_dir()))
         actions.addWidget(open_folder)
         close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close.rejected.connect(dialog.reject)
         actions.addWidget(close)
+
+        def update_actions(*_args):
+            selected = table.currentRow() >= 0
+            open_folder.setEnabled(selected and entries[table.currentRow()]['result'].output.is_dir())
+            retry.setEnabled(selected and can_retry())
+
+        table.currentCellChanged.connect(update_actions)
         layout.addLayout(actions)
-        fit_dialog(dialog, 950, 480)
+        fit_dialog(dialog, 1040, 520)
+        dialog.exec()
+
+    def retry_history_errors(self, result) -> None:
+        """Thử lại các dòng lỗi của một tác vụ lịch sử trong tab hiện tại."""
+        if not result:
+            return
+        failed = [row for row in result.rows if row.get('_file_status') == 'failed']
+        if not failed:
+            self.error('Tác vụ đã chọn không có tệp lỗi để thử lại.')
+            return
+        account_key = hashlib.sha256(self.controller.sessions.account.username.encode()).hexdigest()
+        if result.account_key != account_key:
+            self.error('Tác vụ thuộc tài khoản khác; đăng nhập đúng tài khoản rồi thử lại.')
+            return
+        self.result = result
+        self.model.reset(self.mode, result.rows)
+        self.download_rows(failed)
+
+    def filtered_rows(self) -> list[dict]:
+        """Các dòng đang hiển thị sau tìm kiếm/bộ lọc, theo đúng khóa nguồn."""
+        rows: list[dict] = []
+        for proxy_row in range(self.proxy_model.rowCount()):
+            source = self.proxy_model.source_row(self.proxy_model.index(proxy_row, 0))
+            if source is not None and source < len(self.model.rows):
+                rows.append(self.model.rows[source])
+        return rows
+
+    def reconciliation_scope(self) -> str:
+        parts = []
+        if self.result and all(self.result.date_range):
+            label = {'tax': 'Ngày nộp', 'gnt': 'Ngày lập', 'notice': 'Ngày gửi'}.get(self.mode, 'Khoảng tra cứu')
+            parts.append(f'{label} {self.result.date_range[0]} – {self.result.date_range[1]}')
+        if self.search.text().strip():
+            parts.append(f'Tìm kiếm "{self.search.text().strip()}"')
+        if self.file_filter.currentData() != 'all':
+            parts.append(f'Lọc tải: {self.file_filter.currentText()}')
+        if self.mode == 'tax' and self.cqt_filter.currentData() != 'all':
+            parts.append(f'Lọc CQT: {self.cqt_filter.currentText()}')
+        if self.mode == 'notice' and self.type_filter.currentData():
+            parts.append(f'Loại thông báo: {self.type_filter.currentData()}')
+        base = 'Kết quả tra cứu hiện tại của tài khoản/tab'
+        if parts:
+            base += '; ' + '; '.join(parts)
+        return base + '. Chỉ phản ánh dữ liệu đã tải/đọc được, không xác nhận đầy đủ nghĩa vụ thuế.'
+
+    def show_reconciliation(self) -> None:
+        from PySide6.QtGui import QBrush, QColor
+
+        from .reconciliation import (
+            reconciliation_rows,
+            write_reconciliation_csv,
+            write_reconciliation_xlsx,
+        )
+        from .ui import button, fit_dialog
+        rows = self.filtered_rows()
+        if not rows:
+            self.error('Không có dòng nào trong bộ lọc hiện tại để đối soát.')
+            return
+        scope = self.reconciliation_scope()
+        records = reconciliation_rows(rows, taxpayer_key=self.taxpayer_key(), scope_note=scope)
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Đối soát hồ sơ và phản hồi')
+        layout = QVBoxLayout(dialog)
+        note = QLabel(scope)
+        note.setWordWrap(True)
+        note.setObjectName('hint')
+        layout.addWidget(note)
+        preview = records[:500]
+        if len(records) > len(preview):
+            note.setText(scope + f' Đang hiển thị {len(preview)}/{len(records)} dòng; '
+                                 f'xuất báo cáo sẽ gồm đủ {len(records)} dòng.')
+        table = QTableWidget(len(preview), 8)
+        table.setHorizontalHeaderLabels(['Mã hồ sơ', 'Loại tờ khai', 'Kỳ', 'Ngày nộp',
+                                         'Trạng thái CQT', 'Số phản hồi', 'Kết quả phản hồi',
+                                         'Trạng thái tải'])
+        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        for index, record in enumerate(preview):
+            values = [record['ma_ho_so'], record['to_khai'], record['ky_tinh_thue'], record['ngay_nop'],
+                      record['cqt_status'], record['feedback_count'], record['feedback_result'],
+                      record['file_status']]
+            rejected = (str(record['feedback_result']).startswith('✕')
+                        or record['cqt_status'] == 'Không chấp nhận')
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                if rejected:
+                    item.setForeground(QBrush(QColor('#C94242')))
+                    item.setBackground(QBrush(QColor('#FDECEA')))
+                elif str(record['feedback_result']).startswith('✓'):
+                    item.setForeground(QBrush(QColor('#15805B')))
+                table.setItem(index, column, item)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(table, 1)
+
+        def suggest(name: str) -> str:
+            base = self.result.output if self.result else Path(self.output.text())
+            return str(Path(base) / name)
+
+        def save_csv() -> None:
+            path, _ = QFileDialog.getSaveFileName(self, 'Xuất đối soát CSV',
+                                                  suggest('Doi_soat.csv'), 'CSV (*.csv)')
+            if not path:
+                return
+            target = Path(path)
+            if target.suffix.lower() != '.csv':
+                target = target.with_suffix('.csv')
+            try:
+                write_reconciliation_csv(target, records)
+            except (OSError, ValueError) as error:
+                self.error(f'Không xuất được CSV: {error}')
+                return
+            self.status.setText(f'Đã xuất đối soát CSV: {target.name}')
+
+        def save_xlsx() -> None:
+            path, _ = QFileDialog.getSaveFileName(self, 'Xuất đối soát Excel',
+                                                  suggest('Doi_soat.xlsx'), 'Excel (*.xlsx)')
+            if not path:
+                return
+            target = Path(path)
+            if target.suffix.lower() != '.xlsx':
+                target = target.with_suffix('.xlsx')
+            try:
+                write_reconciliation_xlsx(target, records, scope)
+            except (OSError, ValueError) as error:
+                self.error(f'Không xuất được Excel: {error}')
+                return
+            self.status.setText(f'Đã xuất đối soát Excel: {target.name}')
+
+        actions = QHBoxLayout()
+        actions.addWidget(button('Xuất CSV', save_csv))
+        actions.addWidget(button('Xuất Excel', save_xlsx))
+        actions.addStretch()
+        close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close.rejected.connect(dialog.reject)
+        actions.addWidget(close)
+        layout.addLayout(actions)
+        fit_dialog(dialog, 1100, 560)
         dialog.exec()
 
     def update_empty(self, *_args):
@@ -716,24 +1153,34 @@ class V2InteractionMixin:
         self.counts.setVisible(not (height < 400 and not self.model.rows))
         columns = COLUMNS[self.mode]
         hidden = {'source_zip'} if self.mode == 'offline' and width < 1100 else set()
+        if self.mode == 'notice' and width < 1100:
+            hidden.add('co_quan_gui')
         if width < 900:
             hidden.update({'ky_tinh_thue', 'so_tien', 'form_version'})
         row_height = 28 if height < 400 else 35 if self.ultra else 43
-        if self.mode == 'tax':
-            row_height = max(row_height, self.table.fontMetrics().lineSpacing() * 2 + 6)
         self.table.verticalHeader().setDefaultSectionSize(row_height)
-        for index, (key, _) in enumerate(columns):
-            self.table.setColumnHidden(index, key in hidden)
-            self.table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeMode.Interactive)
-            target = {'_selected': 34, '_action': 75, '_file_status': 83, '_notice_state': 138, 'ngay_nop': 128,
-                      'ngay_lap': 128, 'ngay_gui': 128, 'trang_thai': 145,
-                      'ky_tinh_thue': 95, 'so_tien': 120, 'form_code': 90,
-                      'form_version': 80, 'status': 120}.get(key, 160)
-            if width < 850:
-                target = {'_selected': 30, '_action': 65, '_file_status': 76, 'ngay_nop': 108,
-                          'ngay_lap': 108, 'ngay_gui': 108, 'trang_thai': 112}.get(key, target)
-            self.table.setColumnWidth(index, target)
-        self.table.horizontalHeader().setSectionResizeMode(0 if self.mode == 'offline' else 1, QHeaderView.ResizeMode.Stretch)
+        self._applying_widths = True
+        try:
+            for index, (key, _) in enumerate(columns):
+                self.table.setColumnHidden(index, key in hidden)
+                self.table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeMode.Interactive)
+                target = {'_selected': 34, '_action': 75, '_file_status': 83, '_notice_state': 130, 'ngay_nop': 128,
+                          'ngay_lap': 128, 'ngay_gui': 128, 'trang_thai': 150,
+                          'ten_thong_bao': 220, 'so_thong_bao': 150, 'co_quan_gui': 180,
+                          'ky_tinh_thue': 95, 'so_tien': 120, 'form_code': 90,
+                          'form_version': 80, 'status': 120}.get(key, 160)
+                if width < 850:
+                    target = {'_selected': 30, '_action': 65, '_file_status': 76, 'ngay_nop': 108,
+                              'ngay_lap': 108, 'ngay_gui': 108, 'trang_thai': 112}.get(key, target)
+                self.table.setColumnWidth(index, target)
+            state = self.tab_states.get(self.mode)
+            if state and state.column_widths:
+                for index, (key, _) in enumerate(columns):
+                    if key in state.column_widths and not self.table.isColumnHidden(index):
+                        self.table.setColumnWidth(index, state.column_widths[key])
+            self.table.horizontalHeader().setSectionResizeMode(0 if self.mode == 'offline' else 1, QHeaderView.ResizeMode.Stretch)
+        finally:
+            self._applying_widths = False
         self.position_drawer()
         self.refresh_account()
 

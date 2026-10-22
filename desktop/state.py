@@ -47,5 +47,8 @@ class TabState:
     message: str = "Sẵn sàng"
     rows: list[dict] = field(default_factory=list)
     status_filter: str = "all"
+    cqt_filter: str = "all"
+    type_filter: str = ""
+    column_widths: dict[str, int] = field(default_factory=dict)
     conditions_collapsed: bool = False
     last_task: JobResult | None = None

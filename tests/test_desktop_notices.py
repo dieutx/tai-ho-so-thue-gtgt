@@ -102,8 +102,8 @@ class NoticeReferenceTests(unittest.TestCase):
         self.addCleanup(workbook.close)
         sheet = workbook['Danh sách hồ sơ']
         headers = [cell.value for cell in sheet[1]]
-        self.assertEqual(sheet.cell(2, headers.index('Thông báo cơ quan thuế') + 1).value, 'Chấp nhận')
-        self.assertEqual(workbook['Thông báo tờ khai'].cell(2, 9).value, 'thong-bao-dinh-kem/case/first.xml')
+        self.assertEqual(sheet.cell(2, headers.index('Phản hồi CQT') + 1).value, 'Chấp nhận')
+        self.assertEqual(workbook['Phản hồi tờ khai'].cell(2, 9).value, 'thong-bao-dinh-kem/case/first.xml')
 
     def test_scoped_rows_use_notice_store_parent_identity_instead_of_folder_name_only(self):
         try:

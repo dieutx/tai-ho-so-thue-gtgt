@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__
+from .feedback_panel import FeedbackPanel
 from .settings_store import default_output
 from .table_model import COLUMNS, RecordsModel, RecordsProxy, SelectionHeader
 
@@ -111,7 +112,7 @@ def build_workspace(window):
     for label, value in [('Tháng này', 'month'), ('Tháng trước', 'previous'), ('Quý này', 'quarter'),
                          ('Năm nay', 'year'), ('12 tháng qua', 'twelve'), ('Tùy chỉnh', 'custom')]:
         self.preset.addItem(label, value)
-    self.preset.setAccessibleName('Chọn nhanh kỳ tra cứu')
+    self.preset.setAccessibleName('Chọn nhanh khoảng ngày tra cứu')
     dates.addWidget(self.preset)
     self.from_date, self.to_date = QDateEdit(), QDateEdit()
     previous = QDate.currentDate().addMonths(-1)
@@ -191,11 +192,28 @@ def build_workspace(window):
     self.search = field('Tìm tên, mã hồ sơ, số chứng từ hoặc kỳ…')
     self.search.setClearButtonEnabled(True)
     filter_row.addWidget(self.search, 1)
+    self.filtered_label = QLabel()
+    self.filtered_label.setObjectName('hint')
+    self.filtered_label.setToolTip('Số dòng đang hiển thị sau tìm kiếm/bộ lọc trên tổng số dòng có sẵn')
+    filter_row.addWidget(self.filtered_label)
     self.file_filter = QComboBox()
+    self.file_filter.setAccessibleName('Lọc theo trạng thái tải')
     for label, value in [('Tất cả hồ sơ', 'all'), ('Chưa tải', 'not_downloaded'), ('Đã tải', 'downloaded'),
                          ('Tải lỗi', 'failed'), ('Cần kiểm tra', 'review')]:
         self.file_filter.addItem(label, value)
+    self.file_filter.setAccessibleName('Lọc theo trạng thái tải')
     filter_row.addWidget(self.file_filter)
+    self.cqt_filter = QComboBox()
+    for label, value in [('Tất cả CQT', 'all'), ('Đã tiếp nhận', 'received'), ('Đã chấp nhận', 'accepted'),
+                         ('Không chấp nhận', 'rejected'), ('Chưa xác định', 'unknown'),
+                         ('Cần kiểm tra', 'conflict')]:
+        self.cqt_filter.addItem(label, value)
+    self.cqt_filter.setAccessibleName('Lọc theo trạng thái cơ quan thuế')
+    filter_row.addWidget(self.cqt_filter)
+    self.type_filter = QComboBox()
+    self.type_filter.setAccessibleName('Lọc theo loại thông báo thuế')
+    self.type_filter.addItem('Tất cả loại thông báo', '')
+    filter_row.addWidget(self.type_filter)
     self.missing_button = button('Tải chưa tải', self.download_missing, 'Chỉ tải hồ sơ chưa có tệp trong toàn bộ kết quả của kỳ này')
     self.retry_button = button('Thử lại tệp lỗi', self.retry_failed)
     self.verify_button = button('Kiểm tra tệp', self.verify_files, 'Kiểm tra lại tệp đã xóa, di chuyển hoặc hỏng; không gọi mạng')
@@ -218,9 +236,19 @@ def build_workspace(window):
     self.proxy_model.setSourceModel(self.model)
     self.search.textChanged.connect(self.proxy_model.setFilterFixedString)
     self.search.textChanged.connect(self.update_empty)
+    self.search.textChanged.connect(self.update_filtered_count)
     self.file_filter.currentIndexChanged.connect(lambda: self.set_file_filter())
+    self.cqt_filter.currentIndexChanged.connect(self.set_cqt_filter)
+    self.type_filter.currentIndexChanged.connect(self.set_type_filter)
+    self.model.modelReset.connect(self.update_filtered_count)
+    self.model.modelReset.connect(self.refresh_type_filter)
+    self.proxy_model.modelReset.connect(self.update_filtered_count)
+    self.proxy_model.rowsInserted.connect(lambda *_args: self.update_filtered_count())
+    self.proxy_model.rowsRemoved.connect(lambda *_args: self.update_filtered_count())
+    self.proxy_model.layoutChanged.connect(self.update_filtered_count)
     self.model.selection_changed.connect(self.selection_changed)
     self.table = QTableView()
+    self.table.setAccessibleName('Danh sách hồ sơ; dùng phím mũi tên để chọn, Space để chọn tệp')
     self.table.setMinimumSize(0, 36)
     self.table.setModel(self.proxy_model)
     self.table.setHorizontalHeader(SelectionHeader(Qt.Orientation.Horizontal, self.table))
@@ -234,6 +262,7 @@ def build_workspace(window):
     self.table.horizontalHeader().setStretchLastSection(False)
     self.table.horizontalHeader().setMinimumSectionSize(32)
     self.table.horizontalHeader().sectionClicked.connect(self.select_visible_header)
+    self.table.horizontalHeader().sectionResized.connect(self._remember_column_width)
     self.table.verticalHeader().hide()
     self.table.verticalHeader().setDefaultSectionSize(43)
     self.table.clicked.connect(self.table_clicked)
@@ -259,6 +288,13 @@ def build_workspace(window):
     self.proxy_model.rowsInserted.connect(lambda *_args: self.update_empty())
     self.proxy_model.rowsRemoved.connect(lambda *_args: self.update_empty())
     results.addWidget(table_area, 1)
+    self.feedback_panel = FeedbackPanel()
+    self.feedback_panel.open_asset.connect(self.open_feedback_asset)
+    self.feedback_panel.save_asset.connect(self.save_feedback_asset)
+    self.feedback_panel.open_folder.connect(self.open_feedback_folder)
+    self.feedback_panel.technical.connect(self.show_feedback_technical)
+    results.addWidget(self.feedback_panel)
+    self.feedback_panel.hide()
     self.layout_root.addWidget(self.results_panel, 1)
     self.files = QComboBox(self)
     self.files.hide()
@@ -285,6 +321,7 @@ def build_workspace(window):
     self.folder_button = self.file_menu.addAction('Mở thư mục', self.open_output)
     self.report_button = self.file_menu.addAction('Mở báo cáo', self.open_report)
     self.export_action = self.file_menu.addAction('Xuất danh sách Excel…', self.export_report)
+    self.reconciliation_action = self.file_menu.addAction('Đối soát và xuất báo cáo…', self.show_reconciliation)
     self.report_button.setEnabled(False)
     self.log_button = self.file_menu.addAction('Nhật ký kỹ thuật (0)', self.show_logs)
     self.file_menu.addAction('Kiểm tra lại tệp trên máy', self.verify_files)
@@ -309,16 +346,23 @@ def build_workspace(window):
     self.detail_text = QTextBrowser()
     self.detail_text.setOpenExternalLinks(False)
     self.detail_text.setOpenLinks(False)
-    self.detail_text.anchorClicked.connect(self.open_notice_link)
     drawer.addWidget(self.detail_text, 1)
     tools = QHBoxLayout()
     tools.addWidget(button('Sao chép mã', self.copy_document_id))
-    tools.addWidget(button('Metadata gốc', self.raw_details))
-    self.detail_notices = button('Mở thông báo', self.open_detail_notices,
-                                 'Mở tệp XML thông báo của cơ quan thuế cho tờ khai này')
+    tools.addWidget(button('Thông tin kỹ thuật', self.technical_details,
+                           'Xem đường dẫn, dung lượng, SHA-256 và trạng thái xác minh'))
+    self.detail_notices = button('Xem phản hồi', self.open_detail_notices,
+                                 'Xem danh sách phản hồi của cơ quan thuế cho tờ khai này')
     self.detail_notices.hide()
     tools.addWidget(self.detail_notices)
     drawer.addLayout(tools)
+    raw_tools = QHBoxLayout()
+    self.detail_bundle = button('Xuất hồ sơ', self.export_detail_bundle,
+                                'Xuất ZIP gồm tờ khai và phản hồi của chính lần nộp này')
+    raw_tools.addWidget(self.detail_bundle)
+    raw_tools.addWidget(button('Metadata gốc', self.raw_details))
+    raw_tools.addStretch()
+    drawer.addLayout(raw_tools)
     actions = QHBoxLayout()
     self.detail_open = button('Mở tệp', self.open_detail_file)
     self.detail_download = button('Tải tệp', self.download_detail)

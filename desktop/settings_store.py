@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
@@ -60,6 +60,8 @@ class Preferences:
     cutoff: str = "01/07/2025"
     theme: str = "light"
     dvc_enabled: bool = True
+    #: Trạng thái giao diện theo tab (filter/sort/độ rộng cột); không chứa dữ liệu hồ sơ.
+    ui_state: dict[str, dict] = field(default_factory=dict)
 
 
 class SettingsStore:

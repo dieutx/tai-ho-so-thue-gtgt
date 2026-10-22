@@ -364,12 +364,14 @@ class DesktopV2InteractionTests(unittest.TestCase):
                               'ly_do': 'Hồ sơ không hợp lệ', 'name': 'khong-chap-nhan.xml'}])
         self.window.model.reset('tax', [row])
         index = self.window.model.index(0, column)
-        self.assertEqual(index.data(), 'Không chấp nhận\nMở 2 tệp')
-        self.assertIn('Bấm để mở danh sách thông báo', index.data(Qt.ItemDataRole.ToolTipRole))
+        self.assertEqual(index.data(), 'Xem phản hồi (2)')
+        self.assertIn('Bấm để xem phản hồi', index.data(Qt.ItemDataRole.ToolTipRole))
         self.assertIn('298018/0109/2026/TB-TĐT', index.data(Qt.ItemDataRole.ToolTipRole))
         self.assertTrue(index.data(Qt.ItemDataRole.FontRole).underline())
         self.assertEqual(index.data(Qt.ItemDataRole.BackgroundRole).name(), '#fdecea')
-        self.assertEqual(index.data(Qt.ItemDataRole.ForegroundRole).name(), '#c94242')
+        self.assertEqual(index.data(Qt.ItemDataRole.ForegroundRole).name(), '#225de9')
+        status_column = next(index for index, (key, _) in enumerate(COLUMNS['tax']) if key == 'trang_thai')
+        self.assertEqual(self.window.model.index(0, status_column).data(), 'Không chấp nhận')
         accepted = dict(row, _notice_state='accepted', _notice_summary='Chấp nhận (2)')
         self.window.model.reset('tax', [accepted])
         self.assertIsNone(self.window.model.index(0, column).data(Qt.ItemDataRole.BackgroundRole))
@@ -389,7 +391,7 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.window.proxy_model.setFilterFixedString('')
         self.window.model.reset('tax', [dict(row, _notice_state='')])
         column = next(i for i, (key, _) in enumerate(COLUMNS['tax']) if key == '_notice_state')
-        self.assertEqual(self.window.model.index(0, column).data(), 'Chưa xác định\nMở 1 tệp')
+        self.assertEqual(self.window.model.index(0, column).data(), 'Xem phản hồi (1)')
 
     def test_notice_menu_lists_and_opens_downloaded_xml(self):
         from desktop.table_model import COLUMNS
@@ -409,19 +411,23 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.window.details()
         self.assertFalse(self.window.detail_notices.isHidden())
         self.assertTrue(self.window.detail_notices.isEnabled())
-        self.assertEqual(self.window.detail_notices.text(), 'Mở thông báo (1)')
-        self.assertIn('notice-file:0', self.window.detail_text.toHtml())
-        self.assertIn('Mở thông báo', self.window.detail_text.toPlainText())
-        from PySide6.QtCore import QUrl
+        self.assertEqual(self.window.detail_notices.text(), 'Xem phản hồi (1)')
+        self.assertIn('1 phản hồi', self.window.detail_text.toPlainText())
+        self.window.show_feedback_panel(row)
+        panel = self.window.feedback_panel
+        self.assertEqual(panel.table.rowCount(), 1)
+        with patch('desktop.xml_viewer.XmlViewer.show_asset') as opener:
+            panel.open_asset.emit(panel.items[0])
+        opener.assert_called_once()
         with patch.object(self.window, 'open_path') as opener:
-            self.window.detail_text.anchorClicked.emit(QUrl('notice-file:0'))
+            self.window.open_notice(row['_notices'][0])
         opener.assert_called_once_with(notice)
         with patch.object(self.window, 'open_path') as opener:
-            self.window.detail_text.anchorClicked.emit(QUrl('notice-folder:0'))
+            self.window.open_notice(row['_notices'][0], folder=True)
         opener.assert_called_once_with(notice.parent)
         notice.unlink()
         with patch.object(self.window, 'open_path') as opener, patch.object(self.window, 'error') as error:
-            self.window.detail_text.anchorClicked.emit(QUrl('notice-file:0'))
+            self.window.open_notice(row['_notices'][0])
         opener.assert_not_called()
         error.assert_called_once()
 
@@ -431,9 +437,10 @@ class DesktopV2InteractionTests(unittest.TestCase):
             'status': 'PARTIAL', 'discovered': 2, 'failed': 2, 'items': [{'code': 'ATTACHMENT_RATE_LIMITED'}]}))
         self.window.model.reset('tax', [row])
         column = next(i for i, (key, _) in enumerate(COLUMNS['tax']) if key == '_notice_state')
-        self.assertEqual(self.window.model.index(0, column).data(), 'Tải thông báo lỗi\nXem chi tiết')
+        self.assertEqual(self.window.model.index(0, column).data(), 'Chưa có phản hồi')
         from PySide6.QtCore import Qt
         self.assertIn('HTTP 429', self.window.model.index(0, column).data(Qt.ItemDataRole.ToolTipRole))
+        self.assertEqual(self.window.model.index(0, column).data(Qt.ItemDataRole.ForegroundRole).name(), '#93631b')
 
     def test_stale_proxy_index_is_rejected_instead_of_crashing(self):
         rows = [CaseRecord(str(i), SOURCE_ETAX_LEGACY, to_khai=f'fixture {i}').to_dict() for i in range(4)]

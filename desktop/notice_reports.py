@@ -1,4 +1,4 @@
-"""Export local notice references without copying the original attachments."""
+"""Export local feedback references without copying the original attachments."""
 from __future__ import annotations
 
 import re
@@ -10,13 +10,13 @@ from .notices import REFERENCE_LABELS, STATE_LABELS
 
 
 def notice_report_sheet(workbook, rows, hooks):
-    sheet = workbook.create_sheet('Thông báo tờ khai')
+    sheet = workbook.create_sheet('Phản hồi tờ khai')
     columns = [('ma_ho_so', 'Mã hồ sơ'), ('nguon', 'Nguồn tờ khai'),
-               ('parent_key', 'Khóa hồ sơ'), ('state', 'Trạng thái thông báo'),
+               ('parent_key', 'Khóa hồ sơ'), ('state', 'Trạng thái phản hồi'),
                ('so_thong_bao', 'Số thông báo'), ('ngay_thong_bao', 'Ngày thông báo'),
                ('ten_thong_bao', 'Tên thông báo'), ('ly_do', 'Lý do'),
                ('relative_path', 'Đường dẫn từ nơi lưu tờ khai'),
-               ('reference_key', 'Khóa tham chiếu thông báo'), ('sha256', 'SHA-256 tệp'),
+               ('reference_key', 'Khóa tham chiếu phản hồi'), ('sha256', 'SHA-256 tệp'),
                ('size', 'Dung lượng byte'), ('reference_status', 'Đối chiếu tham chiếu')]
 
     def append(values):

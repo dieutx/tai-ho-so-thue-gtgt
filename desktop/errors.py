@@ -19,3 +19,28 @@ def storage_message(error, prefix='Không lưu được tệp'):
     else:
         reason = 'kiểm tra quyền ghi, dung lượng, đóng Excel hoặc tạm dừng đồng bộ OneDrive rồi thử lại'
     return prefix + ': ' + reason + '. Tệp hồ sơ đã hoàn tất được giữ nguyên.'
+
+
+def issue_hint(message) -> str:
+    """Gợi ý xử lý theo nhóm lỗi; không thay đổi nội dung lỗi gốc."""
+    text = str(message or '').casefold()
+    if any(marker in text for marker in ('hết hạn', 'phiên đăng nhập', 'đăng nhập lại')):
+        return 'Phiên đăng nhập đã hết hạn: đăng nhập lại rồi thử lại tệp này.'
+    if any(marker in text for marker in ('429', 'giới hạn tần suất', 'quá nhiều yêu cầu')):
+        return 'Cổng đang giới hạn tần suất: chờ vài phút rồi bấm Thử lại tệp lỗi.'
+    if 'captcha' in text:
+        return 'CAPTCHA chưa đúng: thử lại; nếu tự động thất bại, nhập tay khi được hỏi.'
+    if any(marker in text for marker in ('mạng', 'network', 'kết nối', 'max retries', 'timeout')):
+        return 'Kiểm tra kết nối mạng/proxy rồi thử lại; tệp đã tải hợp lệ được giữ nguyên.'
+    if any(marker in text for marker in ('quyền', 'permission', 'bị khóa', 'dung lượng', 'disk', 'enospc')):
+        return 'Kiểm tra quyền ghi/dung lượng, đóng Excel/OneDrive rồi thử lại; không xóa tệp hợp lệ.'
+    if any(marker in text for marker in ('không phải zip', 'không phải xml', 'không phải pdf',
+                                         'định dạng', 'không hợp lệ', 'giải mã')):
+        return 'Tệp cổng trả về không hợp lệ: thử lại; nếu lặp lại, mở Nhật ký kỹ thuật để kiểm tra.'
+    if 'không còn trong kết quả' in text:
+        return 'Hồ sơ không còn trong kết quả tra cứu: tra cứu lại đúng kỳ rồi tải lại.'
+    return 'Thử lại tệp này; nếu vẫn lỗi, mở Nhật ký kỹ thuật để xem chi tiết.'
+
+
+__all__ = ['issue_hint', 'storage_message']
+

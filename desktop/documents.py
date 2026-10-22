@@ -31,6 +31,13 @@ from gdt_tax.tb.models import ThongBao
 from gdt_tax.tb.naming import tb_pdf_filename
 from gdt_tax.tb.portal import is_tb_pdf
 
+from .domain import (
+    INTEGRITY_INVALID,
+    INTEGRITY_LABELS,
+    INTEGRITY_NOT_CHECKED,
+    INTEGRITY_UNVERIFIED,
+)
+from .feedback_service import feedback_summary
 from .notices import notice_state, notice_summary, read_notices
 
 KINDS = {
@@ -155,7 +162,9 @@ def verify_rows(mode: str, rows: list[dict], output: Path, hooks: RunHooks | Non
             remote = remote_document_id(mode, row)
             candidates.extend(p for p in zip_candidates if p.stem == remote or p.name.startswith((remote + '__', remote + '-')))
         row.update(_file_status='not_downloaded', _file_path='', _file_size=0, _file_hash='', _file_updated='',
-                   _file_reason='', _error_message='')
+                   _file_reason='', _error_message='',
+                   _integrity_status=INTEGRITY_NOT_CHECKED,
+                   _integrity_label=INTEGRITY_LABELS[INTEGRITY_NOT_CHECKED])
         seen = set()
         for path in candidates:
             resolved = path.resolve()
@@ -170,10 +179,14 @@ def verify_rows(mode: str, rows: list[dict], output: Path, hooks: RunHooks | Non
                 kind = {"tax": "zip", "gnt": "gnt", "notice": "pdf"}[mode]
                 if not valid(content) or not matches_evidence(path, content, source_reference(record, kind)):
                     row['_file_reason'] = 'Tệp hiện có không hoàn chỉnh hoặc sai định dạng; có thể tải lại'
+                    row['_integrity_status'] = INTEGRITY_INVALID
+                    row['_integrity_label'] = INTEGRITY_LABELS[INTEGRITY_INVALID]
                     continue
                 row.update(_file_status='downloaded', _file_path=str(resolved), _file_size=len(content),
                            _file_hash=hashlib.sha256(content).hexdigest(),
-                           _file_updated=datetime.fromtimestamp(path.stat().st_mtime).strftime('%d/%m/%Y %H:%M:%S'))
+                           _file_updated=datetime.fromtimestamp(path.stat().st_mtime).strftime('%d/%m/%Y %H:%M:%S'),
+                           _integrity_status=INTEGRITY_UNVERIFIED,
+                           _integrity_label=INTEGRITY_LABELS[INTEGRITY_UNVERIFIED])
                 row[file_field] = path.name
                 if reused_ids and key in reused_ids:
                     row['_file_reason'] = 'Đã có tệp hợp lệ; bỏ qua tải lại'
@@ -191,7 +204,17 @@ def verify_rows(mode: str, rows: list[dict], output: Path, hooks: RunHooks | Non
             notices = read_notices(output, remote_document_id(mode, row),
                                    parent_key=record.record_key if record.account_key != 'UNKNOWN' else '')
             row.update(_notices=notices, _notice_state=notice_state(notices),
-                       _notice_summary=notice_summary(notices))
+                       _notice_summary=notice_summary(notices), _feedback_count=len(notices))
+            summary = feedback_summary(row)
+            label = ''
+            if summary.conflict:
+                label = 'Cần kiểm tra'
+            elif summary.status in {'accepted', 'received', 'rejected'}:
+                label = summary.status_label
+            row.update(_cqt_status=summary.status,
+                       _cqt_status_label=label,
+                       _feedback_conflict=summary.conflict,
+                       _feedback_problem=summary.problem)
         row['_file_state'] = FILE_LABELS[row['_file_status']]
         row['_needs_review'] = needs_review(row) or row.get('_notice_state') == 'rejected'
         verified.append(row)

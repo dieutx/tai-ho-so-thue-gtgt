@@ -295,7 +295,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         self.pending_rows = {}
         self.history = []
         self.last_task = None
-        self.tab_states = {mode: TabState() for mode in MODES}
+        self._initializing = True
+        self.tab_states = {mode: self._restore_tab_state(mode) for mode in MODES}
         self.after_login = None
         self.account_store = AccountStore()
         self.remember_login = False
@@ -312,6 +313,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         self.apply_theme()
         self.resize(1080, 670)
         self.warning_update()
+        self.mode_changed(0)
+        self._initializing = False
         QTimer.singleShot(0, self.fit_screen)
         if self.startup_error:
             QTimer.singleShot(0, lambda: self.error(self.startup_error))
@@ -419,6 +422,9 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             QPushButton#files {{background:#F5F3FF;color:#6D28D9;border-color:#DDD6FE;}}
             QPushButton#stop:disabled,QPushButton#primary:disabled,QPushButton#query:disabled {{background:{bg};color:{muted};border-color:{border};}}
             QFrame#drawer {{background:{card};border:1px solid {border};border-radius:8px;}}
+            QWidget#feedbackPanel {{background:{card};border-top:1px solid {border};}}
+            QLabel#feedbackTitle {{font-weight:600;}}
+            QLabel#feedbackEmpty {{color:{muted};padding:8px;}}
             QTextBrowser {{background:{card};border:0;padding:6px;}}
             QLabel#counters {{font-weight:600;color:{text};}}
             QLabel#hint {{color:{muted};}}
@@ -439,11 +445,59 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             self.model.reset(self.mode, [])
             self.search.clear()
             self.file_filter.setCurrentIndex(0)
+            self.cqt_filter.setCurrentIndex(0)
+            self.type_filter.setCurrentIndex(0)
+            self.proxy_model.set_cqt_filter('all')
+            self.proxy_model.set_type_filter('')
+            self.filtered_label.clear()
             self.close_drawer()
+            if hasattr(self, 'feedback_panel'):
+                self.feedback_panel.clear()
             self.collapse_conditions(False)
             self.status.setText("Sẵn sàng")
             self.populate_result(None)
             self.update_empty()
+
+    def _restore_tab_state(self, mode: str) -> TabState:
+        """Khôi phục filter/sort/độ rộng cột đã lưu; không khôi phục dữ liệu hồ sơ."""
+        state = TabState()
+        raw = self.preferences.ui_state.get(mode) if isinstance(self.preferences.ui_state, dict) else None
+        if not isinstance(raw, dict):
+            return state
+        state.filter_text = str(raw.get('filter_text') or '')
+        status = str(raw.get('status_filter') or 'all')
+        state.status_filter = status if status in {'all', 'not_downloaded', 'downloaded', 'failed', 'review'} else 'all'
+        cqt = str(raw.get('cqt_filter') or 'all')
+        state.cqt_filter = cqt if cqt in {'all', 'received', 'accepted', 'rejected', 'unknown', 'conflict'} else 'all'
+        state.type_filter = str(raw.get('type_filter') or '')
+        column = raw.get('sort_column')
+        if isinstance(column, int):
+            state.sort_column = column
+        state.sort_descending = bool(raw.get('sort_descending', True))
+        widths = raw.get('column_widths')
+        if isinstance(widths, dict):
+            state.column_widths = {str(key): int(value) for key, value in widths.items()
+                                   if isinstance(value, int) and 20 <= value <= 1000}
+        return state
+
+    def persist_ui_state(self) -> None:
+        """Lưu filter/sort/độ rộng cột theo tab; không lưu rows, tài khoản hay bí mật."""
+        data = {}
+        for mode, state in self.tab_states.items():
+            data[mode] = {
+                'filter_text': state.filter_text,
+                'status_filter': state.status_filter,
+                'cqt_filter': state.cqt_filter,
+                'type_filter': state.type_filter,
+                'sort_column': state.sort_column,
+                'sort_descending': state.sort_descending,
+                'column_widths': dict(state.column_widths),
+            }
+        self.preferences.ui_state = data
+        try:
+            self.store.save(self.preferences)
+        except (OSError, ValueError):
+            pass
 
     def account_action_allowed(self, action) -> bool:
         if not self.controller.busy:
@@ -641,6 +695,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             if config.mode not in {"offline", "saved"}:
                 config.settings()
             if self.controller.start(config):
+                self.progress.setRange(0, 0)
+                self.progress.setValue(0)
                 self.active_config = config
                 if clear:
                     self.result = None
@@ -779,6 +835,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
                     self.controller.stop()
             event.ignore()
             return
+        self.save_tab()
+        self.persist_ui_state()
         self.controller.sessions.close()
         self.proxy, self.extra_headers = "", {}
         event.accept()

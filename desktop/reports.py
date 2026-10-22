@@ -18,7 +18,7 @@ def export_document_report(config, hooks):
     identifiers = {'tax': [('ma_ho_so', 'Mã hồ sơ'), ('to_khai', 'Tờ khai'), ('ky_tinh_thue', 'Kỳ'), ('ngay_nop', 'Ngày nộp')],
                    'gnt': [('ctu_id', 'Mã chứng từ'), ('so_gnt', 'Số GNT'), ('ngay_lap', 'Ngày lập'), ('so_tien', 'Số tiền gốc'), ('loai_tien', 'Loại tiền')],
                    'notice': [('message_id', 'Mã thông báo'), ('so_thong_bao', 'Số thông báo'), ('ten_thong_bao', 'Tên thông báo'), ('ngay_gui', 'Ngày gửi')]}
-    notice_columns = [('_notice_summary', 'Thông báo cơ quan thuế'), ('_notice_count', 'Số tệp thông báo')] if config.mode == 'tax' else []
+    notice_columns = [('_notice_summary', 'Phản hồi CQT'), ('_notice_count', 'Số phản hồi')] if config.mode == 'tax' else []
     columns = identifiers[config.mode] + notice_columns + [('trang_thai', 'Trạng thái cơ quan thuế'), ('_file_label', 'Trạng thái tệp'),
         (KINDS[config.mode][2], 'Tên tệp'), ('_file_path', 'Đường dẫn thực'), ('_file_size', 'Dung lượng byte'),
         ('_file_hash', 'SHA-256'), ('_error_message', 'Lỗi tải'), ('_file_reason', 'Ghi chú')]
