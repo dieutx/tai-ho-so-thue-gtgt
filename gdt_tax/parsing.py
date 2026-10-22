@@ -27,13 +27,14 @@ là dữ liệu cổng dùng cho các lệnh AJAX.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
 from .constants import ALL_SOURCES, SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
 from .csrf import attribute
 from .models import CaseRecord
-from .table_contracts import SCHEMAS, TableParse, TableSchema, parse_table
+from .table_contracts import SCHEMAS, SKIP_NON_DATA, TableParse, TableSchema, parse_table
 
 ETAX_MIN_CELLS = 10
 DVC_MIN_CELLS = 12
@@ -145,17 +146,20 @@ def dvc_record(cells: list[str], case_id: str) -> CaseRecord | None:
     )
 
 
-def etax_legacy_record(cells: list[str], row: Tag) -> CaseRecord | None:
+def etax_legacy_record(cells: list[str], row: Tag) -> Any:
     """Đọc một hàng bảng legacy (12 cột) thành hồ sơ.
 
     Mã hồ sơ nằm trong lệnh ``downloadTkhai('...')`` của cột Thao tác; hàng
-    không có lệnh này (thông báo, tờ khai bị huỷ) được bỏ qua.
+    không có lệnh này (thông báo, tờ khai bị huỷ) được bỏ qua êm, không tính
+    là lỗi schema. Hàng có handler nhưng ID lệch vẫn là lỗi dữ liệu.
     """
     if len(cells) < ETAX_LEGACY_MIN_CELLS:
-        return None
+        return SKIP_NON_DATA
     row_html = str(row)
     case_id = legacy_message_id(row_html)
-    if not case_id or cells[1] != case_id:
+    if not case_id:
+        return SKIP_NON_DATA
+    if cells[1] != case_id:
         return None
     return CaseRecord(
         ma_ho_so=case_id,
@@ -183,10 +187,14 @@ def parse_record_table(html: str, source: str, *, schema: TableSchema | None = N
             return etax_legacy_record(cells, row)
         if source == SOURCE_ETAX:
             case_id = case_id_from_row(row, cells, fallback_index=1)
+            if not case_id:
+                return SKIP_NON_DATA
             if cells[1] != case_id:
                 return None
             return etax_record(cells, case_id)
         case_id = case_id_from_row(row, cells, fallback_index=2)
+        if not case_id:
+            return SKIP_NON_DATA
         if cells[2] != case_id:
             return None
         return dvc_record(cells, case_id)

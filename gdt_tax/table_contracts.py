@@ -26,6 +26,7 @@ class ParseDiagnostics:
     candidate_count: int = 0
     parsed_count: int = 0
     skipped_count: int = 0
+    non_data_count: int = 0
     duplicate_count: int = 0
     reasons: list[str] = field(default_factory=list)
     # Private per-row evidence. Never interpolate raw values into a log message.
@@ -36,6 +37,13 @@ class ParseDiagnostics:
     @property
     def complete(self) -> bool:
         return self.status in {"PARSED", "EMPTY_CONFIRMED"}
+
+
+class _SkipNonData:
+    """Sentinel: hàng bảng không phải dữ liệu (footer/tổng/hàng không handler)."""
+
+
+SKIP_NON_DATA = _SkipNonData()
 
 
 @dataclass
@@ -322,6 +330,9 @@ def parse_table(html: str, schema: TableSchema, decoder: Callable[[Tag, list[str
             if schema.name == "GNT" and values.get("so_tien") and not re.fullmatch(r"[+-]?\d+(?:[.,]\d+)*", values["so_tien"].replace(" ", "")):
                 error = "INVALID_AMOUNT_COLUMN:so_tien"
         record = decoder(row, cells) if error is None else None
+        if record is SKIP_NON_DATA:
+            diagnostics.non_data_count += 1
+            continue
         if record is None:
             diagnostics.skipped_count += 1
             diagnostics.row_issues.append({"row": row_index, "code": error or "RECORD_HANDLER_OR_ID_MISSING", "raw_cells": raw})
@@ -341,8 +352,10 @@ def parse_table(html: str, schema: TableSchema, decoder: Callable[[Tag, list[str
         result.records.append(record)
     if diagnostics.skipped_count or diagnostics.reasons:
         diagnostics.reasons.extend(sorted({item["code"] for item in diagnostics.row_issues}))
-    elif diagnostics.candidate_count:
+    elif diagnostics.parsed_count:
         diagnostics.status = "PARSED"
+    elif diagnostics.candidate_count and diagnostics.non_data_count == diagnostics.candidate_count:
+        diagnostics.status = "EMPTY_CONFIRMED"
     elif _known_empty(soup, schema):
         diagnostics.status = "EMPTY_CONFIRMED"
     else:

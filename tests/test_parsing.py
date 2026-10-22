@@ -113,6 +113,48 @@ class LegacyTransactionTests(unittest.TestCase):
         )
         self.assertEqual(legacy_transaction_ids(html), {})
 
+    def test_footer_row_without_handler_is_not_a_schema_error(self):
+        from gdt_tax.parsing import parse_record_table
+        header = (
+            "<tr><th>STT</th><th>Mã giao dịch</th><th>Tờ khai/Phụ lục</th>"
+            "<th>Kỳ tính thuế</th><th>Loại tờ khai</th><th>Lần nộp</th>"
+            "<th>Lần bổ sung</th><th>Ngày nộp</th><th></th><th>Nơi nộp</th>"
+            "<th>Trạng thái</th><th>Thao tác</th></tr>"
+        )
+        footer = "<tr>" + "".join(
+            f"<td>{'Tổng cộng' if index == 0 else ''}</td>" for index in range(12)
+        ) + "</tr>"
+        html = fixture("etax_legacy_results.html").replace(
+            '<table id="data_content_onday">', '<table id="data_content_onday">' + header
+        ).replace("</table>", footer + "</table>")
+        parsed = parse_record_table(html, SOURCE_ETAX_LEGACY)
+        self.assertEqual(len(parsed.records), 2)
+        self.assertEqual(parsed.diagnostics.skipped_count, 0)
+        self.assertEqual(parsed.diagnostics.non_data_count, 1)
+        self.assertEqual(parsed.diagnostics.status, "PARSED")
+        self.assertFalse(any("RECORD_HANDLER_OR_ID_MISSING" in reason
+                             for reason in parsed.diagnostics.reasons))
+
+    def test_handler_with_mismatched_id_is_still_an_error(self):
+        from gdt_tax.parsing import parse_record_table
+        header = (
+            "<tr><th>STT</th><th>Mã giao dịch</th><th>Tờ khai/Phụ lục</th>"
+            "<th>Kỳ tính thuế</th><th>Loại tờ khai</th><th>Lần nộp</th>"
+            "<th>Lần bổ sung</th><th>Ngày nộp</th><th></th><th>Nơi nộp</th>"
+            "<th>Trạng thái</th><th>Thao tác</th></tr>"
+        )
+        cells = ['X', '999'] + [''] * 9 + [
+            "<a onclick=\"downloadTkhai('ABC')\">Tải tờ khai</a>"
+        ]
+        bad = "<tr>" + "".join(f"<td>{cell}</td>" for cell in cells) + "</tr>"
+        html = fixture("etax_legacy_results.html").replace(
+            '<table id="data_content_onday">', '<table id="data_content_onday">' + header
+        ).replace("</table>", bad + "</table>")
+        parsed = parse_record_table(html, SOURCE_ETAX_LEGACY)
+        self.assertEqual(len(parsed.records), 2)
+        self.assertEqual(parsed.diagnostics.skipped_count, 1)
+        self.assertIn("RECORD_HANDLER_OR_ID_MISSING", parsed.diagnostics.reasons)
+
 
 class UnknownSourceTests(unittest.TestCase):
     def test_nguon_la_thi_bao_loi_ngay(self):
