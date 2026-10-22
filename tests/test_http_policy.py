@@ -130,6 +130,14 @@ class HttpPolicyTests(unittest.TestCase):
         when = datetime.now(timezone.utc) + timedelta(seconds=7)
         self.assertGreater(client._retry_delay(StubResponse(429, {"Retry-After": format_datetime(when)})), 5)
 
+    def test_no_retry_after_uses_short_exponential_backoff(self):
+        client, _ = self.client([], min_backoff=2, default_backoff=15, max_backoff=60)
+        self.assertEqual(client._retry_delay(StubResponse(429), 1), 2)
+        self.assertEqual(client._retry_delay(StubResponse(429), 2), 4)
+        self.assertEqual(client._retry_delay(StubResponse(429), 3), 8)
+        self.assertEqual(client._retry_delay(StubResponse(429), 5), 32)
+        self.assertEqual(client._retry_delay(StubResponse(429, {"Retry-After": "15"}), 1), 15)
+
     def test_budget_counts_redirects_retries_and_total_bytes(self):
         budget = RunBudget(max_requests=1)
         response = StreamingResponse([], 302, {"Location": "/again"})

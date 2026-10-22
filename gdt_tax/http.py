@@ -65,7 +65,7 @@ class HttpClient:
     """Bọc :class:`requests.Session` với vài hành vi dùng chung của cổng thuế.
 
     Cổng Dịch vụ công trả ``429 Too Many Requests`` khi tra cứu quá nhanh, nên
-    lớp này tự nghỉ theo header ``Retry-After`` trước khi thử lại.
+    lớp này tự nghỉ ngắn (2s, 4s, 8s...) hoặc theo header ``Retry-After`` trước khi thử lại.
 
     ``extra_headers`` cho phép thêm hoặc ghi đè header cho **mọi** request ngay
     lúc chạy (``--header``/``GDT_EXTRA_HEADERS``), nên khi cổng yêu cầu thêm một
@@ -80,7 +80,7 @@ class HttpClient:
         base_url: str = BASE,
         timeout: int = 30,
         retries: int = 3,
-        min_backoff: float = 5.0,
+        min_backoff: float = 2.0,
         default_backoff: float = 15.0,
         session: requests.Session | None = None,
         logger: logging.Logger | None = None,
@@ -208,7 +208,7 @@ class HttpClient:
                 )
             if response.status_code != 429 or attempt == attempts:
                 return response
-            delay = self._retry_delay(response)
+            delay = self._retry_delay(response, attempt)
             self.logger.warning(
                 "Máy chủ giới hạn tần suất (HTTP 429); chờ %s giây rồi thử lại (lần %s/%s)...",
                 delay,
@@ -372,18 +372,25 @@ class HttpClient:
             return ""
         return f"?{describe_params(params, limit=PARAMS_LOG_LIMIT)}"
 
-    def _retry_delay(self, response: requests.Response) -> float:
-        raw = response.headers.get("Retry-After", "")
-        try:
-            delay = float(raw)
-        except (TypeError, ValueError):
+    def _retry_delay(self, response: requests.Response, attempt: int = 1) -> float:
+        raw = str(response.headers.get("Retry-After", "") or "").strip()
+        delay: float | None = None
+        if raw:
             try:
-                when = parsedate_to_datetime(raw)
-                if when.tzinfo is None:
-                    when = when.replace(tzinfo=timezone.utc)
-                delay = (when - datetime.now(timezone.utc)).total_seconds()
-            except (TypeError, ValueError, OverflowError):
-                delay = self.default_backoff
+                delay = float(raw)
+            except (TypeError, ValueError):
+                try:
+                    when = parsedate_to_datetime(raw)
+                    if when.tzinfo is None:
+                        when = when.replace(tzinfo=timezone.utc)
+                    delay = (when - datetime.now(timezone.utc)).total_seconds()
+                except (TypeError, ValueError, OverflowError):
+                    delay = None
+        if delay is None:
+            # Cổng thường chỉ chặn burst ngắn và không gửi Retry-After.
+            # 2s, 4s, 8s... nhanh hơn nhiều so với chờ cứng 15s; nếu cổng
+            # vẫn chặn, các lần sau tự lùi tiếp và tôn trọng Retry-After.
+            delay = self.min_backoff * (2 ** (max(1, attempt) - 1))
         if not math.isfinite(delay) or delay < 0:
             delay = self.default_backoff
         return min(self.max_backoff, max(self.min_backoff, delay))
