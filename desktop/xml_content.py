@@ -67,5 +67,3 @@ def readable_fields(root) -> dict[str, str]:
         if text:
             values[label] = text
     return values
-
-

@@ -105,5 +105,3 @@ def release_message(get=requests.get) -> str:
         return "Bản đang dùng đã bằng hoặc mới hơn bản phát hành công khai."
     except (requests.RequestException, ValueError, TypeError):
         return "Chưa kiểm tra được bản mới. Kiểm tra mạng hoặc mở trang phát hành trên GitLab."
-
-
