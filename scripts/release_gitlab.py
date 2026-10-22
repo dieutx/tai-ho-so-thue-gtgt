@@ -116,7 +116,9 @@ def main():
     if actual.hexdigest() != digest or length != exe.stat().st_size:
         raise SystemExit('Published file hash/size mismatch')
     result = {'tag': tag, 'release_url': release['_links']['self'], 'download_url': link['direct_asset_url'], 'bytes': length, 'sha256': digest, 'download_verified': True}
-    (ROOT / '.cache/optimization/gitlab-published.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+    output = ROOT / '.cache/optimization/gitlab-published.json'
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2), encoding='utf-8')
     print(json.dumps(result, indent=2))
 
 
