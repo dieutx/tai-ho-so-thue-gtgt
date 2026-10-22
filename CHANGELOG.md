@@ -2,6 +2,11 @@
 
 ## [2.0.4] — 2026-10-22
 
+- Rà soát thông báo theo tờ khai: đối chiếu khóa hồ sơ cha/checksum, sửa
+  bộ lọc/tìm kiếm, đọc lý do lồng trong XML, giữ trạng thái chưa hiểu là chưa
+  xác định; bổ sung sheet tham chiếu thông báo trong báo cáo Excel.
+  [Review](docs/NOTICE_REVIEW_20261022.md).
+
 - Tab Tờ khai có cột **Thông báo** đọc trực tiếp XML trong
   `thong-bao-dinh-kem/<mã hồ sơ>/` (tiếp nhận / chấp nhận / không chấp nhận),
   bấm để mở từng tệp; tờ khai bị từ chối được tô đỏ và vào nhóm "Cần kiểm tra".

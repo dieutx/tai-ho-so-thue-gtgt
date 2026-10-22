@@ -9,6 +9,7 @@ from gdt_tax.spreadsheet_values import append_row
 from gdt_tax.storage import _excel_value
 
 from .documents import FILE_LABELS, KINDS, counters, verify_rows
+from .notice_reports import notice_report_sheet
 from .services import JobResult
 
 
@@ -17,7 +18,8 @@ def export_document_report(config, hooks):
     identifiers = {'tax': [('ma_ho_so', 'Mã hồ sơ'), ('to_khai', 'Tờ khai'), ('ky_tinh_thue', 'Kỳ'), ('ngay_nop', 'Ngày nộp')],
                    'gnt': [('ctu_id', 'Mã chứng từ'), ('so_gnt', 'Số GNT'), ('ngay_lap', 'Ngày lập'), ('so_tien', 'Số tiền gốc'), ('loai_tien', 'Loại tiền')],
                    'notice': [('message_id', 'Mã thông báo'), ('so_thong_bao', 'Số thông báo'), ('ten_thong_bao', 'Tên thông báo'), ('ngay_gui', 'Ngày gửi')]}
-    columns = identifiers[config.mode] + [('trang_thai', 'Trạng thái cơ quan thuế'), ('_file_label', 'Trạng thái tệp'),
+    notice_columns = [('_notice_summary', 'Thông báo cơ quan thuế'), ('_notice_count', 'Số tệp thông báo')] if config.mode == 'tax' else []
+    columns = identifiers[config.mode] + notice_columns + [('trang_thai', 'Trạng thái cơ quan thuế'), ('_file_label', 'Trạng thái tệp'),
         (KINDS[config.mode][2], 'Tên tệp'), ('_file_path', 'Đường dẫn thực'), ('_file_size', 'Dung lượng byte'),
         ('_file_hash', 'SHA-256'), ('_error_message', 'Lỗi tải'), ('_file_reason', 'Ghi chú')]
     workbook = Workbook()
@@ -27,6 +29,7 @@ def export_document_report(config, hooks):
     for row in rows:
         hooks.check()
         row['_file_label'] = FILE_LABELS.get(row.get('_file_status'), 'Chưa tải')
+        row['_notice_count'] = len(row.get('_notices') or [])
         append_row(sheet, [_excel_value(row.get(key)) for key, _ in columns])
     sheet.freeze_panes = 'A2'
     sheet.auto_filter.ref = sheet.dimensions
@@ -46,6 +49,8 @@ def export_document_report(config, hooks):
     summary.column_dimensions['A'].width = 28
     summary.column_dimensions['B'].width = 90
     attachment_sheet(workbook, rows)
+    if config.mode == 'tax':
+        notice_report_sheet(workbook, rows, hooks)
     hooks.check()
     path = write_workbook(workbook, config.report_path)
     return JobResult('SUCCESS', 'Đã xuất danh sách Excel; tệp hồ sơ gốc giữ nguyên', config.output,

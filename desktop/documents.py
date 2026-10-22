@@ -123,7 +123,7 @@ def display_amount(value: Any, currency: str = '') -> str:
 
 def needs_review(row: dict) -> bool:
     status = str(row.get('trang_thai', '')).casefold()
-    return any(marker in status for marker in ('từ chối', 'không chấp nhận', 'không được chấp nhận', 'không thành công'))
+    return row.get('_notice_state') == 'rejected' or any(marker in status for marker in ('từ chối', 'không chấp nhận', 'không được chấp nhận', 'không thành công'))
 
 
 def counters(rows: list[dict]) -> dict[str, int]:
@@ -188,7 +188,8 @@ def verify_rows(mode: str, rows: list[dict], output: Path, hooks: RunHooks | Non
                 row['_file_reason'] = 'Tệp không còn ở nơi lưu hoặc không còn hợp lệ; có thể đã bị xóa/di chuyển'
         if mode == 'tax':
             # Thư mục thông báo đặt theo mã hồ sơ trên cổng, không theo RecordKey.
-            notices = read_notices(output, remote_document_id(mode, row))
+            notices = read_notices(output, remote_document_id(mode, row),
+                                   parent_key=record.record_key if record.account_key != 'UNKNOWN' else '')
             row.update(_notices=notices, _notice_state=notice_state(notices),
                        _notice_summary=notice_summary(notices))
         row['_file_state'] = FILE_LABELS[row['_file_status']]

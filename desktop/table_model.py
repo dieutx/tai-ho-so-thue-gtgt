@@ -92,8 +92,8 @@ class RecordsModel(QAbstractTableModel):
             if key == '_notice_state':
                 notices = row.get('_notices') or []
                 if not notices:
-                    return 'Không có tệp thông báo XML đính kèm trong thư mục đã tải'
-                return 'Bấm để mở danh sách XML:\n' + '\n'.join(f"{item.get('kind_label', 'Thông báo')}: "
+                    return 'Chưa có tệp thông báo đính kèm trên máy; chưa kết luận cổng không có thông báo'
+                return 'Bấm để mở danh sách thông báo:\n' + '\n'.join(f"{STATE_LABELS.get(item.get('state'), 'Chưa xác định')}: "
                                  f"{item.get('so_thong_bao') or item.get('name', '')}"
                                  + (f" — {item['ly_do']}" if item.get('ly_do') else '')
                                  for item in notices)
@@ -127,10 +127,10 @@ class RecordsModel(QAbstractTableModel):
             return FILE_LABELS.get(row.get(key, 'not_downloaded'), 'Chưa tải')
         if key == '_notice_state':
             state = row.get(key)
-            if not state:
-                return '—'
             count = len(row.get('_notices') or [])
-            return f"{STATE_LABELS.get(state, state)}\nMở {count} XML"
+            if not count:
+                return '—'
+            return f"{STATE_LABELS.get(state, 'Chưa xác định')}\nMở {count} tệp"
         if key == '_action':
             return 'Mở tệp' if row.get('_file_status') == 'downloaded' else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp'
         if key == 'so_tien':
@@ -158,7 +158,7 @@ class RecordsModel(QAbstractTableModel):
             return 'Chọn / bỏ chọn toàn bộ kết quả đang hiển thị sau tìm kiếm và bộ lọc'
         if role == Qt.ItemDataRole.ToolTipRole and orientation == Qt.Orientation.Horizontal:
             if COLUMNS[self.mode][section][0] == '_notice_state':
-                return 'Thông báo của cơ quan thuế cho tờ khai; bấm vào ô để mở tệp XML đã tải'
+                return 'Thông báo của cơ quan thuế cho tờ khai; bấm vào ô để mở tệp đã tải'
             return COLUMNS[self.mode][section][1]
         return None
 
@@ -249,7 +249,10 @@ class RecordsProxy(QSortFilterProxyModel):
     def filterAcceptsRow(self, source_row, source_parent):
         model = self.sourceModel()
         row = model.rows[source_row]
-        if self.query_text and self.query_text not in ' '.join(str(v) for k, v in row.items() if not k.startswith('_')).casefold():
+        notices = row.get('_notices') or []
+        search_text = ' '.join(str(v) for k, v in row.items() if not k.startswith('_'))
+        search_text += ' ' + ' '.join(str(item.get(key) or '') for item in notices for key in ('so_thong_bao', 'ten_thong_bao', 'ly_do'))
+        if self.query_text and self.query_text not in search_text.casefold():
             return False
         status = row.get('_file_status', 'not_downloaded')
         return self.status_filter == 'all' or (self.status_filter == 'review' and needs_review(row)) or status == self.status_filter

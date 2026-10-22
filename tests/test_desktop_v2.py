@@ -339,8 +339,8 @@ class DesktopV2InteractionTests(unittest.TestCase):
                               'ly_do': 'Hồ sơ không hợp lệ', 'name': 'khong-chap-nhan.xml'}])
         self.window.model.reset('tax', [row])
         index = self.window.model.index(0, column)
-        self.assertEqual(index.data(), 'Không chấp nhận\nMở 2 XML')
-        self.assertIn('Bấm để mở danh sách XML', index.data(Qt.ItemDataRole.ToolTipRole))
+        self.assertEqual(index.data(), 'Không chấp nhận\nMở 2 tệp')
+        self.assertIn('Bấm để mở danh sách thông báo', index.data(Qt.ItemDataRole.ToolTipRole))
         self.assertIn('298018/0109/2026/TB-TĐT', index.data(Qt.ItemDataRole.ToolTipRole))
         self.assertTrue(index.data(Qt.ItemDataRole.FontRole).underline())
         self.assertEqual(index.data(Qt.ItemDataRole.BackgroundRole).name(), '#fdecea')
@@ -348,6 +348,23 @@ class DesktopV2InteractionTests(unittest.TestCase):
         accepted = dict(row, _notice_state='accepted', _notice_summary='Chấp nhận (2)')
         self.window.model.reset('tax', [accepted])
         self.assertIsNone(self.window.model.index(0, column).data(Qt.ItemDataRole.BackgroundRole))
+
+    def test_notice_rejection_is_searchable_and_in_review_filter(self):
+        from desktop.table_model import COLUMNS
+        row = dict(CaseRecord('fixture', SOURCE_ETAX_LEGACY, trang_thai='Đã chấp nhận').to_dict(),
+                   _notice_state='rejected', _notices=[{'so_thong_bao': '123/TB', 'ly_do': 'Sai chỉ tiêu'}])
+        self.window.model.reset('tax', [row])
+        self.window.proxy_model.set_status_filter('review')
+        self.assertEqual(self.window.proxy_model.rowCount(), 1)
+        self.window.proxy_model.setFilterFixedString('123/TB')
+        self.assertEqual(self.window.proxy_model.rowCount(), 1)
+        self.window.proxy_model.setFilterFixedString('Sai chỉ tiêu')
+        self.assertEqual(self.window.proxy_model.rowCount(), 1)
+        self.window.proxy_model.set_status_filter('all')
+        self.window.proxy_model.setFilterFixedString('')
+        self.window.model.reset('tax', [dict(row, _notice_state='')])
+        column = next(i for i, (key, _) in enumerate(COLUMNS['tax']) if key == '_notice_state')
+        self.assertEqual(self.window.model.index(0, column).data(), 'Chưa xác định\nMở 1 tệp')
 
     def test_notice_menu_lists_and_opens_downloaded_xml(self):
         from desktop.table_model import COLUMNS

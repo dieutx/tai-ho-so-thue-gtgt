@@ -34,6 +34,7 @@ from .documents import (
     document_label,
     remote_document_id,
 )
+from .notices import REFERENCE_LABELS, STATE_LABELS
 from .state import TabState
 from .table_model import COLUMNS
 
@@ -299,7 +300,7 @@ class V2InteractionMixin:
         if not notices:
             menu.addAction('Chưa có tệp thông báo trong thư mục đã tải').setEnabled(False)
         for item in notices:
-            label = item.get('kind_label') or 'Thông báo'
+            label = STATE_LABELS.get(item.get('state'), 'Chưa xác định')
             number = item.get('so_thong_bao') or item.get('name') or ''
             path = item.get('path') or ''
             action = menu.addAction(f'{label} · {number}', lambda target=path: self.open_path(Path(target)))
@@ -353,15 +354,17 @@ class V2InteractionMixin:
             if self.mode == 'tax':
                 parts.append('<hr><h3>Thông báo của cơ quan thuế</h3>')
                 if not notices:
-                    parts.append('<p><span style="color:#67768C">Chưa có tệp XML đính kèm trong thư mục đã tải.</span></p>')
+                    parts.append('<p><span style="color:#67768C">Chưa có tệp thông báo trên máy; chưa kết luận cổng không có thông báo.</span></p>')
                 for item in notices:
                     title = ' · '.join(str(value) for value in
-                                       (item.get('kind_label'), item.get('so_thong_bao'), item.get('ngay_thong_bao')) if value)
+                                       (STATE_LABELS.get(item.get('state'), 'Chưa xác định'), item.get('so_thong_bao'), item.get('ngay_thong_bao')) if value)
                     color = '#C94242' if item.get('state') == 'rejected' else '#15805B' if item.get('state') == 'accepted' else '#67768C'
                     reason = (f'<br><span style="color:#C94242">{html.escape(item["ly_do"])}</span>'
                               if item.get('ly_do') else '')
+                    reference = REFERENCE_LABELS.get(item.get('reference_status'), '')
                     parts.append(f'<p><b style="color:{color}">{html.escape(title or item.get("name", ""))}</b>{reason}'
-                                 f'<br><span style="color:#67768C">{html.escape(item.get("name", ""))}</span></p>')
+                                 f'<br><span style="color:#67768C">{html.escape(item.get("relative_path") or item.get("name", ""))}'
+                                 f'<br>{html.escape(reference)}</span></p>')
         else:
             parts.append('<p>Chỉ phân tích XML cục bộ; không xác thực chữ ký số hoặc tính đúng của nghĩa vụ thuế.</p>')
         self.detail_text.setHtml(''.join(parts))
@@ -433,7 +436,7 @@ class V2InteractionMixin:
         menu = QMenu(self)
         menu.addAction('Xem chi tiết', self.details)
         if self.mode == 'tax' and row.get('_notices'):
-            menu.addAction('Mở thông báo XML…', lambda: (self.table.setCurrentIndex(index), self.open_notices(index)))
+            menu.addAction('Mở thông báo…', lambda: (self.table.setCurrentIndex(index), self.open_notices(index)))
         if self.mode != 'offline':
             if row.get('_file_status') == 'downloaded':
                 menu.addAction('Mở tệp', lambda: (self.details(), self.open_detail_file()))
