@@ -155,6 +155,23 @@ class ViewerTests(unittest.TestCase):
         self.assertFalse(viewer.open_button.isEnabled())
         self.assertIn('không còn tồn tại', viewer.readable.toPlainText())
 
+    def test_viewer_and_actions_fit_small_high_dpi_workarea(self):
+        from PySide6.QtCore import QRect
+        source = self.write('tb.xml', XML.encode())
+        viewer = self.viewer_class(None, asset(source), source_kind=OWNER_FEEDBACK,
+                                   summary=self.summary())
+        self.addCleanup(viewer.close)
+        viewer.show()
+        self.app.processEvents()
+        area = QRect(0, 0, 560, 360)
+        viewer.fit_screen(area)
+        self.app.processEvents()
+        self.assertTrue(area.contains(viewer.frameGeometry()))
+        for widget in [viewer.tabs, viewer.copy_button, viewer.save_button,
+                       viewer.open_button, viewer.close_button]:
+            self.assertTrue(widget.isVisible())
+            self.assertTrue(viewer.rect().contains(widget.mapTo(viewer, widget.rect().bottomRight())))
+
     def test_large_file_is_not_fully_read(self):
         source = self.write('big.xml', b'<a>' + b'x' * 100 + b'</a>')
         with patch('desktop.xml_viewer.MAX_VIEW_BYTES', 10):

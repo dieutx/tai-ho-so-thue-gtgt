@@ -808,18 +808,31 @@ class V2InteractionMixin:
                 file_status = old.get('_file_status', 'not_downloaded')
             row.update(_file_status=file_status, _file_state=FILE_LABELS[file_status])
             self.pending_rows[key] = {**old, **row}
-            self.model.reset(self.mode, list(self.pending_rows.values()))
+            self.progress_updates[key] = self.pending_rows[key]
+            if not self.progress_flush.isActive():
+                self.progress_flush.start()
             done = payload.get('downloaded', 0)
             target = len(self.active_config.target_ids) if self.active_config.target_ids is not None else payload.get('discovered', 0)
             self.status.setText('Đang tra cứu hồ sơ…' if self.active_config.dry_run else f'Đang tải {done}/{target} · Lỗi {payload.get("errors", 0)}')
             if self.active_config.target_ids:
                 self.progress.setRange(0, len(self.active_config.target_ids))
                 self.progress.setValue(done)
-            self.populate_result(self.result)
-            self.update_empty()
-            self.refresh_feedback_panel()
+
+    def flush_progress_rows(self):
+        if not self.progress_updates:
+            return
+        rows = list(self.progress_updates.values())
+        self.progress_updates.clear()
+        self.model.upsert_many(rows)
+        self.refresh_type_filter()
+        self.populate_result(self.result)
+        self.update_filtered_count()
+        self.update_empty()
+        self.refresh_feedback_panel()
 
     def on_completed(self, result):
+        self.progress_flush.stop()
+        self.flush_progress_rows()
         config, self.active_config = self.active_config, None
         self.last_task = result
         task_result = result

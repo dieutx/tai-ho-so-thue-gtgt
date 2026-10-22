@@ -16,17 +16,18 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QFontDatabase
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QFileDialog,
-    QHBoxLayout,
+    QGridLayout,
     QLabel,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QTabWidget,
     QTextBrowser,
     QVBoxLayout,
@@ -87,19 +88,21 @@ class XmlViewer(QDialog):
     def _build(self) -> None:
         self.setWindowTitle('Xem tài liệu')
         self.resize(980, 700)
-        self.setMinimumSize(640, 420)
         layout = QVBoxLayout(self)
         self.title_label = QLabel()
         self.title_label.setObjectName('viewerTitle')
         self.title_label.setWordWrap(True)
+        self.title_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.title_label.setToolTip(f'owner_kind={self.asset.owner_kind}\n'
                                     f'owner_key={self.asset.owner_key}\n'
                                     f'asset_key={self.asset.asset_key}')
         layout.addWidget(self.title_label)
         self.subtitle = QLabel()
         self.subtitle.setWordWrap(True)
+        self.subtitle.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout.addWidget(self.subtitle)
         self.tabs = QTabWidget()
+        self.tabs.setMinimumSize(0, 80)
         self.readable = QTextBrowser()
         self.readable.setOpenLinks(False)
         self.raw = QPlainTextEdit()
@@ -112,28 +115,42 @@ class XmlViewer(QDialog):
         self.identity = QLabel()
         self.identity.setObjectName('hint')
         self.identity.setWordWrap(True)
+        self.identity.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.identity.setText(f'Nguồn kỹ thuật: {self.asset.owner_kind} · {self.asset.asset_key}')
         layout.addWidget(self.identity)
-        actions = QHBoxLayout()
+        actions = QGridLayout()
         self.copy_button = QPushButton('Sao chép XML')
         self.copy_button.clicked.connect(self.copy_xml)
         self.save_button = QPushButton('Lưu XML')
         self.save_button.clicked.connect(self.save_file)
         self.open_button = QPushButton('Mở bằng ứng dụng mặc định')
         self.open_button.clicked.connect(self.open_external)
-        actions.addWidget(self.copy_button)
-        actions.addWidget(self.save_button)
-        actions.addWidget(self.open_button)
-        actions.addStretch()
-        close = QPushButton('Đóng')
-        close.setToolTip('Đóng cửa sổ xem tài liệu')
-        close.clicked.connect(self.reject)
-        actions.addWidget(close)
+        actions.addWidget(self.copy_button, 0, 0)
+        actions.addWidget(self.save_button, 0, 1)
+        actions.addWidget(self.open_button, 1, 0)
+        self.close_button = QPushButton('Đóng')
+        self.close_button.setToolTip('Đóng cửa sổ xem tài liệu')
+        self.close_button.clicked.connect(self.reject)
+        actions.addWidget(self.close_button, 1, 1)
         layout.addLayout(actions)
         if not self.is_xml:
             self.copy_button.setEnabled(False)
             self.save_button.setText('Lưu tệp')
             self.tabs.setTabText(1, 'Nội dung gốc')
+
+    def fit_screen(self, area=None) -> None:
+        area = (area or self.screen().availableGeometry()).adjusted(8, 8, -8, -8)
+        frame = self.frameGeometry()
+        extra_w, extra_h = frame.width() - self.width(), frame.height() - self.height()
+        self.resize(min(self.width(), area.width() - extra_w),
+                    min(self.height(), area.height() - extra_h))
+        frame = self.frameGeometry()
+        self.move(max(area.left(), min(frame.left(), area.right() - frame.width() + 1)),
+                  max(area.top(), min(frame.top(), area.bottom() - frame.height() + 1)))
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, self.fit_screen)
 
     def _header(self) -> None:
         number, details, result = _summary_parts(self.summary) if self.summary is not None else ('', '', '')

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Bản test 2.0.2: cập nhật từng hồ sơ và gom tiến độ theo nhịp 100 ms để
+  không reset toàn bộ bảng khi tải; giữ dòng chọn, checkbox và proxy index.
+- XML Viewer tự vừa vùng làm việc, xếp nút thành hai hàng; smoke EXE kiểm
+  tra thêm cửa sổ XML ở toàn bộ 18 cấu hình kích thước/DPI.
+
 - Thêm **Xóa bộ lọc** (`Ctrl+Shift+F`), giữ lựa chọn tải và báo rõ số tệp đã
   chọn đang bị bộ lọc ẩn; tách hàng tìm kiếm/bộ lọc/thao tác ở cửa sổ nhỏ.
 - Sửa nguồn XML nhập tay còn giữ danh sách tệp đã chọn trước đó; giải thích

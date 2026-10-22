@@ -190,6 +190,28 @@ def ui_check(application, window, output: Path, size: str) -> None:
         if not available.contains(window.frameGeometry()):
             errors.append(f"{name}: frame outside simulated workarea")
         window.grab().save(str(output / f"{name}-{physical_w}x{physical_h}-{scale}.png"))
-    (output / f"check-{physical_w}x{physical_h}-{scale}.json").write_text(json.dumps({"pass": not errors, "logical_workarea": [width, height], "client_size": [window.width(), window.height()], "errors": errors}, indent=2), encoding="utf-8")
+    from .domain import OWNER_FEEDBACK, DocumentAsset
+    from .xml_viewer import XmlViewer
+    fixture = output / 'xml-viewer-fixture.xml'
+    fixture.write_text('<TBaoThueDTu><soTBao>DEMO-UI</soTBao></TBaoThueDTu>', encoding='utf-8')
+    asset = DocumentAsset(asset_key='ui-fixture', owner_kind=OWNER_FEEDBACK,
+                          owner_key='ui-submission', path_or_handle=str(fixture),
+                          original_filename=fixture.name, content_type='application/xml')
+    viewer = XmlViewer(window, asset, source_kind=OWNER_FEEDBACK)
+    viewer.show()
+    application.processEvents()
+    viewer.fit_screen(available)
+    application.processEvents()
+    if not available.contains(viewer.frameGeometry()):
+        errors.append('xml-viewer: frame outside simulated workarea')
+    for control in [viewer.tabs, viewer.copy_button, viewer.save_button,
+                    viewer.open_button, viewer.close_button]:
+        if (not control.isVisible()
+                or not viewer.rect().contains(control.mapTo(viewer, control.rect().topLeft()))
+                or not viewer.rect().contains(control.mapTo(viewer, control.rect().bottomRight()))):
+            errors.append('xml-viewer: clipped or hidden required control')
+    viewer.grab().save(str(output / f'xml-viewer-{physical_w}x{physical_h}-{scale}.png'))
+    viewer.close()
+    (output / f"check-{physical_w}x{physical_h}-{scale}.json").write_text(json.dumps({"pass": not errors, "logical_workarea": [width, height], "client_size": [window.width(), window.height()], "xml_viewer_checked": True, "errors": errors}, indent=2), encoding="utf-8")
     window.close()
     application.exit(1 if errors else 0)

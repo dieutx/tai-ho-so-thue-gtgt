@@ -295,6 +295,11 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         self.applying_preset = False
         self.source_files = ()
         self.pending_rows = {}
+        self.progress_updates = {}
+        self.progress_flush = QTimer(self)
+        self.progress_flush.setSingleShot(True)
+        self.progress_flush.setInterval(100)
+        self.progress_flush.timeout.connect(self.flush_progress_rows)
         self.history = []
         self.last_task = None
         self._initializing = True
@@ -775,6 +780,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             if config.mode not in {"offline", "saved"}:
                 config.settings()
             if self.controller.start(config):
+                self.progress_flush.stop()
+                self.progress_updates.clear()
                 self.progress.setRange(0, 0)
                 self.progress.setValue(0)
                 self.active_config = config

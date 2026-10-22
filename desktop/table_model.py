@@ -52,16 +52,50 @@ class RecordsModel(QAbstractTableModel):
         self.rows: list[dict] = []
         self.mode = 'tax'
         self.checked: set[str] = set()
+        self._row_by_id: dict[str, int] = {}
         self.can_download = False
 
     def reset(self, mode: str, rows: list[dict]) -> None:
         self.beginResetModel()
         self.mode, self.rows = mode, rows
-        for row in rows:
+        self._row_by_id = {}
+        for index, row in enumerate(rows):
             row['_search_blob'] = self._search_blob(row)
+            if key := document_id(mode, row):
+                self._row_by_id[key] = index
         self.checked.clear()
         self.endResetModel()
         self.selection_changed.emit()
+
+    def upsert_many(self, rows: list[dict]) -> None:
+        """Update stable record identities without resetting selection or indexes."""
+        updates = {}
+        for row in rows:
+            key = document_id(self.mode, row)
+            if not key:
+                raise ValueError('Hồ sơ cập nhật thiếu định danh')
+            updates[key] = {**updates.get(key, {}), **row}
+        changed = []
+        added = []
+        for key, row in updates.items():
+            index = self._row_by_id.get(key)
+            if index is None:
+                current = dict(row)
+                added.append((key, current))
+            else:
+                current = {**self.rows[index], **row}
+                self.rows[index] = current
+                changed.append(index)
+            current['_search_blob'] = self._search_blob(current)
+        for index in sorted(changed):
+            self.dataChanged.emit(self.index(index, 0), self.index(index, self.columnCount() - 1))
+        if added:
+            first = len(self.rows)
+            self.beginInsertRows(EMPTY, first, first + len(added) - 1)
+            for key, row in added:
+                self._row_by_id[key] = len(self.rows)
+                self.rows.append(row)
+            self.endInsertRows()
 
     @staticmethod
     def _search_blob(row: dict) -> str:
