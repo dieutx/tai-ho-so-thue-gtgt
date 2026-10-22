@@ -34,7 +34,7 @@ from .documents import (
     document_label,
     remote_document_id,
 )
-from .notices import REFERENCE_LABELS, STATE_LABELS
+from .notices import REFERENCE_LABELS, STATE_LABELS, attachment_totals, row_attachment_problem
 from .state import TabState
 from .table_model import COLUMNS
 
@@ -302,13 +302,32 @@ class V2InteractionMixin:
         for item in notices:
             label = STATE_LABELS.get(item.get('state'), 'Chưa xác định')
             number = item.get('so_thong_bao') or item.get('name') or ''
-            path = item.get('path') or ''
-            action = menu.addAction(f'{label} · {number}', lambda target=path: self.open_path(Path(target)))
+            action = menu.addAction(f'{label} · {number}', lambda notice=dict(item): self.open_notice(notice))
             action.setToolTip(item.get('ly_do') or item.get('ten_thong_bao') or '')
         if notices:
             menu.addSeparator()
-            menu.addAction('Mở thư mục thông báo', lambda folder=str(Path(notices[0]['path']).parent): self.open_path(Path(folder)))
+            menu.addAction('Mở thư mục thông báo', lambda notice=dict(notices[0]): self.open_notice(notice, folder=True))
         return menu
+
+    def open_notice(self, notice, *, folder=False):
+        value = notice.get('path')
+        if not value:
+            self.error('Chưa có tệp thông báo trên máy; hãy tải lại thông báo của tờ khai.')
+            return
+        path = Path(value)
+        target = path.parent if folder else path
+        if not (target.is_dir() if folder else target.is_file()):
+            self.error('Tệp thông báo đã bị xóa hoặc di chuyển; hãy kiểm tra nơi lưu hoặc tải lại.')
+            return
+        self.open_path(target)
+
+    def open_notice_link(self, url):
+        if url.scheme() not in {'notice-file', 'notice-folder'} or not url.path().isdigit():
+            return
+        notices = (self.detail_row or {}).get('_notices') or []
+        index = int(url.path())
+        if index < len(notices):
+            self.open_notice(notices[index], folder=url.scheme() == 'notice-folder')
 
     def open_notices(self, index):
         """Mở menu thông báo của dòng đang chọn tại ô vừa bấm."""
@@ -353,9 +372,11 @@ class V2InteractionMixin:
             notices = row.get('_notices') or []
             if self.mode == 'tax':
                 parts.append('<hr><h3>Thông báo của cơ quan thuế</h3>')
+                if problem := row_attachment_problem(row):
+                    parts.append(f'<p style="color:#93631B">{html.escape(problem)}</p>')
                 if not notices:
                     parts.append('<p><span style="color:#67768C">Chưa có tệp thông báo trên máy; chưa kết luận cổng không có thông báo.</span></p>')
-                for item in notices:
+                for notice_index, item in enumerate(notices):
                     title = ' · '.join(str(value) for value in
                                        (STATE_LABELS.get(item.get('state'), 'Chưa xác định'), item.get('so_thong_bao'), item.get('ngay_thong_bao')) if value)
                     color = '#C94242' if item.get('state') == 'rejected' else '#15805B' if item.get('state') == 'accepted' else '#67768C'
@@ -364,7 +385,9 @@ class V2InteractionMixin:
                     reference = REFERENCE_LABELS.get(item.get('reference_status'), '')
                     parts.append(f'<p><b style="color:{color}">{html.escape(title or item.get("name", ""))}</b>{reason}'
                                  f'<br><span style="color:#67768C">{html.escape(item.get("relative_path") or item.get("name", ""))}'
-                                 f'<br>{html.escape(reference)}</span></p>')
+                                 f'<br>{html.escape(reference)}</span>'
+                                 f'<br><a href="notice-file:{notice_index}">Mở thông báo</a>'
+                                 f' · <a href="notice-folder:{notice_index}">Mở thư mục chứa tệp</a></p>')
         else:
             parts.append('<p>Chỉ phân tích XML cục bộ; không xác thực chữ ký số hoặc tính đúng của nghĩa vụ thuế.</p>')
         self.detail_text.setHtml(''.join(parts))
@@ -595,6 +618,13 @@ class V2InteractionMixin:
                  f'<p>Phát hiện {result.discovered} · Yêu cầu tải {result.requested} · Tệp hoàn tất trong tác vụ {result.downloaded} · Đã có hợp lệ {result.reused} · Lỗi {result.errors}</p>',
                  f'<p>Đoạn/nguồn chưa xử lý: {result.skipped}. Tệp đã có hợp lệ được giữ; không gộp bỏ qua nguồn thành tệp tải thành công.</p>',
                  f'<p>Nơi lưu: {html.escape(str(result.output))}</p>']
+        attachments = getattr(result, 'attachment_results', {})
+        if attachments:
+            totals = attachment_totals(attachments)
+            parts.append('<h4>Thông báo cơ quan thuế đính kèm</h4>'
+                         f'<p>Phát hiện {totals["discovered"]} · Tải mới {totals["downloaded"]}'
+                         f' · Có sẵn {totals["reused"]} · Lỗi tải {totals["failed"]}'
+                         f' · Chưa đọc được danh sách {totals["discovery_failed"]} hồ sơ</p>')
         for issue in result.issues:
             parts.append(f'<p><b>{html.escape(document_label(issue.get("document_id") or ""))}</b><br>{html.escape(issue.get("message", ""))}</p>')
         body.setHtml(''.join(parts))
@@ -688,7 +718,10 @@ class V2InteractionMixin:
         hidden = {'source_zip'} if self.mode == 'offline' and width < 1100 else set()
         if width < 900:
             hidden.update({'ky_tinh_thue', 'so_tien', 'form_version'})
-        self.table.verticalHeader().setDefaultSectionSize(28 if height < 400 else 35 if self.ultra else 43)
+        row_height = 28 if height < 400 else 35 if self.ultra else 43
+        if self.mode == 'tax':
+            row_height = max(row_height, self.table.fontMetrics().lineSpacing() * 2 + 6)
+        self.table.verticalHeader().setDefaultSectionSize(row_height)
         for index, (key, _) in enumerate(columns):
             self.table.setColumnHidden(index, key in hidden)
             self.table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeMode.Interactive)

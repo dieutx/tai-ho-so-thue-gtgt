@@ -4,6 +4,7 @@ from __future__ import annotations
 import errno
 import hashlib
 import importlib.util
+import json
 import logging
 import os
 import tempfile
@@ -229,6 +230,30 @@ class DocumentStateTests(unittest.TestCase):
         self.assertEqual(RecordKey.parse(result.issues[0]['document_id']).remote_id, '900000001')
         self.assertIn('HTTP 500', result.issues[0]['message'])
 
+    def test_primary_completion_does_not_hide_failed_tax_notices(self):
+        from tests.support import FakeResponse, route_of
+        from tests.test_dvc_notices import DETAIL_HTML
+        from tests.test_pipeline import dvc_search, make_handler
+        base = make_handler(search=dvc_search)
+
+        def handler(method, path, kwargs):
+            route = route_of(path)
+            if route.startswith('/tchs/files/detail/'):
+                return FakeResponse(DETAIL_HTML)
+            if route == '/tchs/downloadthongbao':
+                return FakeResponse(status_code=429)
+            return base(method, path, kwargs)
+
+        config = RunConfig('tax', self.root, username='fixture-user', password='fixture-secret',
+                           preferences=self.prefs, dvc=True, from_date='01/01/2026', to_date='31/01/2026')
+        result = run_online(config, RunHooks(), StubCaptcha(), logging.getLogger('gdt_tax.test'), http=FakeHttp(handler))
+        self.assertEqual(result.state, 'PARTIAL', result.message)
+        self.assertEqual(result.downloaded, 2)
+        self.assertEqual(result.errors, 0)
+        self.assertIn('thông báo cơ quan thuế chưa đầy đủ', result.message)
+        self.assertEqual(len(result.issues), 2)
+        self.assertTrue(all('HTTP 429' in issue['message'] for issue in result.issues))
+
     def test_gui_resume_keeps_original_zip_filename(self):
         from gdt_tax.ownership import check_owner
         check_owner(self.root, account_fingerprint('fixture-user'), create=True)
@@ -385,6 +410,30 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.assertFalse(self.window.detail_notices.isHidden())
         self.assertTrue(self.window.detail_notices.isEnabled())
         self.assertEqual(self.window.detail_notices.text(), 'Mở thông báo (1)')
+        self.assertIn('notice-file:0', self.window.detail_text.toHtml())
+        self.assertIn('Mở thông báo', self.window.detail_text.toPlainText())
+        from PySide6.QtCore import QUrl
+        with patch.object(self.window, 'open_path') as opener:
+            self.window.detail_text.anchorClicked.emit(QUrl('notice-file:0'))
+        opener.assert_called_once_with(notice)
+        with patch.object(self.window, 'open_path') as opener:
+            self.window.detail_text.anchorClicked.emit(QUrl('notice-folder:0'))
+        opener.assert_called_once_with(notice.parent)
+        notice.unlink()
+        with patch.object(self.window, 'open_path') as opener, patch.object(self.window, 'error') as error:
+            self.window.detail_text.anchorClicked.emit(QUrl('notice-file:0'))
+        opener.assert_not_called()
+        error.assert_called_once()
+
+    def test_missing_attachments_are_visible_in_notice_column(self):
+        from desktop.table_model import COLUMNS
+        row = dict(CaseRecord('fixture', SOURCE_ETAX_LEGACY).to_dict(), attachment_result=json.dumps({
+            'status': 'PARTIAL', 'discovered': 2, 'failed': 2, 'items': [{'code': 'ATTACHMENT_RATE_LIMITED'}]}))
+        self.window.model.reset('tax', [row])
+        column = next(i for i, (key, _) in enumerate(COLUMNS['tax']) if key == '_notice_state')
+        self.assertEqual(self.window.model.index(0, column).data(), 'Tải thông báo lỗi\nXem chi tiết')
+        from PySide6.QtCore import Qt
+        self.assertIn('HTTP 429', self.window.model.index(0, column).data(Qt.ItemDataRole.ToolTipRole))
 
     def test_stale_proxy_index_is_rejected_instead_of_crashing(self):
         rows = [CaseRecord(str(i), SOURCE_ETAX_LEGACY, to_khai=f'fixture {i}').to_dict() for i in range(4)]

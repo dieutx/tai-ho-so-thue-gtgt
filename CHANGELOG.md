@@ -2,6 +2,12 @@
 
 ## [2.0.4] — 2026-10-22
 
+- Tải thông báo DVC khi HTTP 429: cho phép retry riêng thao tác chỉ đọc này,
+  chờ Retry-After và thử lại ít nhất 5 lần sau lượt đầu; vẫn chịu timeout,
+  budget và hủy an toàn. Không bật retry cho các POST đăng nhập/nghiệp vụ khác.
+- Thêm liên kết mở từng thông báo/thư mục ngay trong chi tiết tờ khai; tổng
+  kết tách lỗi thông báo khỏi ZIP và chỉ rõ hồ sơ còn thiếu thông báo.
+
 - Rà soát thông báo theo tờ khai: đối chiếu khóa hồ sơ cha/checksum, sửa
   bộ lọc/tìm kiếm, đọc lý do lồng trong XML, giữ trạng thái chưa hiểu là chưa
   xác định; bổ sung sheet tham chiếu thông báo trong báo cáo Excel.

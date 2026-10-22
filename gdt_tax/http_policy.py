@@ -35,10 +35,13 @@ class OperationPolicy:
     name: str = "portal"
     max_bytes: int = 64 * 1024 * 1024
     retry_safe: bool = False
+    minimum_attempts: int = 1
 
     def __post_init__(self):
         if self.max_bytes < 1:
             raise ValueError("HTTP byte limit must be positive")
+        if not isinstance(self.minimum_attempts, int) or not 1 <= self.minimum_attempts <= 10 or self.minimum_attempts > 1 and not self.retry_safe:
+            raise ValueError('Additional attempts require an explicitly retry-safe operation')
 
 
 PAGE_OPERATION = OperationPolicy("page", 8 * 1024 * 1024)

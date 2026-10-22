@@ -27,6 +27,7 @@ from gdt_tax.tb.storage import write_tb_metadata
 from .documents import KINDS, document_id, verify_rows
 from .errors import storage_message
 from .file_store import DesktopZipStore
+from .notices import attachment_problem
 from .settings_store import Preferences, check_writable_directory
 
 
@@ -185,6 +186,10 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
         result.message = "Tra cứu hoàn tất" if config.dry_run else "Thành công"
         if not complete:
             result.message = "Chưa đầy đủ — có hồ sơ hoặc đoạn ngày bị bỏ qua"
+            primary_complete = (set(pipeline.target_ids or ()).issubset(pipeline.downloaded_ids)
+                                if config.target_ids is not None else getattr(summary, 'primary_complete', False))
+            if primary_complete and not getattr(summary, 'attachments_complete', True):
+                result.message = 'Đã tải tệp hồ sơ chính; thông báo cơ quan thuế chưa đầy đủ'
         elif summary.discovered == 0:
             result.message = "Không có kết quả"
     except RunCancelled:
@@ -253,6 +258,9 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     result.issues = [{"document_id": document_id(config.mode, row), "message": row["_error_message"]}
                      for row in result.rows if row.get("_error_message")]
     result.issues.extend({"document_id": key, "message": "Hồ sơ không còn trong kết quả tra cứu của kỳ đã chọn; chưa tải tệp."} for key in sorted(missing))
+    for key, value in result.attachment_results.items():
+        if message := attachment_problem(value):
+            result.issues.append({'document_id': key, 'message': message})
     if result.state in {"ERROR", "PARTIAL"} and not result.issues:
         result.issues.append({"document_id": "", "message": result.message})
     # Only advertise reports actually produced by this job.

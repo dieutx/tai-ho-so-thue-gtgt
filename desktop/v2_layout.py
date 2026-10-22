@@ -308,6 +308,8 @@ def build_workspace(window):
     drawer.addLayout(heading)
     self.detail_text = QTextBrowser()
     self.detail_text.setOpenExternalLinks(False)
+    self.detail_text.setOpenLinks(False)
+    self.detail_text.anchorClicked.connect(self.open_notice_link)
     drawer.addWidget(self.detail_text, 1)
     tools = QHBoxLayout()
     tools.addWidget(button('Sao chép mã', self.copy_document_id))

@@ -26,6 +26,8 @@ from gdt_tax.dvc_notices import (
     notice_filename,
     parse_notices,
 )
+from gdt_tax.errors import AttachmentDownloadError
+from gdt_tax.http import HttpClient
 from gdt_tax.pipeline import Pipeline
 from gdt_tax.portals.dvc import DvcPortal
 from gdt_tax.storage import ZipStore
@@ -152,6 +154,47 @@ class NoticeStoreTests(unittest.TestCase):
 
 
 class NoticePortalTests(unittest.TestCase):
+    def test_rate_limited_read_only_notice_retries_five_times_then_succeeds(self):
+        from unittest.mock import patch
+
+        from tests.test_http import FakeSession
+        payload = {'fileName': 'notice.xml', 'fileType': 'xml', 'content': NOTICE_B64}
+        session = FakeSession([FakeResponse(status_code=429, headers={'Retry-After': '2'}) for _ in range(5)]
+                              + [FakeResponse(json_payload=payload)])
+        http = HttpClient(session=session, retries=1, min_backoff=0)
+        portal = DvcPortal(http, StubCaptcha(), SimpleNamespace(header_profile='minimal'))
+        with patch.object(http.hooks, 'pause') as pause:
+            notice = portal.download_notice(parse_notices(DETAIL_HTML)[0], 'https://example.test/detail', 'csrf')
+        self.assertEqual(notice.data, NOTICE_XML)
+        self.assertEqual(len(session.calls), 6)
+        self.assertEqual(pause.call_count, 5)
+        self.assertTrue(all(call.args == (2.0,) for call in pause.call_args_list))
+
+    def test_rate_limit_exhaustion_has_attachment_specific_error_and_stops(self):
+        from unittest.mock import patch
+
+        from tests.test_http import FakeSession
+        session = FakeSession([FakeResponse(status_code=429) for _ in range(6)])
+        http = HttpClient(session=session, retries=1)
+        portal = DvcPortal(http, StubCaptcha(), SimpleNamespace(header_profile='minimal'))
+        with patch.object(http.hooks, 'pause') as pause, self.assertRaises(AttachmentDownloadError) as caught:
+            portal.download_notice(parse_notices(DETAIL_HTML)[0], 'https://example.test/detail', 'csrf')
+        self.assertEqual(caught.exception.code, 'ATTACHMENT_RATE_LIMITED')
+        self.assertEqual(len(session.calls), 6)
+        self.assertEqual(pause.call_count, 5)
+
+    def test_notice_wait_remains_cancellable_without_sending_another_request(self):
+        from unittest.mock import patch
+
+        from gdt_tax.run_hooks import RunCancelled
+        from tests.test_http import FakeSession
+        session = FakeSession([FakeResponse(status_code=429)])
+        http = HttpClient(session=session, retries=1)
+        portal = DvcPortal(http, StubCaptcha(), SimpleNamespace(header_profile='minimal'))
+        with patch.object(http.hooks, 'pause', side_effect=RunCancelled()), self.assertRaises(RunCancelled):
+            portal.download_notice(parse_notices(DETAIL_HTML)[0], 'https://example.test/detail', 'csrf')
+        self.assertEqual(len(session.calls), 1)
+
     def test_posts_id_and_csrf_for_each_endpoint(self):
         def handler(method, path, kwargs):
             route = route_of(path)

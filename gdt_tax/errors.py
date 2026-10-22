@@ -52,6 +52,14 @@ class DownloadError(GdtError):
     """Không tải được hồ sơ."""
 
 
+class AttachmentDownloadError(DownloadError):
+    """An attachment request failed without invalidating the primary file."""
+
+    def __init__(self, code: str, message: str):
+        self.code = code
+        super().__init__(message)
+
+
 class StorageError(GdtError):
     """Không đọc/ghi được file hoặc metadata; giữ nguyên dữ liệu cũ khi lỗi."""
 

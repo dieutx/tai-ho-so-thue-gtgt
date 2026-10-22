@@ -169,7 +169,7 @@ class HttpClient:
             kwargs.setdefault("proxies", self.proxy.proxies())
 
         response: requests.Response | None = None
-        attempts = self.retries if operation.retry_safe else 1
+        attempts = max(self.retries, operation.minimum_attempts) if operation.retry_safe else 1
         for attempt in range(1, attempts + 1):
             self.hooks.check()
             self._log_request(method, url, sent_headers, params, payload, attempt)
@@ -213,7 +213,7 @@ class HttpClient:
                 "Máy chủ giới hạn tần suất (HTTP 429); chờ %s giây rồi thử lại (lần %s/%s)...",
                 delay,
                 attempt + 1,
-                self.retries,
+                attempts,
             )
             self.hooks.pause(delay)
         assert response is not None  # vòng lặp luôn chạy ít nhất một lần

@@ -26,6 +26,13 @@ REFERENCE_LABELS = {'VERIFIED': 'Đã đối chiếu tham chiếu và checksum',
                     'LEGACY_UNVERIFIED': 'Tệp cũ; chưa xác minh tham chiếu',
                     'NOT_CHECKED': 'Chưa đối chiếu checksum; tệp lớn',
                     'INVALID': 'Tệp hoặc tham chiếu không khớp; cần kiểm tra'}
+ATTACHMENT_MESSAGES = {
+    'ATTACHMENT_RATE_LIMITED': 'Cổng giới hạn tần suất tải (HTTP 429); hãy thử tải lại sau.',
+    'ATTACHMENT_HTTP_ERROR': 'Cổng chưa trả thành công tệp thông báo.',
+    'ATTACHMENT_INVALID_OR_SAVE_FAILED': 'Cổng chưa trả tệp hợp lệ hoặc chưa lưu được thông báo.',
+    'ATTACHMENT_SCHEMA_UNKNOWN': 'Chưa đọc đầy đủ danh sách thông báo của hồ sơ.',
+    'ATTACHMENT_CSRF_MISSING': 'Chưa lấy được phiên tải thông báo; hãy thử lại.',
+}
 KIND_LABELS = {"tiep-nhan": "Tiếp nhận", "chap-nhan": "Chấp nhận",
                "khong-chap-nhan": "Không chấp nhận", "khac": "Thông báo"}
 _FIELDS = {"maTBao": "ma_thong_bao", "tenTBao": "ten_thong_bao", "soTBao": "so_thong_bao",
@@ -201,6 +208,30 @@ def notice_summary(notices: list[dict]) -> str:
 
 def is_rejected(row: dict) -> bool:
     return row.get("_notice_state") == REJECTED
+
+
+def attachment_totals(results: dict) -> dict[str, int]:
+    names = ('discovered', 'downloaded', 'reused', 'failed', 'discovery_failed')
+    return {name: sum(value.get(name, 0) for value in results.values()) for name in names}
+
+
+def attachment_problem(value: dict) -> str:
+    if not value or value.get('status') in {'COMPLETE', 'EMPTY_CONFIRMED', 'NOT_APPLICABLE'}:
+        return ''
+    completed = value.get('downloaded', 0) + value.get('reused', 0)
+    message = f"Thông báo chưa đầy đủ: đã có {completed}/{value.get('discovered', 0)} tệp; lỗi tải {value.get('failed', 0)}."
+    codes = dict.fromkeys(item.get('code') for item in value.get('items', []) if item.get('code'))
+    return ' '.join([message] + [ATTACHMENT_MESSAGES.get(code, 'Thông báo chưa xử lý được (' + code + ').') for code in codes])
+
+
+def row_attachment_problem(row: dict) -> str:
+    value = row.get('attachment_result') or {}
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return 'Chưa đọc được kết quả tải thông báo; hãy kiểm tra lại.'
+    return attachment_problem(value) if isinstance(value, dict) else ''
 
 
 __all__ = [

@@ -15,7 +15,7 @@ from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QCheckBox, QHeaderView
 
 from .documents import FILE_LABELS, display_amount, document_id, event_datetime, needs_review
-from .notices import STATE_LABELS
+from .notices import STATE_LABELS, row_attachment_problem
 
 COLUMNS = {
     'tax': [('_selected', 'Chọn'), ('to_khai', 'Hồ sơ / Tờ khai'), ('ky_tinh_thue', 'Kỳ tính thuế'),
@@ -91,9 +91,10 @@ class RecordsModel(QAbstractTableModel):
                 return '\n'.join(str(row.get(k) or '') for k in ['_file_state', '_file_path', '_file_reason', '_error_message']).strip()
             if key == '_notice_state':
                 notices = row.get('_notices') or []
+                problem = row_attachment_problem(row)
                 if not notices:
-                    return 'Chưa có tệp thông báo đính kèm trên máy; chưa kết luận cổng không có thông báo'
-                return 'Bấm để mở danh sách thông báo:\n' + '\n'.join(f"{STATE_LABELS.get(item.get('state'), 'Chưa xác định')}: "
+                    return problem or 'Chưa có tệp thông báo đính kèm trên máy; chưa kết luận cổng không có thông báo'
+                return (problem + '\n' if problem else '') + 'Bấm để mở danh sách thông báo:\n' + '\n'.join(f"{STATE_LABELS.get(item.get('state'), 'Chưa xác định')}: "
                                  f"{item.get('so_thong_bao') or item.get('name', '')}"
                                  + (f" — {item['ly_do']}" if item.get('ly_do') else '')
                                  for item in notices)
@@ -110,6 +111,8 @@ class RecordsModel(QAbstractTableModel):
             if key == '_file_status':
                 return QColor({'downloaded': '#15805B', 'failed': '#C94242'}.get(row.get(key), '#67768C'))
             if key == '_notice_state':
+                if row_attachment_problem(row):
+                    return QColor('#93631B')
                 return QColor(NOTICE_COLORS.get(row.get(key), '#94A3B8'))
             if key == 'trang_thai' and row.get('_notice_state') == 'rejected':
                 return QColor('#C94242')
@@ -128,6 +131,8 @@ class RecordsModel(QAbstractTableModel):
         if key == '_notice_state':
             state = row.get(key)
             count = len(row.get('_notices') or [])
+            if row_attachment_problem(row):
+                return f'Còn thiếu thông báo\nMở {count} tệp' if count else 'Tải thông báo lỗi\nXem chi tiết'
             if not count:
                 return '—'
             return f"{STATE_LABELS.get(state, 'Chưa xác định')}\nMở {count} tệp"

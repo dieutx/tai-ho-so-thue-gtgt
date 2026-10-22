@@ -16,6 +16,8 @@ from ..constants import (
 )
 from ..dates import format_date
 from ..dvc_notices import decode_notice_response, parse_notice_list
+from ..errors import AttachmentDownloadError
+from ..http_policy import DOWNLOAD_OPERATION, OperationPolicy
 from ..models import CaseRecord, PageResult, SearchPeriod
 from .base import Portal
 
@@ -117,12 +119,20 @@ class DvcPortal(Portal):
     def download_notice(self, notice, detail_url: str, csrf: str):
         path = '/tchs/downloadthongbao-tdt' if notice.is_tdt else '/tchs/downloadthongbao'
         response = self.http.post(path,
+            operation=OperationPolicy('notice-download', DOWNLOAD_OPERATION.max_bytes,
+                                      retry_safe=True, minimum_attempts=6),
             params={'loaiTraCuu': notice.loai_tra_cuu} if notice.is_tdt else None,
             json={'idTbao': notice.id, 'loaiTBao': notice.loai_tbao},
             headers=self.xhr_headers(headers={'Content-Type': 'application/json',
                 'Origin': ORIGIN, 'Referer': detail_url, 'X-Requested-With': 'XMLHttpRequest',
                 'X-XSRF-TOKEN': csrf}))
         raise_terminal(response, 'DVC', authenticated=True)
+        if response.status_code == 429:
+            raise AttachmentDownloadError('ATTACHMENT_RATE_LIMITED',
+                'Cổng đang giới hạn tải thông báo (HTTP 429); đã chờ và thử lại theo giới hạn. Tệp hồ sơ chính được giữ nguyên.')
+        if response.status_code != 200:
+            raise AttachmentDownloadError('ATTACHMENT_HTTP_ERROR',
+                f'Cổng trả HTTP {response.status_code} khi tải thông báo; tệp hồ sơ chính được giữ nguyên.')
         return decode_notice_response(response)
 
 
