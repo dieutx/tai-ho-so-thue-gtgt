@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.support import cleanup_temporary_directory
+
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 HAS_QT = importlib.util.find_spec('PySide6') is not None
 
@@ -39,7 +41,7 @@ def row(case: str, notices: list[dict], **extra) -> dict:
 class ReconciliationRowsTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.addCleanup(cleanup_temporary_directory, self.temp)
         self.root = Path(self.temp.name)
 
     def test_one_row_per_feedback_and_empty_state(self):

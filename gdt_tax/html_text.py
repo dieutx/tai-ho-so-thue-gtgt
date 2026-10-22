@@ -1,12 +1,12 @@
 """Visible HTML text for control messages, without mutating the parsed tree."""
 from __future__ import annotations
 
-from bs4 import Comment, NavigableString, Tag
+from bs4 import Comment, NavigableString, PageElement, Tag
 
 
 def visible_text(scope: Tag, *, include_hidden_root: bool = False) -> str:
-    parts = []
-    stack = [scope]
+    parts: list[str] = []
+    stack: list[PageElement] = [scope]
     while stack:
         node = stack.pop()
         if isinstance(node, Tag):

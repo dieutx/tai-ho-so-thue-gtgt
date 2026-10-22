@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+- Thêm **Xóa bộ lọc** (`Ctrl+Shift+F`), giữ lựa chọn tải và báo rõ số tệp đã
+  chọn đang bị bộ lọc ẩn; tách hàng tìm kiếm/bộ lọc/thao tác ở cửa sổ nhỏ.
+- Sửa nguồn XML nhập tay còn giữ danh sách tệp đã chọn trước đó; giải thích
+  ngày đảo ngược, nguồn trống và nơi lưu không hợp lệ trước khi chạy tác vụ.
+- Giữ kết quả các nhóm đã hoàn thành khi một nhóm tải liên tiếp gặp lỗi thư mục;
+  không kết luận "không có hồ sơ" khi tra cứu bị dừng hoặc chưa đầy đủ.
+- Sửa lỗi typecheck HTML; thêm CI Windows chạy test Qt cho mỗi PR.
+  Chi tiết và ảnh: [review UX](docs/UX_REVIEW_20261022.md).
+
 ## [2.0.1] — 2026-10-22
 
 Bản phát hành công khai kế tiếp sau 2.0.0; gộp các bản nội bộ 2.0.1–2.0.4 và bộ UX mới.

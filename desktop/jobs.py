@@ -203,9 +203,10 @@ class Worker(QObject):
                     if self.config.mode == "batch":
                         result = JobResult("SUCCESS", "Đã hoàn tất các tác vụ", self.config.output)
                         for mode in self.config.batch_modes:
-                            config = replace(self.config, mode=mode, output=job_output(self.config.output, self.config.username, mode))
+                            config = replace(self.config, mode=mode)
                             try:
                                 hooks.check()
+                                config = replace(config, output=job_output(self.config.output, self.config.username, mode))
                                 hooks.emit(active_mode=mode)
                                 config.validate()
                                 child = self.sessions.execute(config, hooks, solver, logger)

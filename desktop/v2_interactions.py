@@ -184,6 +184,21 @@ class V2InteractionMixin:
         visible = self.proxy_model.rowCount()
         self.filtered_label.setText(f'Hiển thị {visible}/{total}' if total else '')
         self.filtered_label.setVisible(bool(total))
+        self.reset_filters_button.setEnabled(bool(
+            self.search.text() or self.proxy_model.status_filter != 'all'
+            or self.mode == 'tax' and self.proxy_model.cqt_filter != 'all'
+            or self.mode == 'notice' and self.proxy_model.type_filter))
+        if hasattr(self, 'selection_bar'):
+            self.selection_changed()
+
+    def reset_filters(self):
+        """Khôi phục toàn bộ danh sách của tab; giữ kết quả và lựa chọn tải."""
+        self.search.clear()
+        self.file_filter.setCurrentIndex(0)
+        self.cqt_filter.setCurrentIndex(0)
+        self.type_filter.setCurrentIndex(0)
+        self.update_filtered_count()
+        self.update_empty()
 
     def refresh_type_filter(self, *_args):
         """Nạp loại thông báo thực có trong tab; không bịa nhóm không có dữ liệu."""
@@ -256,7 +271,15 @@ class V2InteractionMixin:
     def selection_changed(self):
         count = len(self.model.checked)
         self.selection_bar.setVisible(self.mode != 'offline' and count > 0)
-        self.selection_label.setText(f'Đã chọn {count} tệp')
+        visible = set()
+        if count:
+            for index in range(self.proxy_model.rowCount()):
+                source_row = self.proxy_model.source_row(self.proxy_model.index(index, 0))
+                if source_row is not None:
+                    visible.add(document_id(self.mode, self.model.rows[source_row]))
+        hidden = len(self.model.checked - visible)
+        self.selection_label.setText(f'Đã chọn {count} tệp' + (f' · {hidden} đang ẩn bởi bộ lọc' if hidden else ''))
+        self.selection_label.setToolTip('Tải các tệp đã chọn sẽ tải cả tệp đang bị ẩn bởi bộ lọc. Bấm Bỏ chọn để xóa toàn bộ lựa chọn.')
         self.sync_actions()
 
     def clear_selection(self):
@@ -761,6 +784,7 @@ class V2InteractionMixin:
         if state == 'STOPPING' and self.captcha_dialog:
             self.captcha_dialog.reject()
         self.sync_actions()
+        self.update_empty()
 
     def on_progress(self, payload):
         from .ui import MODES, TITLES
@@ -1119,11 +1143,13 @@ class V2InteractionMixin:
         if self.proxy_model.rowCount():
             return
         if self.model.rowCount():
-            message = 'Không có hồ sơ khớp tìm kiếm/bộ lọc. Thử chọn Tất cả hồ sơ.'
+            message = 'Không có hồ sơ khớp tìm kiếm/bộ lọc.\nNhấn Xóa bộ lọc để xem lại toàn bộ danh sách.'
         elif self.controller.busy:
             message = 'Đang xử lý… Bạn có thể dừng an toàn; tệp hoàn tất được giữ.'
         elif self.result and self.result.state == 'ERROR':
             message = 'Không thể hoàn tất tác vụ. Nhấn Xem chi tiết ở thanh dưới để biết nguyên nhân và cách xử lý.'
+        elif self.result and self.result.state in {'CANCELLED', 'PARTIAL'}:
+            message = 'Tra cứu chưa đầy đủ nên chưa thể kết luận không có hồ sơ.\nChạy lại tra cứu hoặc xem tổng kết trong Lịch sử tải.'
         elif self.result:
             message = 'Không tìm thấy hồ sơ trong kỳ đã tra cứu.'
         elif self.mode == 'offline':
@@ -1147,6 +1173,7 @@ class V2InteractionMixin:
         self.account_label.setSizePolicy(self.account_label.sizePolicy().horizontalPolicy(), self.account_label.sizePolicy().verticalPolicy())
         self.source_badge.setVisible(self.mode != 'offline' and width >= 1100)
         self.config_layout.setDirection(QHBoxLayout.Direction.TopToBottom if width < 1500 else QHBoxLayout.Direction.LeftToRight)
+        self.result_tools.setDirection(QHBoxLayout.Direction.TopToBottom if width < 850 else QHBoxLayout.Direction.LeftToRight)
         self.output_label.setText('Nơi xuất' if self.mode == 'offline' else 'Nơi lưu')
         self.start_button.setText('Chạy phân tích' if self.mode == 'offline' else 'Tra cứu và tải')
         self.xml_notice.setVisible(self.mode == 'offline' and height >= 430)
@@ -1195,6 +1222,10 @@ class V2InteractionMixin:
         paths, _ = QFileDialog.getOpenFileNames(self, 'Chọn tệp XML hoặc ZIP cục bộ', self.input_path.text(), 'Hồ sơ XML/ZIP (*.xml *.zip)')
         if paths:
             self.set_source_files(paths)
+
+    def clear_source_selection(self, *_args):
+        self.source_files = ()
+        self.source_info.clear()
 
     def set_source_files(self, paths):
         if self.controller.busy:
