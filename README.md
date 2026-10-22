@@ -23,6 +23,10 @@ CAPTCHA được thử tự động tối đa **5 lần**; nếu vẫn chưa th�
 DVC được bật mặc định. **Trạng thái thuế** và **trạng thái tệp** được hiển thị riêng;
 hồ sơ bị từ chối vẫn có thể đã tải thành công.
 
+Khi danh sách bị thu hẹp bởi tìm kiếm hoặc bộ lọc, bấm **Xóa bộ lọc**
+(`Ctrl+Shift+F`) để xem lại toàn bộ. Thanh chọn tệp cho biết có bao nhiêu tệp
+đã chọn đang bị ẩn; **Tải các tệp đã chọn** lấy cả các tệp này.
+
 Với hồ sơ DVC và legacy, app tải thêm **thông báo tiếp nhận / chấp nhận /
 không chấp nhận** đính kèm hồ sơ (XML/PDF) vào
 `thong-bao-dinh-kem/<mã hồ sơ>/` trong nơi lưu. Tệp đã có được bỏ qua; lỗi tải

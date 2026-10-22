@@ -32,20 +32,10 @@ from .domain import (
     format_date,
     submission_key,
 )
+from .feedback_labels import RESULT_PREFIX as RESULT_PREFIX
+from .feedback_labels import TYPE_LABELS as TYPE_LABELS
 from .feedback_service import FeedbackItem, list_feedback_items
 
-TYPE_LABELS = {
-    BUSINESS_RECEIVED: 'Tiếp nhận',
-    BUSINESS_ACCEPTED: 'Chấp nhận',
-    BUSINESS_REJECTED: 'Không chấp nhận',
-    BUSINESS_UNKNOWN: 'Phản hồi khác / Chưa phân loại',
-}
-RESULT_PREFIX = {
-    BUSINESS_ACCEPTED: '✓ ',
-    BUSINESS_REJECTED: '✕ ',
-    BUSINESS_RECEIVED: '• ',
-    BUSINESS_UNKNOWN: '? ',
-}
 RESULT_COLORS = {
     BUSINESS_ACCEPTED: '#15805B',
     BUSINESS_REJECTED: '#C94242',

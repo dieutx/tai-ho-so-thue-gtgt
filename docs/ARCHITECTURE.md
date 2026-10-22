@@ -396,6 +396,25 @@ Nếu cổng thay đổi giới hạn, sửa `MAX_DAYS_PER_SEARCH_DEFAULT` trong
 
 ## Kiểm thử
 
+### Desktop: điều kiện, bộ lọc và tải nhiều nhóm
+
+`ui.MainWindow.validate_conditions()` kiểm tra nơi lưu trống, ngày đảo ngược
+và nguồn offline trước luồng đăng nhập. `launch_current()` bắt lỗi chuẩn bị
+đường dẫn/quyền sở hữu; `RunConfig.validate()` trong worker vẫn kiểm tra cấu
+hình đầy đủ. Lỗi thư mục trong một nhóm batch thuộc kết quả riêng của nhóm
+đó; worker giữ kết quả các nhóm trước và xử lý tiếp các nhóm còn lại.
+
+`v2_layout` chia tìm kiếm và bộ lọc/thao tác thành hàng riêng; dưới 850 px,
+bộ lọc và nút tải xếp thành hai hàng. `v2_interactions.reset_filters()` chỉ
+xóa điều kiện lọc của tab hiện tại, giữ các hồ sơ đã chọn. Số lựa chọn bị ẩn
+được tính qua proxy đang hiển thị. Khi người dùng sửa ô nguồn XML, danh sách
+tệp chọn tường minh được xóa để lần chạy tiếp dùng đúng thư mục mới.
+
+`xml_content.py` giữ hàm giải mã/đọc trường XML; `release_info.py` giữ lookup
+phiên bản; `feedback_labels.py` giữ nhãn phản hồi dùng chung. Các module này
+không import Qt. `xml_viewer.py`, `updates.py` và `feedback_panel.py` chỉ ghép
+logic tương ứng vào widget/signal; test thuần dữ liệu chạy được khi không cài Qt.
+
 `tests/support.py` cung cấp `FakeHttp` định tuyến theo `(method, đường dẫn)`,
 nên `test_pipeline.py` chạy nguyên luồng 5 giai đoạn mà không ra Internet. Khi
 cổng đổi giao diện, cách nhanh nhất là cập nhật fixture trong `tests/fixtures/`

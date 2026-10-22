@@ -19,7 +19,7 @@ from gdt_tax.storage import _excel_value
 
 from .documents import FILE_LABELS
 from .domain import BUSINESS_LABELS, business_status_from_text, format_date
-from .feedback_panel import RESULT_PREFIX, TYPE_LABELS
+from .feedback_labels import RESULT_PREFIX, TYPE_LABELS
 from .feedback_service import list_feedback_items, submission_key
 
 COLUMNS = [

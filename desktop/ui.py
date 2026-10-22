@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from gdt_tax.config import load_env_file
+from gdt_tax.errors import ConfigError
 
 from . import __version__
 from .account_dialog import AccountDialog
@@ -652,10 +653,12 @@ class MainWindow(V2InteractionMixin, QMainWindow):
                 self.start_batch()
 
     def start_batch(self) -> None:
+        if self.controller.busy or not self.validate_conditions('batch'):
+            return
         if not self.controller.sessions.account.password:
             self.open_login(after=self.start_batch)
             return
-        self.launch(self.make_config("batch"))
+        self.launch_current('batch')
 
     def import_legacy(self) -> None:
         if self.mode == "offline":
@@ -733,12 +736,36 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             dvc=self.dvc, filters=dict(self.filters), csv=self.csv, forms_dir=self.forms_dir, rehash=self.rehash, batch_modes=self.batch_modes, source_files=self.source_files)
 
     def start(self, dry_run: bool) -> None:
-        if self.controller.busy:
+        if self.controller.busy or not self.validate_conditions(self.mode):
             return
         if self.mode != "offline" and not self.controller.sessions.account.password:
             self.open_login(after=lambda: self.start(dry_run))
             return
-        self.launch(self.make_config(self.mode, dry_run))
+        self.launch_current(self.mode, dry_run)
+
+    def validate_conditions(self, mode: str) -> bool:
+        if not self.output.text().strip():
+            self.error('Chọn thư mục lưu hồ sơ trước khi bắt đầu.')
+            self.output.setFocus()
+            return False
+        if mode != 'offline' and self.from_date.date() > self.to_date.date():
+            self.error('Từ ngày phải trước hoặc bằng Đến ngày. Kiểm tra lại khoảng tra cứu.')
+            self.from_date.setFocus()
+            return False
+        if mode == 'offline' and (not self.input_path.text().strip()
+                                  or not Path(self.input_path.text()).expanduser().is_dir()):
+            self.error('Chọn tệp XML/ZIP hoặc thư mục nguồn tồn tại trên máy trước khi phân tích.')
+            self.input_path.setFocus()
+            return False
+        return True
+
+    def launch_current(self, mode: str, dry_run: bool = False) -> None:
+        try:
+            config = self.make_config(mode, dry_run)
+        except (OSError, ValueError, ConfigError):
+            self.error('Không chuẩn bị được nơi lưu hồ sơ. Chọn thư mục có quyền truy cập và thuộc đúng tài khoản, rồi thử lại.')
+            return
+        self.launch(config)
 
     def launch(self, config: RunConfig, clear: bool = True) -> None:
         if not self.output.text().strip():
