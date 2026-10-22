@@ -290,6 +290,14 @@ class NoticePipelineTests(unittest.TestCase):
         posts = [call for call in http.calls if route_of(call.path) == DVC_NOTICE_DOWNLOAD]
         self.assertEqual(len(posts), 6)
 
+    def test_reuses_detail_page_for_primary_and_attachment_download(self):
+        summary, http = self.run_pipeline()
+        details = [
+            call for call in http.calls
+            if route_of(call.path).startswith("/tchs/files/detail/")
+        ]
+        self.assertEqual(len(details), 2)
+
     def test_second_run_reuses_notice_files_without_downloading_again(self):
         self.run_pipeline()
         summary, http = self.run_pipeline()

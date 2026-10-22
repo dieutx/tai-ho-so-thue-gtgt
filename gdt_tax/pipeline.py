@@ -222,7 +222,7 @@ class Pipeline:
                 self.record_errors[record.record_key] = 'DOWNLOAD_ARTIFACT_INVALID'
                 return False
             succeeded.add(record.record_key)
-            self._download_attachments(portal, record)
+            self._download_attachments(portal, record, detail_url=detail_url, csrf=csrf)
             return True
         if response is None or response.status_code != 200:
             self.record_errors[record.record_key] = f"Cổng trả HTTP {getattr(response, 'status_code', 'không có phản hồi')} khi tải tệp. Kiểm tra kết nối/phiên rồi thử lại."
@@ -242,16 +242,17 @@ class Pipeline:
                 )
             return False
         succeeded.add(record.record_key)
-        self._download_attachments(portal, record)
+        self._download_attachments(portal, record, detail_url=detail_url, csrf=csrf)
         return True
 
-    def _download_attachments(self, portal, record):
+    def _download_attachments(self, portal, record, *, detail_url=None, csrf=None):
         if not self.download_notices or not callable(getattr(portal, 'fetch_notice_list', None)):
             return
         result = AttachmentResult(record.record_key)
         self.attachments[record.record_key] = result
         try:
-            collect_attachments(portal, record, self.notice_store, self.hooks, result)
+            collect_attachments(portal, record, self.notice_store, self.hooks, result,
+                                detail_url=detail_url, csrf=csrf)
         finally:
             record.attachment_status = result.status
             record.attachment_result = json.dumps(result.to_dict(), ensure_ascii=False, sort_keys=True)

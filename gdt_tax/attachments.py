@@ -29,9 +29,13 @@ class AttachmentResult:
         return asdict(self)
 
 
-def collect_attachments(portal, record, store, hooks, result: AttachmentResult):
+def collect_attachments(portal, record, store, hooks, result: AttachmentResult,
+                        *, detail_url: str | None = None, csrf: str | None = None):
     try:
-        detail_url, csrf = portal.fetch_detail_csrf(record)
+        # Tái dùng trang chi tiết/CSRF vừa lấy cho file chính để bớt một GET
+        # (mỗi request đều tính vào giới hạn 429 của cổng).
+        if detail_url is None or csrf is None or not getattr(portal, "detail_html", ""):
+            detail_url, csrf = portal.fetch_detail_csrf(record)
         if not csrf and not getattr(portal, "csrf_optional", False):
             result.discovery_failed = 1
             result.items.append({'code': 'ATTACHMENT_CSRF_MISSING', 'retryable': True})
