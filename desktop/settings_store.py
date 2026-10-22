@@ -62,6 +62,8 @@ class Preferences:
     dvc_enabled: bool = True
     #: Trạng thái giao diện theo tab (filter/sort/độ rộng cột); không chứa dữ liệu hồ sơ.
     ui_state: dict[str, dict] = field(default_factory=dict)
+    #: Phiên bản người dùng đã bấm "Để sau"; chỉ ẩn đúng bản đó.
+    dismissed_update_version: str = ""
 
 
 class SettingsStore:

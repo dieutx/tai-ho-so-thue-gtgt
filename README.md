@@ -48,7 +48,7 @@ Với danh sách tra cứu, chọn **Công cụ nâng cao → Xuất danh sách 
 
 - Không ghi được tệp: đóng file Excel đang mở, chọn thư mục có quyền ghi; nếu dùng OneDrive, thử nơi lưu khác.
 - Lỗi tải: bấm **Thử lại tệp lỗi**. Mở **Nhật ký** để xem chi tiết; tệp đã tải xong được giữ lại.
-- Kiểm tra bản mới: bấm **v2.0.1** ở đầu cửa sổ → kiểm tra cập nhật.
+- Kiểm tra bản mới: app tự kiểm tra khi mở và hiện banner nếu có bản mới; bấm **v2.0.1** để xem phiên bản.
 
 [Thay đổi phiên bản](CHANGELOG.md) · [Hướng dẫn CLI](docs/CLI_GUIDE.md) · [Build từ mã nguồn](BUILD_WINDOWS.md) · [Kết quả kiểm thử](docs/DESKTOP_ACCEPTANCE.md)
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -46,7 +47,7 @@ from .settings_store import Preferences, SettingsStore, default_output
 from .state import TabState, job_output
 from .table_model import COLUMNS as COLUMNS
 from .table_model import RecordsModel as RecordsModel
-from .updates import RELEASES_URL, UpdateChecker
+from .updates import RELEASES_URL, NewerReleaseChecker, ReleaseInfo, UpdateChecker
 from .v2_interactions import V2InteractionMixin
 from .v2_layout import build_workspace
 
@@ -303,6 +304,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         self.deferred_account_action = None
         self.batch_modes = ("tax", "gnt", "notice")
         self.case_filter = ""
+        self._available_update: ReleaseInfo | None = None
+        self._update_checker: NewerReleaseChecker | None = None
         self.controller = JobController(self)
         self.controller.state_changed.connect(self.on_state)
         self.controller.progress.connect(self.on_progress)
@@ -316,11 +319,61 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         self.mode_changed(0)
         self._initializing = False
         QTimer.singleShot(0, self.fit_screen)
+        if (QApplication.platformName() != "offscreen"
+                and os.environ.get("TAIHOSOTHUE_DISABLE_UPDATE_CHECK") != "1"):
+            # Kiểm tra công khai trên GitLab sau khi cửa sổ đã mở; không chặn UI.
+            QTimer.singleShot(1200, self.auto_check_updates)
         if self.startup_error:
             QTimer.singleShot(0, lambda: self.error(self.startup_error))
 
     def build_ui(self) -> None:
         build_workspace(self)
+
+    def auto_check_updates(self) -> None:
+        """Startup-only public GitLab check; never blocks or touches tax sessions."""
+        if self._update_checker is not None:
+            return
+        checker = NewerReleaseChecker(self)
+        checker.found.connect(self.show_update_banner)
+        self._update_checker = checker
+        checker.start()
+
+    def show_update_banner(self, info) -> None:
+        if not isinstance(info, ReleaseInfo):
+            return
+        if self.preferences.dismissed_update_version == info.version:
+            return
+        self._available_update = info
+        self.update_text.setText(
+            f"Có bản mới v{info.version} — bản đang dùng v{__version__}. "
+            "Cập nhật để nhận sửa lỗi mới."
+        )
+        self.update_banner.show()
+        self.setWindowTitle(f"Tải Hồ Sơ Thuế — có bản mới v{info.version}")
+        try:
+            QApplication.alert(self, 0)  # nháy taskbar khi app không phải cửa sổ đang focus
+        except (AttributeError, RuntimeError):
+            pass
+
+    def download_update(self) -> None:
+        info = self._available_update
+        if info is None:
+            QDesktopServices.openUrl(QUrl(RELEASES_URL))
+            return
+        QDesktopServices.openUrl(QUrl(info.download_url or info.page_url))
+
+    def dismiss_update(self) -> None:
+        info = self._available_update
+        self.update_banner.hide()
+        self.setWindowTitle("Tải Hồ Sơ Thuế")
+        if info is None:
+            return
+        self._available_update = None
+        self.preferences.dismissed_update_version = info.version
+        try:
+            self.store.save(self.preferences)
+        except (OSError, ValueError, TypeError):
+            pass
 
     def show_release(self) -> None:
         dialog = QDialog(self)
@@ -347,7 +400,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
                                         " • Source: " + str(release.get('source_sha', 'chưa ghi nhận'))[:12]))
             except (OSError, ValueError):
                 pass
-        status = QLabel("Chỉ kết nối GitLab khi bạn bấm Kiểm tra bản mới. Không gửi thông tin tài khoản thuế.")
+        status = QLabel("App tự kiểm tra bản mới khi mở. Chỉ gửi yêu cầu công khai tới GitLab; không gửi thông tin tài khoản thuế.")
         status.setWordWrap(True)
         status.setOpenExternalLinks(True)
         layout.addWidget(status)

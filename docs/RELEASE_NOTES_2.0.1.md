@@ -10,6 +10,9 @@ Bản phát hành công khai kế tiếp sau 2.0.0; gộp các bản nội bộ 
 - **Thông báo thuế** là tab độc lập, có bộ lọc và thao tác xem/tải tệp.
 - **Xuất hồ sơ ZIP** có manifest, kèm phản hồi của đúng lần nộp.
 - **Đối soát và xuất báo cáo** CSV/XLSX theo các dòng đang lọc.
+- **Tự kiểm tra bản mới khi mở app:** hiện banner ngay trên cửa sổ với nút
+  **Tải ngay**/**Để sau** và nháy taskbar nếu app không được focus; không cần
+  bấm kiểm tra. Chỉ gọi API công khai GitLab, không gửi thông tin tài khoản thuế.
 - Sửa `RECORD_HANDLER_OR_ID_MISSING`: bỏ qua hàng không phải dữ liệu, không
   còn báo lỗi giả; vẫn cảnh báo khi handler có nhưng ID lệch.
 - Nhận đúng ZIP thông báo `04/SS-HĐĐT` (XML `<TBao>`), không còn báo nhầm
@@ -21,7 +24,7 @@ Bản phát hành công khai kế tiếp sau 2.0.0; gộp các bản nội bộ 
 
 ## Kiểm thử
 
-- **855 tests OK (6 skip)**, ruff và mypy pass.
+- **861 tests OK (6 skip)**, ruff và mypy pass.
 - Tài khoản thật: **4/4** hồ sơ `04/SS-HĐĐT` tải và lưu thành công.
 - Tài khoản thật: **12/12** thông báo của một hồ sơ tải trong **14,23 giây**,
   không lỗi.

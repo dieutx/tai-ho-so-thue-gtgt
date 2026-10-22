@@ -72,6 +72,25 @@ def build_workspace(window):
     self.settings_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
     header.addWidget(self.settings_button)
     self.layout_root.addLayout(header)
+    self.update_banner = QFrame()
+    self.update_banner.setObjectName('updateBanner')
+    self.update_banner.setStyleSheet(
+        'QFrame#updateBanner { background: #e8f2ff; border: 1px solid #8ab4f8; border-radius: 6px; }'
+        'QFrame#updateBanner QLabel { color: #17324d; }'
+    )
+    update_row = QHBoxLayout(self.update_banner)
+    update_row.setContentsMargins(10, 6, 10, 6)
+    self.update_text = QLabel()
+    self.update_text.setWordWrap(True)
+    self.update_text.setAccessibleName('Có bản cập nhật mới')
+    update_row.addWidget(self.update_text, 1)
+    self.update_download = button('Tải ngay', self.download_update, 'Tải bản mới từ GitLab')
+    self.update_download.setObjectName('primary')
+    update_row.addWidget(self.update_download)
+    self.update_later = button('Để sau', self.dismiss_update, 'Ẩn thông báo bản mới')
+    update_row.addWidget(self.update_later)
+    self.update_banner.hide()
+    self.layout_root.addWidget(self.update_banner)
     self.tabs = QTabBar()
     self.tabs.setExpanding(False)
     for title in TITLES:

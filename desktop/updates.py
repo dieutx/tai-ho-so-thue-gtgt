@@ -1,7 +1,8 @@
-"""User-initiated release lookup, separate from all tax HTTP sessions."""
+"""User-initiated release lookup and startup update notification, separate from all tax HTTP sessions."""
 from __future__ import annotations
 
 import html
+from dataclasses import dataclass
 from threading import Thread
 from urllib.parse import quote
 
@@ -12,6 +13,74 @@ from . import __version__
 
 RELEASES_URL = "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/releases"
 RELEASES_API = "https://gitlab.com/api/v4/projects/dieutx%2Ftai-ho-so-thue-gtgt/releases"
+
+
+@dataclass(frozen=True)
+class ReleaseInfo:
+    version: str
+    tag: str
+    page_url: str
+    download_url: str
+
+
+def latest_release(get=requests.get) -> ReleaseInfo | None:
+    """Return the highest public release, or None when the public API is unavailable."""
+    from packaging.version import InvalidVersion, Version
+
+    response = get(
+        RELEASES_API,
+        timeout=8,
+        headers={"Accept": "application/json", "User-Agent": f"TaiHoSoThue/{__version__}"},
+    )
+    if getattr(response, "status_code", 0) != 200:
+        return None
+    try:
+        releases = response.json()
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(releases, list):
+        return None
+    best: tuple[Version, ReleaseInfo] | None = None
+    for item in releases:
+        if not isinstance(item, dict):
+            continue
+        tag = str(item.get("tag_name") or "").strip()
+        version = tag.removeprefix("desktop-v").removeprefix("v")
+        try:
+            parsed = Version(version)
+        except InvalidVersion:
+            continue
+        links = item.get("assets", {}).get("links", [])
+        download = ""
+        if isinstance(links, list):
+            for link in links:
+                if (isinstance(link, dict) and link.get("name") == "TaiHoSoThue-Windows.exe"
+                        and link.get("direct_asset_url")):
+                    download = str(link["direct_asset_url"])
+                    break
+        page = str((item.get("_links") or {}).get("self") or "") or (
+            f"{RELEASES_URL}/{quote(tag, safe='')}"
+        )
+        if not download:
+            download = f"{RELEASES_URL}/{quote(tag, safe='')}/downloads/TaiHoSoThue-Windows.exe"
+        info = ReleaseInfo(str(parsed), tag, page, download)
+        if best is None or parsed > best[0]:
+            best = (parsed, info)
+    return best[1] if best else None
+
+
+def auto_update_release(get=requests.get, current: str = __version__) -> ReleaseInfo | None:
+    """Return a newer release; network/format failures are deliberately silent for startup."""
+    from packaging.version import InvalidVersion, Version
+
+    try:
+        info = latest_release(get)
+        if info is not None and Version(info.version) > Version(current):
+            return info
+    except (requests.RequestException, ValueError, TypeError, InvalidVersion):
+        return None
+    return None
+
 
 
 def release_message(get=requests.get) -> str:
@@ -51,3 +120,24 @@ class UpdateChecker(QObject):
             except RuntimeError:
                 pass  # the owning window was closed while the GET was in flight
         Thread(target=run, name="release-check", daemon=True).start()
+
+
+class NewerReleaseChecker(QObject):
+    """Background startup check; emits only when a release newer than the app exists."""
+
+    found = Signal(object)
+
+    def __init__(self, parent=None, get=requests.get) -> None:
+        super().__init__(parent)
+        self.get = get
+
+    def start(self) -> None:
+        def run():
+            info = auto_update_release(self.get)
+            if info is not None:
+                try:
+                    self.found.emit(info)
+                except RuntimeError:
+                    pass  # the owning window was closed while the GET was in flight
+        Thread(target=run, name="release-check-startup", daemon=True).start()
+

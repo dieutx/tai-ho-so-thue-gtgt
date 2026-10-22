@@ -17,8 +17,11 @@ Bản phát hành công khai kế tiếp sau 2.0.0; gộp các bản nội bộ 
   file chính và thông báo để bớt một request mỗi hồ sơ.
 - Giữ lưu mật khẩu trong Windows Credential Manager, retry thông báo, định
   danh tài khoản/hồ sơ và các bản sửa 2.0.4.
-- Kiểm thử: **855 tests OK (6 skip)**, ruff/mypy pass; tài khoản thật 4/4
+- Kiểm thử: **861 tests OK (6 skip)**, ruff/mypy pass; tài khoản thật 4/4
   hồ sơ `04/SS-HĐĐT` và 12/12 thông báo trong 14,23 giây.
+- Tự kiểm tra bản mới khi mở app: hiện banner ngay trên cửa sổ kèm nút
+  **Tải ngay**/**Để sau**, nháy taskbar nếu app không được focus; không cần bấm
+  kiểm tra. Chỉ gọi API công khai GitLab, không gửi thông tin tài khoản thuế.
 
 ## [2.0.4] — 2026-10-22
 
