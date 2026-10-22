@@ -9,6 +9,8 @@
 - Giữ kết quả các nhóm đã hoàn thành khi một nhóm tải liên tiếp gặp lỗi thư mục;
   không kết luận "không có hồ sơ" khi tra cứu bị dừng hoặc chưa đầy đủ.
 - Sửa lỗi typecheck HTML; thêm CI Windows chạy test Qt cho mỗi PR.
+  Tách logic XML/cập nhật và nhãn phản hồi khỏi Qt để bản core chạy test độc
+  lập; khai báo dependency `packaging` dùng để so sánh phiên bản cập nhật.
   Chi tiết và ảnh: [review UX](docs/UX_REVIEW_20261022.md).
 
 ## [2.0.1] — 2026-10-22

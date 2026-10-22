@@ -410,6 +410,11 @@ xóa điều kiện lọc của tab hiện tại, giữ các hồ sơ đã chọ
 được tính qua proxy đang hiển thị. Khi người dùng sửa ô nguồn XML, danh sách
 tệp chọn tường minh được xóa để lần chạy tiếp dùng đúng thư mục mới.
 
+`xml_content.py` giữ hàm giải mã/đọc trường XML; `release_info.py` giữ lookup
+phiên bản; `feedback_labels.py` giữ nhãn phản hồi dùng chung. Các module này
+không import Qt. `xml_viewer.py`, `updates.py` và `feedback_panel.py` chỉ ghép
+logic tương ứng vào widget/signal; test thuần dữ liệu chạy được khi không cài Qt.
+
 `tests/support.py` cung cấp `FakeHttp` định tuyến theo `(method, đường dẫn)`,
 nên `test_pipeline.py` chạy nguyên luồng 5 giai đoạn mà không ra Internet. Khi
 cổng đổi giao diện, cách nhanh nhất là cập nhật fixture trong `tests/fixtures/`

@@ -19,7 +19,7 @@ from desktop.domain import (  # noqa: E402
     SubmissionFeedback,
     TaxNotice,
 )
-from desktop.xml_viewer import (  # noqa: E402
+from desktop.xml_content import (  # noqa: E402
     contains_dtd,
     decode_xml,
     detect_encoding,
