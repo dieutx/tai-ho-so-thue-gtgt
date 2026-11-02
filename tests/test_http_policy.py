@@ -130,6 +130,21 @@ class HttpPolicyTests(unittest.TestCase):
         when = datetime.now(timezone.utc) + timedelta(seconds=7)
         self.assertGreater(client._retry_delay(StubResponse(429, {"Retry-After": format_datetime(when)})), 5)
 
+    def test_operation_policy_can_use_slower_growth_for_rate_limited_endpoint(self):
+        client, _ = self.client([], min_backoff=2, default_backoff=15, max_backoff=60)
+        slow = OperationPolicy('notice-download', retry_safe=True, minimum_attempts=6,
+                               retry_growth=1.3)
+        delays = [round(client._retry_delay(StubResponse(429), attempt, slow), 2)
+                  for attempt in range(1, 6)]
+        self.assertEqual(delays, [2.0, 2.6, 3.38, 4.39, 5.71])
+        self.assertLess(sum(delays), 20)
+
+    def test_operation_policy_rejects_out_of_range_growth(self):
+        with self.assertRaises(ValueError):
+            OperationPolicy('x', retry_safe=True, minimum_attempts=2, retry_growth=0.5)
+        with self.assertRaises(ValueError):
+            OperationPolicy('x', retry_safe=True, minimum_attempts=2, retry_growth=5)
+
     def test_no_retry_after_uses_short_exponential_backoff(self):
         client, _ = self.client([], min_backoff=2, default_backoff=15, max_backoff=60)
         self.assertEqual(client._retry_delay(StubResponse(429), 1), 2)

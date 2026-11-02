@@ -129,8 +129,11 @@ class DvcPortal(Portal):
     def download_notice(self, notice, detail_url: str, csrf: str):
         path = '/tchs/downloadthongbao-tdt' if notice.is_tdt else '/tchs/downloadthongbao'
         response = self.http.post(path,
+            # Cổng giới hạn riêng endpoint này: giữ 6 lượt nhưng tăng khoảng chờ
+            # chậm (2 → 2,6 → 3,4s) thay vì 2 → 4 → 8 → 16 → 32s.
             operation=OperationPolicy('notice-download', DOWNLOAD_OPERATION.max_bytes,
-                                      retry_safe=True, minimum_attempts=6),
+                                      retry_safe=True, minimum_attempts=6,
+                                      retry_growth=1.3),
             params={'loaiTraCuu': notice.loai_tra_cuu} if notice.is_tdt else None,
             json={'idTbao': notice.id, 'loaiTBao': notice.loai_tbao},
             headers=self.xhr_headers(headers={'Content-Type': 'application/json',

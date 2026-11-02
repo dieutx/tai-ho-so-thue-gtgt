@@ -51,8 +51,8 @@ class Preferences:
     retries: int = 3
     login_attempts: int = 10
     search_attempts: int = 6
-    record_delay: float = 1.0
-    page_delay: float = 3.0
+    record_delay: float = 0.25
+    page_delay: float = 1.0
     jitter: float = 0.3
     page_size: int = 10
     max_days: int = 31
