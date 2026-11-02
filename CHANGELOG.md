@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [2.1.1] — 2026-11-03
+
+- Giảm một request `validateIdTkhai` cho mỗi tờ khai: chỉ dò khả năng tải AJAX
+  của DVC một lần mỗi lượt chạy; đường form dự phòng vẫn giữ khi cổng không hỗ
+  trợ AJAX.
+- Cập nhật bảng từ SQLite ngay trong lúc tra cứu/tải bằng nhịp 250ms thay mốc
+  100 bản ghi, nên hồ sơ dùng lại và lô cuối vẫn hiện; tiến trình báo
+  "Đã tìm thấy N" và "Đang kiểm tra tệp và hoàn tất danh mục…" thay vì N/N.
+- Hoàn tất không thay bảng đang xem bằng rows của job: giữ đúng khoảng ngày và
+  bộ lọc, giữ trạng thái/lỗi tra cứu kèm liên kết xem lỗi; báo rõ "Tra cứu"
+  khác "Đang xem" khi người dùng đổi ngày trước lúc job xong.
+- Lỗi SQLite khi đọc kho local được báo thành PARTIAL/ERROR thay vì làm hỏng
+  luồng "Hồ sơ trên máy"; thanh trạng thái tự xuống dòng.
+- Thêm 16 kiểm thử hồi quy trong `tests/test_lookup_completion.py`.
+
 ## [2.1.0] — 2026-11-02
 
 - SQLite inventory bền vững theo account/RecordKey; đổi kỳ và restart giữ hồ sơ cũ.
