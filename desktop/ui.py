@@ -297,6 +297,10 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         self.applying_preset = False
         self.source_files = ()
         self.pending_rows = {}
+        self.catalog_refresh_timer = QTimer(self)
+        self.catalog_refresh_timer.setSingleShot(True)
+        self.catalog_refresh_timer.setInterval(250)
+        self.catalog_refresh_timer.timeout.connect(self.apply_local_date_filter)
         self.history = []
         self.last_task = None
         self._initializing = True
@@ -816,6 +820,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             if config.mode not in {"offline", "saved", "library"}:
                 config.settings()
             if self.controller.start(config):
+                self.catalog_refresh_timer.stop()
                 self.progress.setRange(0, 0)
                 self.progress.setValue(0)
                 self.active_config = config

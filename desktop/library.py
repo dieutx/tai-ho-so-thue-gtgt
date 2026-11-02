@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sqlite3
 from datetime import date, datetime
 from pathlib import Path
 
@@ -193,7 +194,7 @@ def catalog_view(base, username, mode, start=None, end=None, *, unknown=False, m
             review += catalog.get_counts(mode)['quarantined']
             selected = catalog.get_documents(mode, start, end, unknown=unknown)
             rows = merge_rows(mode, rows, check_files(mode, selected, folder))
-        except (OSError, ValueError, IdentityError) as error:
+        except (OSError, ValueError, IdentityError, sqlite3.Error) as error:
             problems.append(str(error))
     result = JobResult('LOADED' if not problems else 'PARTIAL' if rows else 'ERROR',
                        '; '.join(problems) if problems else 'Hồ sơ trên máy — bấm Tra cứu để đối soát online',

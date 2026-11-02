@@ -251,6 +251,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     finally:
         # Flush a discovered record even if a detail request/captcha was cancelled.
         try:
+            hooks.emit(stage='finalize')
             if pipeline.records:
                 verified_rows = verify_rows(config.mode, [record.to_dict() for record in pipeline.records.values()],
                     config.output, failed_ids=pipeline.failed_ids, errors=pipeline.record_errors,

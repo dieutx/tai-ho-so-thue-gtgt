@@ -335,6 +335,7 @@ def build_workspace(window):
     self.stop_button.setEnabled(False)
     footer.addWidget(self.stop_button)
     self.status = QLabel('Sẵn sàng')
+    self.status.setWordWrap(True)
     self.status.linkActivated.connect(lambda _url: self.show_issues())
     self.status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
     footer.addWidget(self.status, 1)
