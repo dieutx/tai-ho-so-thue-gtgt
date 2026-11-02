@@ -1,10 +1,4 @@
-"""LOCAL FIRST: đọc lại danh mục đã tải trên máy, không gọi mạng.
-
-Danh mục do pipeline ghi (``danh_sach_ho_so.json`` …) là nguồn sự thật về hồ sơ
-nghiệp vụ; module này chỉ đọc, bỏ bản ghi trùng theo khóa ổn định, đối chiếu tệp
-thực tế trên đĩa bằng kiểm tra rẻ (tồn tại + kích thước) rồi trả về dòng cho UI.
-Không băm lại toàn bộ tệp, không tạo bản ghi giả từ tên tệp, không sửa danh mục.
-"""
+"""Local SQLite projections and one-time, ownership-checked legacy import."""
 from __future__ import annotations
 
 import hashlib
@@ -13,11 +7,12 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
-from gdt_tax.identity import account_fingerprint
+from gdt_tax.identity import IdentityError, account_fingerprint
+from gdt_tax.local_catalog import LocalCatalog
 from gdt_tax.run_hooks import RunHooks
 
 from .documents import FILE_LABELS, document_id
-from .domain import INTEGRITY_LABELS, INTEGRITY_NOT_CHECKED, INTEGRITY_UNVERIFIED
+from .domain import INTEGRITY_INVALID, INTEGRITY_LABELS, INTEGRITY_NOT_CHECKED, INTEGRITY_UNVERIFIED
 from .services import JobResult
 
 CATALOGS = {
@@ -52,7 +47,7 @@ def date_in_range(mode: str, row: dict, start: date | None, end: date | None) ->
     """Ngày của dòng có nằm trong khoảng (bao gồm hai đầu); dòng chưa rõ ngày vẫn giữ."""
     when = parse_date(row.get(DATE_FIELDS.get(mode, "")))
     if when is None:
-        return True
+        return start is None and end is None
     if start is not None and when < start:
         return False
     if end is not None and when > end:
@@ -132,14 +127,21 @@ def check_files(mode: str, rows: list[dict], folder: str | Path) -> list[dict]:
     for row in rows:
         item = dict(row)
         name = str(item.get(file_field) or "")
-        path = root / name if name else None
+        path = (root / name).resolve() if name else None
+        if path is not None and not path.is_relative_to(root.resolve()):
+            path = None
         size = 0
         if path is not None:
             try:
-                size = path.stat().st_size
+                size = path.stat().st_size if path.is_file() else 0
             except OSError:
                 size = 0
-        if path is not None and size > 0:
+        expected = item.get('_file_size')
+        valid = (item.get('_file_status') == 'downloaded' and bool(item.get('_file_hash'))
+                 and expected == size and item.get('_integrity_status') != INTEGRITY_INVALID)
+        if valid and item.get('_file_mtime_ns') is not None:
+            valid = path is not None and path.stat().st_mtime_ns == item['_file_mtime_ns']
+        if path is not None and size > 0 and valid:
             item.update(_file_status="downloaded", _file_state=FILE_LABELS["downloaded"],
                         _file_path=str(path.resolve()), _file_size=size, _file_reason="",
                         _integrity_status=INTEGRITY_UNVERIFIED,
@@ -168,39 +170,51 @@ def library_folders(base: str | Path, username: str, mode: str) -> list[Path]:
     return [folder for index, folder in enumerate(folders) if folder not in folders[:index]]
 
 
+def catalog_view(base, username, mode, start=None, end=None, *, unknown=False, migrate=False, hooks=None):
+    """SELECT the visible range; no HTTP and no full inventory file verification."""
+    from .documents import verify_rows
+    from .state import job_output
+    account_key = account_fingerprint(username)
+    used = job_output(Path(base), username, mode)
+    rows, keys, unknown_keys, review, problems = [], set(), set(), 0, []
+    for folder in library_folders(base, username, mode):
+        if not (folder / 'catalog.sqlite3').exists() and not (folder / CATALOGS[mode]).exists():
+            continue
+        try:
+            catalog = LocalCatalog(folder, account_key)
+            if migrate:
+                report = catalog.import_json(mode)
+                if report['state'] == 'IMPORTED':
+                    imported = catalog.get_documents(mode)
+                    catalog.upsert_documents(mode, verify_rows(mode, imported, folder, hooks))
+            with catalog.connection() as db:
+                keys.update(row[0] for row in db.execute('SELECT record_key FROM documents WHERE account_key=? AND mode=?', (account_key, mode)))
+                unknown_keys.update(row[0] for row in db.execute('SELECT record_key FROM documents WHERE account_key=? AND mode=? AND document_date IS NULL', (account_key, mode)))
+            review += catalog.get_counts(mode)['quarantined']
+            selected = catalog.get_documents(mode, start, end, unknown=unknown)
+            rows = merge_rows(mode, rows, check_files(mode, selected, folder))
+        except (OSError, ValueError, IdentityError) as error:
+            problems.append(str(error))
+    result = JobResult('LOADED' if not problems else 'PARTIAL' if rows else 'ERROR',
+                       '; '.join(problems) if problems else 'Hồ sơ trên máy — bấm Tra cứu để đối soát online',
+                       used, rows=rows, discovered=len(rows), account_key=account_key, operation='library',
+                       inventory_total=len(keys), unknown_dates=len(unknown_keys), quarantined=review)
+    result.date_range = (str(start or ''), str(end or ''))
+    return result
+
+
 def load_library(config, hooks: RunHooks) -> JobResult:
-    """Nạp danh mục của đúng tài khoản cho cả ba tab; không gọi mạng, không ghi tệp."""
+    """Migrate trusted JSON once, then read SQLite for the three independent tabs."""
     base = Path(config.output)
     base.mkdir(parents=True, exist_ok=True)
     account_key = account_fingerprint(config.username)
     children: dict[str, JobResult] = {}
     total = 0
     for mode in ("tax", "gnt", "notice"):
-        rows: list[dict] = []
-        used = library_folders(base, config.username, mode)[0]
-        problems: list[str] = []
-        for folder in library_folders(base, config.username, mode):
-            try:
-                hooks.check()
-                catalog = read_catalog(mode, folder)
-            except ValueError as error:
-                problems.append(str(error))
-                used = folder
-                continue
-            if not catalog:
-                continue
-            used = folder
-            rows = merge_rows(mode, rows, check_files(mode, dedupe(mode, catalog), folder))
-        if problems and not rows:
-            children[mode] = JobResult("ERROR", problems[0], used, errors=1)
-            continue
-        downloaded = sum(row.get("_file_status") == "downloaded" for row in rows)
-        message = (f"Đã nạp {len(rows)} {LABELS[mode]} từ máy — không gọi mạng" if rows
-                   else f"Chưa có {LABELS[mode]} đã lưu trong khoảng này")
-        children[mode] = JobResult("LOADED", message, used, rows=rows, discovered=len(rows),
-                                   downloaded=downloaded, account_key=account_key,
-                                   operation="library")
-        total += len(rows)
+        hooks.check()
+        children[mode] = catalog_view(base, config.username, mode, config.from_date or None,
+                                      config.to_date or None, migrate=True, hooks=hooks)
+        total += len(children[mode].rows)
     failures = sum(1 for child in children.values() if child.state == "ERROR")
     message = (f"Đã nạp {total} hồ sơ từ máy — không gọi mạng" if not failures
                else f"Đã nạp {total} hồ sơ từ máy; {failures} nhóm lỗi danh mục")

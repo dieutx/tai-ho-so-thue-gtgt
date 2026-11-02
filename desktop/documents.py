@@ -183,6 +183,7 @@ def verify_rows(mode: str, rows: list[dict], output: Path, hooks: RunHooks | Non
                     row['_integrity_label'] = INTEGRITY_LABELS[INTEGRITY_INVALID]
                     continue
                 row.update(_file_status='downloaded', _file_path=str(resolved), _file_size=len(content),
+                           _file_mtime_ns=path.stat().st_mtime_ns,
                            _file_hash=hashlib.sha256(content).hexdigest(),
                            _file_updated=datetime.fromtimestamp(path.stat().st_mtime).strftime('%d/%m/%Y %H:%M:%S'),
                            _integrity_status=INTEGRITY_UNVERIFIED,

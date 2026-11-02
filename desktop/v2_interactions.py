@@ -38,26 +38,21 @@ from .documents import (
 )
 from .domain import INTEGRITY_LABELS, INTEGRITY_NOT_CHECKED, submission_key
 from .errors import issue_hint
-from .library import merge_rows
+from .library import catalog_view
 from .notices import STATE_LABELS, attachment_totals, row_attachment_problem
 from .services import RunConfig
-from .state import TabState
 from .table_model import COLUMNS
 
 
 class V2InteractionMixin:
     def dates_changed(self, *_args):
+        if self.applying_preset:
+            return
         if not self.applying_preset:
             self.preset.blockSignals(True)
             self.preset.setCurrentIndex(self.preset.findData('custom'))
             self.preset.blockSignals(False)
         self.warning_update()
-        if self.result and all(self.result.date_range) and self.result.date_range != (
-                self.from_date.date().toString('dd/MM/yyyy'), self.to_date.date().toString('dd/MM/yyyy')):
-            if self.result.operation == 'library':
-                self.status.setText('Đang lọc hồ sơ đã lưu trên máy theo khoảng ngày mới — không gọi mạng')
-            else:
-                self.status.setText('Điều kiện đã đổi; danh sách vẫn thuộc kỳ đã tra cứu trước đó')
         self.apply_local_date_filter()
 
     def apply_preset(self, *_args):
@@ -83,18 +78,11 @@ class V2InteractionMixin:
         self.to_date.setDate(end)
         self.applying_preset = False
         self.warning_update()
+        self.apply_local_date_filter()
 
     def collapse_conditions(self, collapsed=True):
-        self.conditions_collapsed = bool(collapsed and self.mode != 'offline')
-        self.config_panel.setVisible(not self.conditions_collapsed)
-        self.condition_summary.setVisible(self.conditions_collapsed)
-        dates = self.result.date_range if self.result and all(self.result.date_range) else (
-            self.from_date.date().toString('dd/MM/yyyy'), self.to_date.date().toString('dd/MM/yyyy'))
-        path = self.result.output if self.result else Path(self.output.text())
-        label = {'tax': 'Ngày nộp', 'gnt': 'Ngày lập', 'notice': 'Ngày gửi'}.get(self.mode, 'Khoảng tra cứu')
-        source = '  ·  Dữ liệu trên máy' if self.result and self.result.operation == 'library' else ''
-        self.summary_text.setText(f'{label}: {dates[0]} – {dates[1]}  ·  Nơi lưu: {path.name}{source}')
-        self.summary_text.setToolTip(f'Kết quả theo {label.lower()} {dates[0]} – {dates[1]}\n{path}')
+        self.conditions_collapsed = False
+        self.config_panel.show()
         self.responsive()
 
     def save_tab(self):
@@ -118,6 +106,10 @@ class V2InteractionMixin:
         state.message = self.status.text()
         state.conditions_collapsed = self.conditions_collapsed
         state.last_task = self.last_task
+        state.from_date = self.from_date.date().toString('dd/MM/yyyy')
+        state.to_date = self.to_date.date().toString('dd/MM/yyyy')
+        state.preset = self.preset.currentData() or 'custom'
+        self.persist_ui_state()
 
     def mode_changed(self, index):
         if not hasattr(self, 'model'):
@@ -140,6 +132,7 @@ class V2InteractionMixin:
         for widget in [self.account_label, self.source_badge, self.account_button, self.logout_button]:
             widget.setVisible(not offline)
         state = self.tab_states[self.mode]
+        self.restore_dates(state)
         self.result = state.result
         self.last_task = state.last_task
         self.model.reset(self.mode, state.rows)
@@ -164,6 +157,19 @@ class V2InteractionMixin:
         self.warning_update()
         self.responsive()
         self.update_empty()
+        if self.mode != 'offline' and not getattr(self, '_initializing', False):
+            self.apply_local_date_filter()
+
+    def restore_dates(self, state):
+        self.applying_preset = True
+        for widget, value in ((self.from_date, state.from_date), (self.to_date, state.to_date)):
+            day = QDate.fromString(value, 'dd/MM/yyyy')
+            if day.isValid():
+                widget.setDate(day)
+        self.preset.blockSignals(True)
+        self.preset.setCurrentIndex(max(0, self.preset.findData(state.preset)))
+        self.preset.blockSignals(False)
+        self.applying_preset = False
 
     def set_file_filter(self):
         self.proxy_model.set_status_filter(self.file_filter.currentData())
@@ -226,16 +232,39 @@ class V2InteractionMixin:
         self.launch(config, clear=False)
         return True
 
-    def apply_local_date_filter(self) -> None:
-        """Lọc bảng theo khoảng ngày đang chọn khi dữ liệu đến từ danh mục trên máy."""
-        if not hasattr(self, 'proxy_model'):
+    def apply_local_date_filter(self, *_args) -> None:
+        """Read the currently visible period from SQLite without network calls."""
+        if not hasattr(self, 'proxy_model') or getattr(self, '_initializing', False):
             return
-        if not self.result or self.result.operation != 'library':
+        account = self.controller.sessions.account
+        if self.mode == 'offline' or not account.username:
             self.proxy_model.set_date_range(None, None)
             return
-        start = self.from_date.date().toPython()
-        end = self.to_date.date().toPython()
-        self.proxy_model.set_date_range(start, end)
+        try:
+            selected = catalog_view(self.output.text(), account.username, self.mode,
+                                    self.from_date.date().toString('dd/MM/yyyy'),
+                                    self.to_date.date().toString('dd/MM/yyyy'),
+                                    unknown=self.unknown_dates.isChecked())
+        except Exception:
+            self.status.setText('Không đọc được kho local; dữ liệu hiện tại được giữ. Kiểm tra nơi lưu và quyền sở hữu.')
+            return
+        if selected.state == 'ERROR':
+            self.status.setText(selected.message)
+            return
+        checked = set(self.model.checked)
+        if self.result and self.result.account_key == selected.account_key and self.result.output == selected.output:
+            selected.files = list(self.result.files)
+        self.result = selected
+        self.proxy_model.set_date_range(None, None)
+        self.model.reset(self.mode, selected.rows)
+        self.model.checked = checked & {document_id(self.mode, row) for row in selected.rows}
+        self.populate_result(selected)
+        self.refresh_type_filter()
+        self.close_drawer()
+        if not self.controller.busy:
+            self.status.setText('Hồ sơ trên máy — không gọi mạng' if selected.rows else
+                                'Chưa có dữ liệu lưu trên máy trong kỳ này — bấm Tra cứu để đối soát')
+        self.save_tab()
         self.update_filtered_count()
         self.update_empty()
 
@@ -268,7 +297,7 @@ class V2InteractionMixin:
     def can_target_download(self):
         account = self.controller.sessions.account
         return bool(self.result and self.mode != 'offline' and all(self.result.date_range)
-                    and self.result.operation in {'query', 'query_and_download', 'download_selected'}
+                    and self.result.operation in {'query', 'query_and_download', 'download_selected', 'library'}
                     and self.result.account_key == hashlib.sha256(account.username.encode()).hexdigest())
 
     def sync_actions(self):
@@ -298,7 +327,6 @@ class V2InteractionMixin:
         if hasattr(self, 'export_action'):
             self.export_action.setVisible(online)
             self.export_action.setEnabled(not busy and online and bool(rows))
-        self.edit_conditions.setEnabled(not busy)
         if hasattr(self, 'selection_bar'):
             self.selection_bar.setEnabled(not busy)
         if hasattr(self, 'detail_download'):
@@ -381,7 +409,8 @@ class V2InteractionMixin:
             self.open_login(after=lambda: self.download_rows(rows))
             return
         config = replace(self.make_config(self.mode), output=self.result.output,
-                         from_date=self.result.date_range[0], to_date=self.result.date_range[1],
+                         from_date=self.from_date.date().toString('dd/MM/yyyy'),
+                         to_date=self.to_date.date().toString('dd/MM/yyyy'),
                          case_id='', action='download_selected',
                          target_ids=tuple(dict.fromkeys(document_id(self.mode, row) for row in rows)),
                          input_rows=[dict(row) for row in rows])
@@ -801,7 +830,11 @@ class V2InteractionMixin:
             self.counts.setText(f"Bản ghi {len(rows) or (result.discovered if result else 0)}    Đã mapping {mapped}    Cần kiểm tra {result.skipped if result else 0}    Lỗi {result.errors if result else 0}")
         else:
             count = counters(rows)
-            self.counts.setText(f"Tìm thấy {count['found']}    Đã tải {count['downloaded']}    Chưa tải {count['pending']}    Tải lỗi {count['failed']}")
+            total = result.inventory_total if result and result.operation == 'library' else count['found']
+            self.counts.setText(f"Kho: {total}  |  Kỳ đang xem: {count['found']}  |  Đã tải: {count['downloaded']}  |  Thiếu: {count['pending']}  |  Lỗi: {count['failed']}")
+            if result:
+                self.unknown_dates.setText(f'Ngày chưa xác định ({result.unknown_dates})')
+                self.counts.setToolTip(f'Kho tích lũy của tài khoản/tab; không giảm khi đổi kỳ. Cần xác minh định danh: {result.quarantined}')
         if result:
             for path in result.files:
                 self.files.addItem(path.name, str(path))
@@ -815,7 +848,7 @@ class V2InteractionMixin:
                   'WAITING_CAPTCHA': 'Chờ nhập CAPTCHA…', 'STOPPING': 'Đang dừng an toàn…'}
         self.status.setText(labels.get(state, state))
         busy = self.controller.busy
-        for widget in [self.config_panel, self.tabs, self.navigation, self.settings_button, self.query, self.start_button]:
+        for widget in [self.tabs, self.navigation, self.settings_button, self.query, self.start_button]:
             widget.setEnabled(not busy)
         self.batch_action.setEnabled(not busy)
         self.stop_button.setEnabled(busy and state != 'STOPPING')
@@ -847,7 +880,9 @@ class V2InteractionMixin:
                 file_status = old.get('_file_status', 'not_downloaded')
             row.update(_file_status=file_status, _file_state=FILE_LABELS[file_status])
             self.pending_rows[key] = {**old, **row}
-            self.model.reset(self.mode, list(self.pending_rows.values()))
+            # Worker commits progress to SQLite; repaint in bounded batches.
+            if len(self.pending_rows) % 100 == 0:
+                self.apply_local_date_filter()
             done = payload.get('downloaded', 0)
             target = len(self.active_config.target_ids) if self.active_config.target_ids is not None else payload.get('discovered', 0)
             self.status.setText('Đang tra cứu hồ sơ…' if self.active_config.dry_run else f'Đang tải {done}/{target} · Lỗi {payload.get("errors", 0)}')
@@ -893,25 +928,10 @@ class V2InteractionMixin:
             if config and config.action in {'verify', 'export_report'} and previous:
                 files = list(dict.fromkeys(result.files + previous.files))
                 result = replace(previous, rows=result.rows or previous.rows, files=files)
-            elif config and config.target_ids and previous:
-                updates = {document_id(self.mode, row): row for row in result.rows}
-                result.rows = [{**row, **updates.get(document_id(self.mode, row), {})} for row in previous.rows]
-                issue_map = {issue.get('document_id'): issue.get('message') for issue in result.issues}
-                for row in result.rows:
-                    key = document_id(self.mode, row)
-                    if key in config.target_ids and row.get('_file_status') != 'downloaded' and (key in issue_map or result.state == 'ERROR'):
-                        row.update(_file_status='failed', _error_message=issue_map.get(key) or result.message)
-                result.discovered = len(result.rows)
-                result.files = previous.files
-            elif config and config.mode in {'tax', 'gnt', 'notice'} and previous and previous.rows:
-                # SMART MERGE: kết quả online chỉ bổ sung/cập nhật, không làm mất dữ liệu đã có.
-                if previous.account_key == result.account_key:
-                    result.rows = merge_rows(config.mode, previous.rows, result.rows)
-                    result.discovered = len(result.rows)
-                    result.files = list(dict.fromkeys(result.files + previous.files))
             if result.children:
                 for mode, child in result.children.items():
-                    self.tab_states[mode] = TabState(result=child, rows=child.rows, message=child.message, conditions_collapsed=True)
+                    state = self.tab_states[mode]
+                    state.result, state.rows, state.message = child, child.rows, child.message
                 selected = self.tab_states[self.mode].result
             else:
                 selected = result
@@ -935,8 +955,11 @@ class V2InteractionMixin:
             self.status.setStyleSheet('color:' + {'SUCCESS': '#15805B', 'PARTIAL': '#93631B', 'ERROR': '#C94242'}.get(status_result.state, '#67768C') + ';')
             self.status.setToolTip(status_result.message)
             self.populate_result(selected)
-            if config and config.mode in {'tax', 'gnt', 'notice'} and result.state in {'SUCCESS', 'PARTIAL'}:
-                self.collapse_conditions(True)
+            if config and config.mode in {'tax', 'gnt', 'notice', 'batch'}:
+                self.apply_local_date_filter()
+                metrics = task_result.sync_metrics
+                self.status.setText(short + f" · Online: {task_result.discovered} | Mới: {metrics.get('new', 0)} | Dùng lại: {task_result.reused} | Lỗi: {task_result.errors}")
+            self.collapse_conditions(False)
             self.save_tab()
             self.update_empty()
         if self.captcha_dialog:

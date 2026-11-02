@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-11-02
+
+- SQLite inventory bền vững theo account/RecordKey; đổi kỳ và restart giữ hồ sơ cũ.
+- Giữ nguyên bộ chọn ngày sau tải; đổi ngày SELECT local, không gửi HTTP.
+- Import JSON có owner, backup và quarantine identity mơ hồ; file cũ được giữ nguyên.
+- Checkpoint discovery/download, tải bổ sung và kiểm chứng 100→105: 98 reused, 7 tải thiếu.
+- Đọc local khi offline, counts kho/kỳ riêng, nhóm ngày chưa xác định và ngày theo account/tab.
+- Metrics không lưu URL/secret; pilot live có quota; tải vẫn tuần tự đến khi chứng minh session isolation.
+- Hướng dẫn và giới hạn: [LOCAL_DATABASE_GUIDE](docs/LOCAL_DATABASE_GUIDE.md).
+
 - Thêm **Xóa bộ lọc** (`Ctrl+Shift+F`), giữ lựa chọn tải và báo rõ số tệp đã
   chọn đang bị bộ lọc ẩn; tách hàng tìm kiếm/bộ lọc/thao tác ở cửa sổ nhỏ.
 - Sửa nguồn XML nhập tay còn giữ danh sách tệp đã chọn trước đó; giải thích

@@ -230,8 +230,12 @@ class HttpClient:
             remaining = budget.remaining()
             configured = options.get("timeout", self.timeout)
             options["timeout"] = tuple(min(float(value), remaining) for value in configured) if isinstance(configured, tuple) else min(float(configured), remaining)
-            response = self.session.request(method, url, **options)
+            exchange_started = time.monotonic()
+            response = None
             try:
+                response = self.session.request(method, url, **options)
+                if budget.stop_on_http_errors and response.status_code in {403, 429, 503}:
+                    raise NetworkError('LIVE_PILOT_STOP: cổng từ chối/giới hạn yêu cầu; đã dừng kiểm thử')
                 location = response.headers.get("Location") or response.headers.get("location")
                 if follow_redirects and response.status_code in {301, 302, 303, 307, 308} and location:
                     if hop == 5:
@@ -253,6 +257,10 @@ class HttpClient:
                 response.history = history
                 return response
             finally:
+                self.hooks.http_metrics.record(operation.name,
+                    response.status_code if response is not None else None,
+                    time.monotonic() - exchange_started,
+                    len(getattr(response, '_content', b'') or b'') if response is not None else 0)
                 close = getattr(response, "close", None)
                 if callable(close):
                     close()

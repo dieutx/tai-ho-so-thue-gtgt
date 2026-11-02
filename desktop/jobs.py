@@ -198,6 +198,9 @@ class Worker(QObject):
                 counts = counters(rows)
                 result = JobResult("SUCCESS", "Đã kiểm tra tệp trên máy", self.config.output,
                     rows=rows, discovered=len(rows), downloaded=counts["downloaded"], errors=counts["failed"])
+                from gdt_tax.identity import account_fingerprint
+                from gdt_tax.local_catalog import LocalCatalog
+                LocalCatalog(self.config.output, account_fingerprint(self.config.username)).upsert_documents(self.config.mode, rows)
             elif self.config.action == 'export_report':
                 from .reports import export_document_report
                 result = export_document_report(self.config, hooks)

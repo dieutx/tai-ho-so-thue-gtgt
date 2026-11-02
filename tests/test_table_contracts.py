@@ -343,7 +343,7 @@ class TablePipelineTests(unittest.TestCase):
             from_date="01/01/2020", to_date="31/01/2020", dry_run=True,
             preferences=Preferences(record_delay=0, page_delay=0, jitter=0, login_attempts=1, search_attempts=4))
 
-    def test_gui_keeps_partial_rows_without_requery_and_dry_run_writes_nothing(self):
+    def test_gui_keeps_partial_rows_in_sqlite_without_requery_or_artifacts(self):
         soup = BeautifulSoup(fixture("etax_legacy_results.html"), "lxml")
         soup.find("table").find_all("tr")[1].find("td").decompose()
         state = {"query_html": str(soup)}
@@ -355,7 +355,8 @@ class TablePipelineTests(unittest.TestCase):
         self.assertGreater(result.errors, 0)
         queries = [call for call in http.calls if (call.kwargs.get("data") or {}).get("dse_nextEventName") == "query"]
         self.assertEqual(len(queries), 1)
-        self.assertFalse(self.config().output.exists())
+        self.assertTrue((self.config().output / 'catalog.sqlite3').is_file())
+        self.assertEqual(list(self.config().output.glob('*.zip')), [])
 
     def test_cli_schema_failure_returns_nonzero(self):
         config = self.config()

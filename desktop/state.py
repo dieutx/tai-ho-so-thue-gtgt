@@ -52,3 +52,6 @@ class TabState:
     column_widths: dict[str, int] = field(default_factory=dict)
     conditions_collapsed: bool = False
     last_task: JobResult | None = None
+    from_date: str = ""
+    to_date: str = ""
+    preset: str = "previous"

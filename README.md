@@ -1,4 +1,4 @@
-# Tải Hồ Sơ Thuế 2.0
+# Tải Hồ Sơ Thuế 2.1
 
 Tra cứu và tải **tờ khai, giấy nộp tiền, thông báo thuế**; đọc XML/ZIP và xuất Excel.
 Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không cần cài Python hoặc Excel.
@@ -19,6 +19,10 @@ Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không
 4. Chọn hồ sơ cần lấy → **Tải các tệp đã chọn**; hoặc bấm **Tải chưa tải**. Bấm **Mở tệp** để xem kết quả.
 
 **Tra cứu & tải** lấy luôn hồ sơ trong khoảng đã chọn. Tệp hợp lệ đã có sẽ được dùng lại.
+Kho hồ sơ được lưu bền vững trong SQLite theo tài khoản/nghiệp vụ. Đổi kỳ đọc ngay
+dữ liệu local; tra cứu online bổ sung hồ sơ mới, không xóa các kỳ đã lưu. Có thể chọn
+**Xem hồ sơ đã lưu** khi offline. Thanh chọn ngày luôn hiện và giữ kỳ đã chọn.
+Chi tiết migration, vị trí DB và phục hồi: [Hướng dẫn kho local](docs/LOCAL_DATABASE_GUIDE.md).
 CAPTCHA được thử tự động tối đa **5 lần**; nếu vẫn chưa thành công, app thông báo và mở ô nhập tay.
 DVC được bật mặc định. **Trạng thái thuế** và **trạng thái tệp** được hiển thị riêng;
 hồ sơ bị từ chối vẫn có thể đã tải thành công.

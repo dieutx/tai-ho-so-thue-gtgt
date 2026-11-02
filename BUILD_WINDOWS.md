@@ -109,7 +109,7 @@ cần máy/phiên tương ứng; không suy ra đã PASS từ máy build.
 ## Sử dụng và giới hạn
 
 - Bốn nghiệp vụ dùng chung nơi lưu; offline có nguồn riêng, không cần tài khoản.
-- `Tra cứu` đăng nhập và đọc danh sách, không tạo catalog/báo cáo hoặc tải ZIP/XML/PDF. Tải đã chọn giữ đúng tài khoản, kỳ và nơi lưu của lần tra cứu.
+- `Tra cứu` đăng nhập, đọc danh sách và upsert SQLite, không tải ZIP/XML/PDF. Tải đã chọn giữ đúng tài khoản và kỳ đang xem; chỉ tải các ID của view local đã xác minh.
 - Desktop bật DVC mặc định, có thể tắt trong Cài đặt. Khi tắt, phạm vi sau cutoff
   báo thiếu. CLI giữ mặc định cũ. DVC dùng cookie riêng, GNT/TB dùng legacy toàn khoảng.
 - Nhấp đúp hoặc menu phải để xem metadata đầy đủ; menu phải mở file đã tồn tại.
@@ -123,7 +123,7 @@ cần máy/phiên tương ứng; không suy ra đã PASS từ máy build.
   Parser không tính lại thuế, cộng các lần nộp, parse chỉ tiêu GNT hay nội dung PDF.
 - Chỉ dùng output riêng từng tài khoản. Giới hạn định danh/gộp metadata của core
   ghi trong REVIEW vẫn áp dụng. Kết quả tải thật được ghi trong báo cáo nghiệm thu.
-- Danh mục đầu ra có thể gộp lịch sử theo core; bảng UI chỉ hiển thị job hiện tại.
+- SQLite giữ toàn bộ lịch sử theo tài khoản/nghiệp vụ; bảng UI đọc lại đúng kỳ đang chọn. Xem [kho local và rollback](docs/LOCAL_DATABASE_GUIDE.md).
 - Nhấn `v2.0.0` để xem thay đổi và kiểm tra bản mới. Chỉ khi bấm nút kiểm tra,
   app mới đọc GitLab public releases; không gửi tài khoản thuế, không tự cài.
   Repo riêng tư/chưa có release sẽ được thông báo rõ, không báo giả có cập nhật.

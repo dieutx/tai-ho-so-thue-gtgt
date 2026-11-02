@@ -1,6 +1,7 @@
 """Compact Qt Widgets workspace. Only tables and dialogs scroll."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from dataclasses import asdict, replace
@@ -42,6 +43,7 @@ from gdt_tax.errors import ConfigError
 from . import __version__
 from .account_dialog import AccountDialog
 from .account_store import AccountStore, AccountStoreError
+from .documents import document_id
 from .jobs import CaptchaRequest, JobController
 from .services import JobResult, RunConfig
 from .settings_store import Preferences, SettingsStore, default_output
@@ -492,7 +494,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
 
     def clear_account_views(self) -> None:
         for mode in ["tax", "gnt", "notice"]:
-            self.tab_states[mode] = TabState()
+            self.tab_states[mode] = self._restore_tab_state(mode)
+        self.restore_dates(self.tab_states[self.mode])
         if self.mode != "offline":
             self.result = None
             self.last_task = None
@@ -516,6 +519,15 @@ class MainWindow(V2InteractionMixin, QMainWindow):
     def _restore_tab_state(self, mode: str) -> TabState:
         """Khôi phục filter/sort/độ rộng cột đã lưu; không khôi phục dữ liệu hồ sơ."""
         state = TabState()
+        account = getattr(getattr(self, 'controller', None), 'sessions', None)
+        username = account.account.username if account else ''
+        accounts = self.preferences.ui_state.get('accounts', {})
+        account_dates = accounts.get(hashlib.sha256(username.encode()).hexdigest(), {}) if isinstance(accounts, dict) else {}
+        dates = account_dates.get(mode, {}) if isinstance(account_dates, dict) else {}
+        if isinstance(dates, dict):
+            state.from_date = str(dates.get('from_date') or '')
+            state.to_date = str(dates.get('to_date') or '')
+            state.preset = str(dates.get('preset') or 'previous')
         raw = self.preferences.ui_state.get(mode) if isinstance(self.preferences.ui_state, dict) else None
         if not isinstance(raw, dict):
             return state
@@ -548,6 +560,15 @@ class MainWindow(V2InteractionMixin, QMainWindow):
                 'sort_descending': state.sort_descending,
                 'column_widths': dict(state.column_widths),
             }
+        accounts = self.preferences.ui_state.get('accounts', {})
+        if not isinstance(accounts, dict):
+            accounts = {}
+        username = self.controller.sessions.account.username
+        if username:
+            accounts[hashlib.sha256(username.encode()).hexdigest()] = {
+                mode: {'from_date': state.from_date, 'to_date': state.to_date, 'preset': state.preset}
+                for mode, state in self.tab_states.items() if mode != 'offline'}
+        data['accounts'] = accounts
         self.preferences.ui_state = data
         try:
             self.store.save(self.preferences)
@@ -575,6 +596,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         if not accepted or not credentials:
             return
         old_username = account.username
+        self.save_tab()
         self.controller.sessions.set_account(*credentials)
         if old_username != account.username:
             self.clear_account_views()
@@ -606,6 +628,21 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             menu.addSeparator()
         menu.addAction('Đăng nhập tài khoản khác…', lambda: self.open_login(initial=('', '')))
         menu.exec(self.account_label.mapToGlobal(self.account_label.rect().bottomLeft()))
+
+    def open_local_account(self) -> None:
+        """Explicit local access; never represents a successful portal login."""
+        from PySide6.QtWidgets import QInputDialog
+        if self.controller.busy:
+            return
+        username, accepted = QInputDialog.getText(self, 'Xem hồ sơ đã lưu',
+                                                  'Tên tài khoản đã lưu trên máy (không cần mật khẩu):')
+        if not accepted or not username.strip():
+            return
+        self.save_tab()
+        self.controller.sessions.set_account(username.strip(), '')
+        self.clear_account_views()
+        self.refresh_account()
+        self.load_local_library()
 
     def logout(self) -> None:
         if not self.account_action_allowed(self.logout):
@@ -686,6 +723,9 @@ class MainWindow(V2InteractionMixin, QMainWindow):
                 self.source_files = ()
                 self.source_info.clear()
                 self.stage.setCurrentIndex(0)
+            elif widget is self.output and self.controller.sessions.account.username:
+                self.clear_account_views()
+                self.load_local_library()
 
     def error(self, text: str) -> None:
         message = QMessageBox(QMessageBox.Icon.Warning, "Tải Hồ Sơ Thuế", text,
@@ -780,11 +820,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
                 self.progress.setValue(0)
                 self.active_config = config
                 if clear:
-                    self.result = None
-                    self.model.reset(self.mode, [])
-                    self.pending_rows = {}
-                    self.populate_result(None)
-                    self.update_empty()
+                    self.pending_rows = {document_id(self.mode, row): dict(row) for row in self.model.rows}
         except Exception:
             self.error("Không bắt đầu được. Kiểm tra tài khoản, ngày, proxy và cài đặt nâng cao.")
 

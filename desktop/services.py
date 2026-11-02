@@ -150,6 +150,10 @@ class JobResult:
     requested: int = 0
     error_code: str = ""
     attachment_results: dict[str, dict] = field(default_factory=dict)
+    inventory_total: int = 0
+    unknown_dates: int = 0
+    quarantined: int = 0
+    sync_metrics: dict[str, int] = field(default_factory=dict)
 
 
 ONLINE = {
@@ -163,6 +167,25 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
                logger: logging.Logger, http: Any = None, portal_factory: Any = None,
                *, close_resources: bool = True, propagate_auth: bool = False) -> JobResult:
     settings = config.settings()
+    from gdt_tax.identity import account_fingerprint
+    from gdt_tax.local_catalog import LocalCatalog
+    catalog = LocalCatalog(config.output, account_fingerprint(config.username))
+    catalog.import_json(config.mode)
+    run_id = catalog.start_sync_run(config.mode, config.from_date, config.to_date,
+                                    config.action or ('query' if config.dry_run else 'query_and_download'))
+    changes = {'new': 0, 'updated': 0, 'unchanged': 0, 'quarantined': 0}
+    observed = set()
+    previous_checkpoint = hooks.catalog_checkpoint
+
+    def checkpoint(row):
+        key = document_id(config.mode, row)
+        counts = catalog.upsert_documents(config.mode, [row], online=True)
+        if key not in observed:
+            for name, value in counts.items():
+                changes[name] += value
+            observed.add(key)
+
+    hooks.catalog_checkpoint = checkpoint
     kind, writer, report = ONLINE[config.mode]
     http = http or HttpClient(timeout=settings.request_timeout, retries=settings.http_retries,
                               header_profile=settings.header_profile, proxy=parse_proxy(config.proxy),
@@ -241,10 +264,14 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
                     result.message = storage_message(error, 'Không lưu được danh mục')
                     logger.error(result.message)
         finally:
+            hooks.catalog_checkpoint = previous_checkpoint
+            catalog.upsert_documents(config.mode, verified_rows, online=True)
+            catalog.finish_sync_run(run_id, result.state, changes)
             if close_resources:
                 http.close()
                 captcha.close()
     result.rows = verified_rows
+    result.sync_metrics = changes
     result.discovered = len(result.rows)
     result.downloaded = len(pipeline.downloaded_ids)
     missing = set(pipeline.target_ids or ()) - pipeline.records.keys()
@@ -266,6 +293,9 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     # Only advertise reports actually produced by this job.
     if metadata_saved and (config.output / report).is_file():
         result.files = [config.output / report]
+    catalog.finish_sync_run(run_id, result.state, {**result.sync_metrics, 'found_online': result.discovered,
+                            'downloaded': result.downloaded, 'reused': result.reused, 'errors': result.errors,
+                            'http': hooks.http_metrics.snapshot()})
     return result
 
 
