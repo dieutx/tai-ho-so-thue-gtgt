@@ -13,4 +13,6 @@ Tất cả SELECT trả đúng tập RecordKey của JSON; `integrity_check=ok`.
 
 Smart-sync mock: 105 hồ sơ, 98 valid reused, đúng 7 download calls; đồng bộ lại reused=105, download calls=0, inventory=105. Đây là kiểm chứng request reuse, không phải bằng chứng tốc độ truyền mạng tăng. HTTP metrics mới chỉ ghi category allowlist, status class, số byte và tối đa 2.048 latency samples (p50/p95); không URL/payload/cookie/token.
 
+Desktop dùng SQLite thay cho checkpoint JSON trung gian, chỉ materialize JSON/CSV/XLSX trong `run_online.finally` khi có records. CLI giữ checkpoint policy hiện hữu. Tra cứu không tải bỏ lần upsert sau download rỗng; vẫn commit discovery trước khi trả kết quả và lưu trạng thái verify cuối lượt. 21 test pipeline/document liên quan đã chạy lại PASS sau thay đổi này; không gán số giây tiết kiệm khi chưa đo đường xuất báo cáo đó.
+
 Live performance và workers 2/3: NOT_RUN, chưa có cơ sở bật đa luồng.

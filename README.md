@@ -7,7 +7,7 @@ Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không
 
 **[🐍 Chạy bằng Python như trước — cài đặt, cấu hình .env và các lệnh CLI](docs/CLI_GUIDE.md)**
 
-![Giao diện Tải Hồ Sơ Thuế 2.0](docs/images/desktop-v2.png)
+![Giao diện Tải Hồ Sơ Thuế 2.1 sau tra cứu](docs/images/local-catalog-after.png)
 
 *Ảnh giao diện mới với dữ liệu kiểm thử; không chứa hồ sơ thuế thật.*
 

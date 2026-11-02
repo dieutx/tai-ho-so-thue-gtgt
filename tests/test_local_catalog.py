@@ -96,6 +96,9 @@ class LocalCatalogTests(unittest.TestCase):
         self.assertEqual(saved['trang_thai'], 'Đã chấp nhận')
         self.assertEqual(saved['tep_zip'], 'x.zip')
         self.assertEqual(saved['_file_hash'], 'synthetic-digest')
+        self.catalog.upsert_documents('tax', [dict(original, _integrity_status='invalid')])
+        with self.catalog.connection() as db:
+            self.assertEqual(db.execute('SELECT verification_state FROM artifacts').fetchone()[0], 'invalid')
 
     def test_transaction_rolls_back_and_backup_restores(self):
         self.catalog.upsert_documents('tax', [row('good')])
@@ -204,6 +207,66 @@ class LocalCatalogTests(unittest.TestCase):
 
 
 class IncrementalPipelineTests(unittest.TestCase):
+    def test_import_evidence_conflict_does_not_copy_primary_or_overwrite_evidence(self):
+        from desktop.migration import _copy_artifact
+        with tempfile.TemporaryDirectory() as directory:
+            source, target = Path(directory) / 'source', Path(directory) / 'target'
+            source.mkdir()
+            target.mkdir()
+            document = source / 'record.xml'
+            document.write_bytes(b'<record/>')
+            document.with_name('record.xml.integrity.json').write_bytes(b'source evidence')
+            evidence = target / 'record.xml.integrity.json'
+            evidence.write_bytes(b'existing evidence')
+            with self.assertRaisesRegex(ValueError, 'khác nguồn'):
+                _copy_artifact(source, target, document)
+            self.assertFalse((target / 'record.xml').exists())
+            self.assertEqual(evidence.read_bytes(), b'existing evidence')
+            self.assertEqual(document.read_bytes(), b'<record/>')
+
+    def test_trusted_import_preserves_attachments_and_original_manifest(self):
+        from desktop.migration import load_saved
+        from desktop.notices import read_notices
+        from gdt_tax.dvc_notices import NOTICE_DIRECTORY, DvcNotice, NoticeFile, NoticeStore
+        from gdt_tax.storage import ZipStore, write_metadata
+        with tempfile.TemporaryDirectory() as directory:
+            source, target = Path(directory) / 'source', Path(directory) / 'target'
+            check_owner(source, ACCOUNT, create=True)
+            record = CaseRecord('attachment-import', 'DVC', account_key=ACCOUNT)
+            ZipStore(source).save(record, sample_zip())
+            payload = NoticeFile('notice.xml', b'<TBaoThueDTu><TBaoThue/></TBaoThueDTu>', 'xml')
+            NoticeStore(source / NOTICE_DIRECTORY).save(record.key, DvcNotice('receipt'), payload)
+            write_metadata(source, [record])
+            before = {p.relative_to(source).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                      for p in source.rglob('*') if p.is_file()}
+            config = RunConfig('import', target, username='synthetic-catalog-owner', source=source, stage='tax')
+            result = load_saved(config, RunHooks(), copy_files=True)
+            self.assertEqual(result.state, 'SUCCESS')
+            notices = read_notices(target, record.ma_ho_so, parent_key=record.record_key)
+            self.assertEqual(len(notices), 1)
+            self.assertEqual(notices[0]['reference_status'], 'VERIFIED')
+            after = {p.relative_to(source).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                     for p in source.rglob('*') if p.is_file()}
+            self.assertEqual(before, after)
+
+    def test_explicit_import_requires_owner_and_persists_trusted_records(self):
+        from desktop.migration import load_saved
+        from gdt_tax.gnt.storage import write_gnt_metadata
+        with tempfile.TemporaryDirectory() as directory:
+            source, target = Path(directory) / 'source', Path(directory) / 'target'
+            check_owner(source, ACCOUNT, create=True)
+            record = GiayNopTien('trusted-import', ngay_lap='05/10/2026', account_key=ACCOUNT)
+            path = GntStore(source).save(record, fixture('gnt_chungtu.xml').encode())
+            write_gnt_metadata(source, [record])
+            before = hashlib.sha256(path.read_bytes()).hexdigest()
+            config = RunConfig('import', target, username='synthetic-catalog-owner', source=source, stage='gnt')
+            result = load_saved(config, RunHooks(), copy_files=True)
+            self.assertEqual(result.state, 'SUCCESS')
+            self.assertEqual(LocalCatalog(target, ACCOUNT).get_counts('gnt')['total'], 1)
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), before)
+            checked = verify_rows('gnt', result.rows, target)
+            self.assertEqual(checked[0]['_file_status'], 'downloaded')
+
     def test_100_to_105_reuses_98_downloads_exactly_seven_then_zero(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
@@ -326,6 +389,29 @@ class PersistentUITests(unittest.TestCase):
         self.assertEqual(self.window.model.rows[0]['ma_ho_so'], '2026')
         self.assertFalse(self.window.config_panel.isHidden())
         self.assertFalse(hasattr(self.window, 'edit_conditions'))
+        self.assertEqual(self.catalog.get_counts('tax')['total'], 3)
+
+    def test_query_and_download_keep_dates_and_controls_for_every_completion_state(self):
+        from desktop.services import JobResult
+        for mode in ('tax', 'gnt', 'notice'):
+            self.window.mode_changed(('tax', 'gnt', 'notice').index(mode))
+            for query_only in (True, False):
+                for state in ('SUCCESS', 'PARTIAL', 'ERROR', 'CANCELLED'):
+                    with self.subTest(mode=mode, query_only=query_only, state=state):
+                        self.period(2026, 10)
+                        config = self.window.make_config(mode, query_only)
+                        self.window.active_config = config
+                        before = (self.window.from_date.date(), self.window.to_date.date(),
+                                  self.window.preset.currentData())
+                        self.window.on_completed(JobResult(state, 'Synthetic completion', config.output,
+                                                           account_key=ACCOUNT))
+                        self.assertEqual((self.window.from_date.date(), self.window.to_date.date(),
+                                          self.window.preset.currentData()), before)
+                        for widget in (self.window.config_panel, self.window.from_date,
+                                       self.window.to_date, self.window.preset, self.window.query,
+                                       self.window.start_button):
+                            self.assertFalse(widget.isHidden())
+                        self.assertFalse(hasattr(self.window, 'edit_conditions'))
         self.assertEqual(self.catalog.get_counts('tax')['total'], 3)
 
     def test_library_worker_import_preserves_known_periods(self):

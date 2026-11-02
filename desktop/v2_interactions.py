@@ -236,6 +236,11 @@ class V2InteractionMixin:
         """Read the currently visible period from SQLite without network calls."""
         if not hasattr(self, 'proxy_model') or getattr(self, '_initializing', False):
             return
+        if self.result and self.result.operation == 'saved':
+            self.proxy_model.set_date_range(self.from_date.date().toPython(), self.to_date.date().toPython())
+            self.update_filtered_count()
+            self.update_empty()
+            return
         account = self.controller.sessions.account
         if self.mode == 'offline' or not account.username:
             self.proxy_model.set_date_range(None, None)
@@ -955,10 +960,13 @@ class V2InteractionMixin:
             self.status.setStyleSheet('color:' + {'SUCCESS': '#15805B', 'PARTIAL': '#93631B', 'ERROR': '#C94242'}.get(status_result.state, '#67768C') + ';')
             self.status.setToolTip(status_result.message)
             self.populate_result(selected)
-            if config and config.mode in {'tax', 'gnt', 'notice', 'batch'}:
+            if config and config.mode in {'tax', 'gnt', 'notice', 'batch', 'import'}:
                 self.apply_local_date_filter()
-                metrics = task_result.sync_metrics
-                self.status.setText(short + f" · Online: {task_result.discovered} | Mới: {metrics.get('new', 0)} | Dùng lại: {task_result.reused} | Lỗi: {task_result.errors}")
+                if config.mode == 'import':
+                    self.status.setText(short + f" · Nhập từ máy: {task_result.discovered} | Cần kiểm tra: {task_result.skipped} | Lỗi: {task_result.errors}")
+                elif config.action not in {'verify', 'export_report'}:
+                    metrics = task_result.sync_metrics
+                    self.status.setText(short + f" · Online: {task_result.discovered} | Mới: {metrics.get('new', 0)} | Dùng lại: {task_result.reused} | Lỗi: {task_result.errors}")
             self.collapse_conditions(False)
             self.save_tab()
             self.update_empty()

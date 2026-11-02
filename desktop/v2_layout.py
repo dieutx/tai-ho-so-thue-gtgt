@@ -182,7 +182,7 @@ def build_workspace(window):
     output.addWidget(self.open_folder_button)
     self.options_button = button('Tùy chọn', self.task_options, 'Bộ lọc và tùy chọn nghiệp vụ')
     output.addWidget(self.options_button)
-    self.query = button('Tra cứu', lambda: self.start(True), 'Chỉ tra cứu, không ghi catalog hoặc tải tệp')
+    self.query = button('Tra cứu', lambda: self.start(True), 'Tra cứu và bổ sung danh mục trên máy; không tải tệp')
     self.query.setObjectName('query')
     self.start_button = button('Tra cứu và tải', lambda: self.start(False), 'Tra cứu và tải; giữ tệp hợp lệ đã có')
     self.start_button.setObjectName('primary')

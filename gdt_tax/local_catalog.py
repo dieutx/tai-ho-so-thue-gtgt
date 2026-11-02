@@ -202,6 +202,13 @@ class LocalCatalog:
         return counts
 
     def _artifact(self, db, mode, key, role, artifact_key, relative, row, stamp):
+        state = 'unknown'
+        if row.get('reference_status') == 'INVALID' or row.get('_integrity_status') == 'invalid':
+            state = 'invalid'
+        elif (row.get('reference_status') == 'VERIFIED'
+              or row.get('_file_status') == 'downloaded' and row.get('_file_hash')
+              and row.get('_integrity_status') in {'verified', 'unverified'}):
+            state = 'verified'
         db.execute("""INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(account_key,mode,record_key,artifact_role,artifact_key) DO UPDATE SET
                 relative_path=COALESCE(excluded.relative_path,artifacts.relative_path),
@@ -210,8 +217,7 @@ class LocalCatalog:
                 verification_state=excluded.verification_state,last_verified_at=excluded.last_verified_at""",
                    (self.account, mode, key, role, artifact_key, relative, row.get("_file_size", row.get('size')),
                     row.get("_file_hash") or row.get('sha256') or None, json.dumps(row, ensure_ascii=False),
-                    'invalid' if row.get('reference_status') == 'INVALID' else
-                    "verified" if row.get("_file_hash") or row.get('reference_status') == 'VERIFIED' else "unknown", stamp))
+                    state, stamp))
 
     def get_documents(self, mode: str, from_date=None, to_date=None, *, unknown: bool = False) -> list[dict]:
         sql = "SELECT raw_metadata_json FROM documents WHERE account_key=? AND mode=?"
@@ -236,6 +242,12 @@ class LocalCatalog:
                                         (self.account, mode)).fetchone()
             review = db.execute("SELECT COUNT(*) FROM quarantine WHERE mode=?", (mode,)).fetchone()[0]
         return {"total": total, "unknown": unknown, "quarantined": review}
+
+    def quarantine_metadata(self, mode: str, metadata: dict, reason: str) -> None:
+        raw = json.dumps(metadata, ensure_ascii=False, sort_keys=True)
+        with self.connection() as db:
+            db.execute('INSERT OR IGNORE INTO quarantine VALUES(?,?,?,?,?)',
+                       (hashlib.sha256((mode + raw).encode()).hexdigest(), mode, reason, raw, now()))
 
     def start_sync_run(self, mode, from_date, to_date, operation) -> str:
         run = uuid4().hex

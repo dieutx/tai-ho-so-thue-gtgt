@@ -98,7 +98,7 @@ def consume_record(context: RunContext, record: R, records, download: Callable[[
     targeted = context.target_ids is None or key in context.target_ids
     if targeted:
         download()
-    if context.hooks.catalog_checkpoint:
+    if context.hooks.catalog_checkpoint and not context.settings.dry_run:
         context.hooks.catalog_checkpoint(record.to_dict())
     if not context.settings.dry_run and targeted:
         if key in context.downloaded_ids:

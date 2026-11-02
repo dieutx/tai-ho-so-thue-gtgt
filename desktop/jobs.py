@@ -187,6 +187,10 @@ class Worker(QObject):
                 from .migration import load_saved
                 result = load_saved(self.config, hooks, copy_files=self.config.mode == "import")
                 result.rows = verify_rows(self.config.stage, result.rows, result.output, hooks)
+                if self.config.mode == 'import':
+                    from gdt_tax.identity import account_fingerprint
+                    from gdt_tax.local_catalog import LocalCatalog
+                    LocalCatalog(result.output, account_fingerprint(self.config.username)).upsert_documents(self.config.stage, result.rows)
             elif self.config.mode == "library":
                 # LOCAL FIRST: đọc danh mục đã lưu của đúng tài khoản, không gọi mạng.
                 from .library import load_library

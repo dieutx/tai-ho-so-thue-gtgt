@@ -10,6 +10,8 @@ DB v1: `ROOT/<account-namespace>/to-khai/catalog.sqlite3`, `gnt/catalog.sqlite3`
 
 Lần mở local đầu tiên import JSON đã xác minh owner; lưu fingerprint migration và DB backup. Các lần online ghi tăng dần trực tiếp SQLite; JSON/CSV/XLSX là export tương thích. Không lấy JSON mới để replace DB. JSON đã import không tự ghi ngược metadata cũ lên DB ở lần mở sau. CLI core giữ dry-run không ghi; JSON do công cụ ngoài chỉnh sau migration cần reconciliation rõ ràng qua repository API `import_json(..., reconcile=True)`, không tự quét/nhận lại.
 
+Luồng **Nhập dữ liệu cũ** cũng yêu cầu source có owner đúng tài khoản và RecordKey không xung đột. Metadata được checkpoint vào SQLite trước khi copy; file chính, evidence và thông báo đính kèm đã xác minh được copy nguyên byte. Attachment chưa xác minh vào quarantine và giữ file nguồn. Folder unowned chỉ được mở để xem; không được tự gán owner bằng nút xác nhận tài khoản. Các JSON/Excel xuất một lần khi kết thúc, kể cả hủy có kiểm soát.
+
 File trong view chỉ stat size/mtime đã ghi sau verify; không rehash toàn kho khi đổi ngày. File không có evidence verify, bị xóa, đổi size/mtime hoặc đã biết invalid không được hiển thị đã tải. `Kiểm tra tệp` thực hiện deep verify và cập nhật SQLite. Tệp chính và attachment có registry riêng; ZIP hợp lệ không khẳng định đã đủ thông báo.
 
 Đổi `Nơi lưu` mở workspace tương ứng, không chuyển/xóa dữ liệu cũ. Quay về root cũ sẽ đọc lại DB cũ. Ưu tiên ổ local; SQLite dùng rollback journal (không bật WAL). Network share/OneDrive vẫn phụ thuộc khóa file và chính sách đồng bộ; nên đóng app trước khi copy/backup folder, không dùng một DB đang mở từ nhiều máy.

@@ -194,7 +194,10 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     if config.mode == 'tax':
         kwargs['store'] = DesktopZipStore(config.output, logger, config.input_rows)
     pipeline = kind(settings, http, captcha, hooks=hooks, logger=logger,
-                    persist_metadata=not config.dry_run and config.target_ids is None,
+                    # SQLite owns crash checkpoints. Materialize legacy exports
+                    # once in finally, rather than re-serializing the full JSON
+                    # and workbook at every growing pipeline checkpoint.
+                    persist_metadata=False,
                     target_ids=set(config.target_ids) if config.target_ids is not None else None, **kwargs)
     result = JobResult("ERROR", "Tác vụ thất bại", config.output)
     metadata_saved = False

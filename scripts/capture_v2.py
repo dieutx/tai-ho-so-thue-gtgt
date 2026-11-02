@@ -11,15 +11,17 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from uuid import uuid4
 
 
 def capture(size: str) -> None:
-    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtCore import QDate, QPoint, QRect
     from PySide6.QtWidgets import QApplication
 
     from desktop.documents import document_id
     from desktop.services import RunConfig, run_offline, run_online
     from desktop.settings_store import Preferences, SettingsStore
+    from desktop.state import job_output
     from desktop.ui import MainWindow
     from gdt_tax.run_hooks import RunHooks
     from tests.support import FakeHttp, FakeResponse, StubCaptcha
@@ -30,7 +32,7 @@ def capture(size: str) -> None:
     width, height = map(int, size.split('x'))
     output = Path('.cache/v2-fixture-ui').resolve()
     output.mkdir(parents=True, exist_ok=True)
-    data = output / 'data' / (size + '-' + str(scale))
+    data = output / 'data' / (size + '-' + str(scale) + '-' + uuid4().hex)
     data.mkdir(parents=True, exist_ok=True)
     prefs = Preferences(output=str(data), record_delay=0, page_delay=0, jitter=0, login_attempts=1, search_attempts=1)
     store = SettingsStore(data / 'settings.json')
@@ -44,10 +46,10 @@ def capture(size: str) -> None:
     for mode, factory in [('tax', make_legacy_handler), ('gnt', make_gnt_handler), ('notice', make_tb_handler), ('offline', None)]:
         window.close_drawer()
         window.tabs.setCurrentIndex(['tax', 'gnt', 'notice', 'offline'].index(mode))
-        config = RunConfig(mode, data / mode, username='fixture-user', password='fixture-secret', preferences=prefs,
+        config = RunConfig(mode, job_output(data, 'fixture-user', mode), username='fixture-user', password='fixture-secret', preferences=prefs,
                            dry_run=mode != 'offline', source=Path('tests/fixtures').resolve(),
-                           from_date='01/06/2025' if mode == 'tax' else '01/09/2026',
-                           to_date='30/06/2025' if mode == 'tax' else '30/09/2026')
+                           from_date={'tax': '01/02/2020', 'notice': '01/08/2026'}.get(mode, '01/09/2026'),
+                           to_date={'tax': '29/02/2020', 'notice': '31/08/2026'}.get(mode, '30/09/2026'))
         if mode == 'offline':
             config.validate()
             result = run_offline(config, RunHooks(), logging.getLogger('fixture'))
@@ -65,9 +67,15 @@ def capture(size: str) -> None:
                 failed = replace(config, dry_run=False, target_ids=(document_id(mode, second),), input_rows=[second])
                 result = run_online(failed, RunHooks(), StubCaptcha(), logging.getLogger('fixture'),
                                     http=FakeHttp(factory({'download_response': FakeResponse(status_code=500)})))
-        window.result = result
-        window.model.reset(mode, result.rows)
-        window.populate_result(result)
+        window.applying_preset = True
+        window.from_date.setDate(QDate.fromString(config.from_date, 'dd/MM/yyyy'))
+        window.to_date.setDate(QDate.fromString(config.to_date, 'dd/MM/yyyy'))
+        window.preset.setCurrentIndex(window.preset.findData('custom'))
+        window.applying_preset = False
+        window.active_config = config
+        window.on_completed(result)
+        if mode != 'offline' and not window.model.rows:
+            failures.append(mode + ': expected populated local inventory')
         window.status.setText('Có 1 lỗi tải · Fixture' if result.errors and mode != 'offline' else
                               'Phân tích hoàn tất một phần · Fixture' if mode == 'offline' else 'Tra cứu hoàn tất · Fixture')
         window.collapse_conditions(mode != 'offline')
@@ -79,8 +87,12 @@ def capture(size: str) -> None:
         with patch.object(window, 'screen', return_value=SimpleNamespace(availableGeometry=lambda workarea=area: workarea)):
             window.fit_screen()
         app.processEvents()
-        for control in [window.table, window.stop_button, window.history_button, window.menu_button,
-                        window.config_panel if mode == 'offline' else window.condition_summary]:
+        controls = [window.table, window.stop_button, window.history_button, window.menu_button,
+                    window.config_panel]
+        if mode != 'offline':
+            controls.extend([window.preset, window.from_date, window.to_date,
+                             window.query, window.start_button])
+        for control in controls:
             top = control.mapTo(window, QPoint(0, 0))
             bottom = control.mapTo(window, control.rect().bottomRight())
             if not control.isVisible() or not window.rect().contains(top) or not window.rect().contains(bottom):
