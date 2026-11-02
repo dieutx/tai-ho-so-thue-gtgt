@@ -503,6 +503,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             self.type_filter.setCurrentIndex(0)
             self.proxy_model.set_cqt_filter('all')
             self.proxy_model.set_type_filter('')
+            self.proxy_model.set_date_range(None, None)
             self.filtered_label.clear()
             self.close_drawer()
             if hasattr(self, 'feedback_panel'):
@@ -772,7 +773,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             self.error("Chọn thư mục lưu chung")
             return
         try:
-            if config.mode not in {"offline", "saved"}:
+            if config.mode not in {"offline", "saved", "library"}:
                 config.settings()
             if self.controller.start(config):
                 self.progress.setRange(0, 0)

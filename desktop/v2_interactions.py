@@ -38,7 +38,9 @@ from .documents import (
 )
 from .domain import INTEGRITY_LABELS, INTEGRITY_NOT_CHECKED, submission_key
 from .errors import issue_hint
+from .library import merge_rows
 from .notices import STATE_LABELS, attachment_totals, row_attachment_problem
+from .services import RunConfig
 from .state import TabState
 from .table_model import COLUMNS
 
@@ -52,7 +54,11 @@ class V2InteractionMixin:
         self.warning_update()
         if self.result and all(self.result.date_range) and self.result.date_range != (
                 self.from_date.date().toString('dd/MM/yyyy'), self.to_date.date().toString('dd/MM/yyyy')):
-            self.status.setText('Điều kiện đã đổi; danh sách vẫn thuộc kỳ đã tra cứu trước đó')
+            if self.result.operation == 'library':
+                self.status.setText('Đang lọc hồ sơ đã lưu trên máy theo khoảng ngày mới — không gọi mạng')
+            else:
+                self.status.setText('Điều kiện đã đổi; danh sách vẫn thuộc kỳ đã tra cứu trước đó')
+        self.apply_local_date_filter()
 
     def apply_preset(self, *_args):
         kind = self.preset.currentData()
@@ -86,7 +92,8 @@ class V2InteractionMixin:
             self.from_date.date().toString('dd/MM/yyyy'), self.to_date.date().toString('dd/MM/yyyy'))
         path = self.result.output if self.result else Path(self.output.text())
         label = {'tax': 'Ngày nộp', 'gnt': 'Ngày lập', 'notice': 'Ngày gửi'}.get(self.mode, 'Khoảng tra cứu')
-        self.summary_text.setText(f'{label}: {dates[0]} – {dates[1]}  ·  Nơi lưu: {path.name}')
+        source = '  ·  Dữ liệu trên máy' if self.result and self.result.operation == 'library' else ''
+        self.summary_text.setText(f'{label}: {dates[0]} – {dates[1]}  ·  Nơi lưu: {path.name}{source}')
         self.summary_text.setToolTip(f'Kết quả theo {label.lower()} {dates[0]} – {dates[1]}\n{path}')
         self.responsive()
 
@@ -197,6 +204,38 @@ class V2InteractionMixin:
         self.file_filter.setCurrentIndex(0)
         self.cqt_filter.setCurrentIndex(0)
         self.type_filter.setCurrentIndex(0)
+        self.update_filtered_count()
+        self.update_empty()
+
+    def load_local_library(self, *, after=None) -> bool:
+        """Nạp danh mục đã lưu của tài khoản hiện tại trước mọi thao tác mạng."""
+        account = self.controller.sessions.account
+        base = str(self.output.text() or '').strip()
+        if not account.username or not base:
+            return False
+        if self.controller.busy:
+            return False
+        config = RunConfig(
+            'library', Path(base).expanduser(), username=account.username,
+            from_date=self.from_date.date().toString('dd/MM/yyyy'),
+            to_date=self.to_date.date().toString('dd/MM/yyyy'),
+            preferences=replace(self.preferences),
+        )
+        self.local_after = after
+        self.status.setText('Đang đọc hồ sơ đã lưu trên máy…')
+        self.launch(config, clear=False)
+        return True
+
+    def apply_local_date_filter(self) -> None:
+        """Lọc bảng theo khoảng ngày đang chọn khi dữ liệu đến từ danh mục trên máy."""
+        if not hasattr(self, 'proxy_model'):
+            return
+        if not self.result or self.result.operation != 'library':
+            self.proxy_model.set_date_range(None, None)
+            return
+        start = self.from_date.date().toPython()
+        end = self.to_date.date().toPython()
+        self.proxy_model.set_date_range(start, end)
         self.update_filtered_count()
         self.update_empty()
 
@@ -828,10 +867,27 @@ class V2InteractionMixin:
             self.save_login(config, result.state == 'SUCCESS')
             self.status.setText(result.message)
             after, self.after_login = self.after_login, None
-            if result.state == 'SUCCESS' and after:
-                QTimer.singleShot(0, after)
+            if result.state == 'SUCCESS':
+                # LOCAL FIRST: danh mục trên máy hiện ra ngay, không cần bấm Tra cứu.
+                self.load_local_library(after=after)
             elif result.state == 'ERROR':
                 self.error(result.message)
+        elif config and config.mode == 'library':
+            for mode, child in result.children.items():
+                state = self.tab_states[mode]
+                state.result, state.rows, state.message = child, child.rows, child.message
+            current = self.tab_states[self.mode]
+            self.result = current.result
+            self.model.reset(self.mode, current.rows)
+            self.refresh_feedback_panel()
+            self.populate_result(current.result)
+            self.status.setText(result.message)
+            self.status.setStyleSheet('color:#67768C;')
+            self.status.setToolTip(result.message)
+            self.apply_local_date_filter()
+            after, self.local_after = self.local_after, None
+            if after:
+                QTimer.singleShot(0, after)
         else:
             previous = self.result
             if config and config.action in {'verify', 'export_report'} and previous:
@@ -847,6 +903,12 @@ class V2InteractionMixin:
                         row.update(_file_status='failed', _error_message=issue_map.get(key) or result.message)
                 result.discovered = len(result.rows)
                 result.files = previous.files
+            elif config and config.mode in {'tax', 'gnt', 'notice'} and previous and previous.rows:
+                # SMART MERGE: kết quả online chỉ bổ sung/cập nhật, không làm mất dữ liệu đã có.
+                if previous.account_key == result.account_key:
+                    result.rows = merge_rows(config.mode, previous.rows, result.rows)
+                    result.discovered = len(result.rows)
+                    result.files = list(dict.fromkeys(result.files + previous.files))
             if result.children:
                 for mode, child in result.children.items():
                     self.tab_states[mode] = TabState(result=child, rows=child.rows, message=child.message, conditions_collapsed=True)
@@ -856,7 +918,7 @@ class V2InteractionMixin:
             self.result = selected
             self.model.reset(self.mode, selected.rows if selected else [])
             self.refresh_feedback_panel()
-            if config and config.action not in {'verify', 'export_report'} and config.mode not in {'saved', 'import'}:
+            if config and config.action not in {'verify', 'export_report'} and config.mode not in {'saved', 'import', 'library'}:
                 self.history.insert(0, {'mode': config.mode, 'result': result, 'action': result.operation})
                 self.history = self.history[:100]
             status_result = task_result if config and config.action in {'verify', 'export_report'} else result
@@ -1150,6 +1212,10 @@ class V2InteractionMixin:
             message = 'Không thể hoàn tất tác vụ. Nhấn Xem chi tiết ở thanh dưới để biết nguyên nhân và cách xử lý.'
         elif self.result and self.result.state in {'CANCELLED', 'PARTIAL'}:
             message = 'Tra cứu chưa đầy đủ nên chưa thể kết luận không có hồ sơ.\nChạy lại tra cứu hoặc xem tổng kết trong Lịch sử tải.'
+        elif self.result and self.result.operation == 'library':
+            message = ('Chưa có hồ sơ đã lưu trong khoảng ngày này.\nBạn có thể bấm Tra cứu để lấy dữ liệu từ cơ quan thuế.'
+                       if not self.model.rowCount() else
+                       'Không có hồ sơ đã lưu trong khoảng ngày đang chọn.\nĐổi ngày hoặc xóa bộ lọc để xem lại.')
         elif self.result:
             message = 'Không tìm thấy hồ sơ trong kỳ đã tra cứu.'
         elif self.mode == 'offline':

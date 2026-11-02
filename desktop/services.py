@@ -92,7 +92,7 @@ class RunConfig:
         return replace(self, target_ids=targets, case_id=case_id)
 
     def validate(self) -> None:
-        if self.mode not in {"tax", "gnt", "notice", "offline", "login", "batch", "import", "saved"}:
+        if self.mode not in {"tax", "gnt", "notice", "offline", "login", "batch", "import", "saved", "library"}:
             raise ValueError("Chế độ không hợp lệ")
         if self.action not in {"", "download_selected", "verify", "export_report"}:
             raise ValueError("Thao tác không hợp lệ")
@@ -116,10 +116,10 @@ class RunConfig:
                 raise ValueError("Bước offline không hợp lệ")
             if self.forms_dir and not Path(self.forms_dir).is_dir():
                 raise ValueError("Thư mục mapping tùy chỉnh không tồn tại")
-        elif self.mode != "saved":
+        elif self.mode not in {"saved", "library"}:
             self.settings()
             self.normalized_selection()
-        if self.mode in {"login", "saved"}:
+        if self.mode in {"login", "saved", "library"}:
             return
         if self.dry_run and self.mode in ONLINE:
             return  # GUI query writes neither attachments nor catalog/report files.
