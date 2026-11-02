@@ -3,6 +3,8 @@
 - Không đọc `.env` hoặc lấy password thuế để chạy test. Pilot nhập trực tiếp dialog/vault hiện hữu; không thêm secret vào SQLite/settings/report.
 - Tất cả SQL dùng bound parameters; toán tử ngày chỉ từ hằng số. RecordKey/account/source/kind phải khớp; mơ hồ vào quarantine. Legacy unowned không được nhận theo tên folder.
 - Đường dẫn artifact resolve và phải nằm trong workspace; SQLite symlink bị từ chối. File tải giữ atomic save/evidence của core; không đổi policy verify thành chỉ kiểm đuôi file.
+- Import kiểm tra source/đích của cả tệp chính và sidecar evidence trước khi copy; từ chối symlink/path ngoài root và xung đột nội dung. Regression evidence đích xung đột giữ nguyên evidence, không chép tệp chính.
+- Lượt tiếp tục giữ nguyên GuiCaptchaSolver/OCR/portal; hai frozen smoke xác nhận OCR và fallback tối đa 5 lần tự động rồi nhập tay. Không dùng kết quả offline để khẳng định login live thành công.
 - Mỗi operation tự mở/đóng connection; BEGIN IMMEDIATE bảo vệ upsert; busy timeout 5s; FK ON; index account/mode/date; không bật WAL trên thư mục cloud/share. Không dùng connection xuyên Qt worker/UI.
 - Discovery commit trước download; commit file xong checkpoint; cancel/error không DELETE. DB backup trước import/schema; integrity và inspector read-only.
 - Không cất raw HTTP trong metrics; chỉ đếm category/status/bytes/latency. Chưa thêm service telemetry hoặc gửi dữ liệu thuế cho bên thứ ba.

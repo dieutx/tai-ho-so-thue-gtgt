@@ -7,7 +7,9 @@
 - Đọc local khi offline, lưu ngày theo tài khoản/tab, tách số tổng kho và số trong kỳ.
 - Checkpoint SQLite từng hồ sơ; export JSON/Excel một lần khi kết thúc để giảm việc ghi lại toàn danh sách.
 
-Kiểm chứng: 907 unit/integration tests (6 skips); ruff/mypy; Windows onefile Full/CPU OCR, bundle audit, hai lượt frozen smoke và 18 cấu hình DPI. Mock 100→105 giữ đúng 105 keys, 98 tệp reused, đúng 7 download calls; chạy lại không gọi download cho 105 tệp đã hợp lệ. Migration fixture không đổi SHA-256 tệp gốc.
+Kiểm chứng source build 07fcfd3: 911 unit/integration tests (6 skips); ruff/mypy; Windows onefile Full/CPU OCR, bundle audit, hai lượt frozen smoke và 18/18 cấu hình native DPI PASS. Mock 100→105 giữ đúng 105 keys, 98 tệp reused, đúng 7 download calls; chạy lại không gọi download cho 105 tệp đã hợp lệ. Migration fixture không đổi SHA-256 tệp gốc. [Báo cáo triển khai](IMPLEMENTATION_REPORT_2.1.0.md) ghi checksum và giới hạn kiểm chứng.
+
+Giữ nguyên luồng CAPTCHA tự động: OCR và fallback tối đa 5 lượt tự động trước nhập tay được kiểm tra trong frozen smoke; không đổi GuiCaptchaSolver hoặc module OCR/portal trong lượt hoàn thiện này.
 
 Benchmark metadata tổng hợp 100.000 rows: median đọc/lọc JSON 600,132 ms, SQLite SELECT tháng tương ứng 46,053 ms (5 warm reads); không đại diện tốc độ cổng thuế thật.
 
