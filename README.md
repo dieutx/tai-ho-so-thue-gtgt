@@ -1,4 +1,4 @@
-# Tải Hồ Sơ Thuế 2.0
+# Tải Hồ Sơ Thuế 2.1
 
 Tra cứu và tải **tờ khai, giấy nộp tiền, thông báo thuế**; đọc XML/ZIP và xuất Excel.
 Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không cần cài Python hoặc Excel.
@@ -9,7 +9,7 @@ Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không
 
 **[Mã nguồn trên GitHub](https://github.com/dieutx/tai-ho-so-thue-gtgt)**
 
-![Giao diện Tải Hồ Sơ Thuế 2.0](docs/images/desktop-v2.png)
+![Giao diện Tải Hồ Sơ Thuế 2.1 sau tra cứu](docs/images/local-catalog-after.png)
 
 *Ảnh giao diện mới với dữ liệu kiểm thử; không chứa hồ sơ thuế thật.*
 
@@ -18,9 +18,13 @@ Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không
 1. Tải và mở **TaiHoSoThue-Windows.exe**.
 2. Chọn **Đăng nhập**, nhập tài khoản Thuế điện tử và mật khẩu; nhập CAPTCHA nếu được yêu cầu.
 3. Chọn nhóm hồ sơ, khoảng ngày và nơi lưu, rồi bấm **Tra cứu**.
-4. Chọn hồ sơ cần lấy → **Tải các tệp đã chọn**; hoặc bấm **Tải chưa tải**. Bấm **Mở tệp** để xem kết quả.
+4. Chọn hồ sơ cần lấy → **Tải các tệp đã chọn**; hoặc bấm **Tải chưa tải**. Bấm **Xem file** để mở XML của hồ sơ bằng ứng dụng mặc định (ZIP gốc được giữ nguyên).
 
 **Tra cứu & tải** lấy luôn hồ sơ trong khoảng đã chọn. Tệp hợp lệ đã có sẽ được dùng lại.
+Kho hồ sơ được lưu bền vững trong SQLite theo tài khoản/nghiệp vụ. Đổi kỳ đọc ngay
+dữ liệu local; tra cứu online bổ sung hồ sơ mới, không xóa các kỳ đã lưu. Có thể chọn
+**Xem hồ sơ đã lưu** khi offline. Thanh chọn ngày luôn hiện và giữ kỳ đã chọn.
+Chi tiết migration, vị trí DB và phục hồi: [Hướng dẫn kho local](docs/LOCAL_DATABASE_GUIDE.md).
 CAPTCHA được thử tự động tối đa **5 lần**; nếu vẫn chưa thành công, app thông báo và mở ô nhập tay.
 DVC được bật mặc định. **Trạng thái thuế** và **trạng thái tệp** được hiển thị riêng;
 hồ sơ bị từ chối vẫn có thể đã tải thành công.

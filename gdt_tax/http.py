@@ -208,7 +208,7 @@ class HttpClient:
                 )
             if response.status_code != 429 or attempt == attempts:
                 return response
-            delay = self._retry_delay(response, attempt)
+            delay = self._retry_delay(response, attempt, operation)
             self.logger.warning(
                 "Máy chủ giới hạn tần suất (HTTP 429); chờ %s giây rồi thử lại (lần %s/%s)...",
                 delay,
@@ -230,8 +230,12 @@ class HttpClient:
             remaining = budget.remaining()
             configured = options.get("timeout", self.timeout)
             options["timeout"] = tuple(min(float(value), remaining) for value in configured) if isinstance(configured, tuple) else min(float(configured), remaining)
-            response = self.session.request(method, url, **options)
+            exchange_started = time.monotonic()
+            response = None
             try:
+                response = self.session.request(method, url, **options)
+                if budget.stop_on_http_errors and response.status_code in {403, 429, 503}:
+                    raise NetworkError('LIVE_PILOT_STOP: cổng từ chối/giới hạn yêu cầu; đã dừng kiểm thử')
                 location = response.headers.get("Location") or response.headers.get("location")
                 if follow_redirects and response.status_code in {301, 302, 303, 307, 308} and location:
                     if hop == 5:
@@ -253,6 +257,10 @@ class HttpClient:
                 response.history = history
                 return response
             finally:
+                self.hooks.http_metrics.record(operation.name,
+                    response.status_code if response is not None else None,
+                    time.monotonic() - exchange_started,
+                    len(getattr(response, '_content', b'') or b'') if response is not None else 0)
                 close = getattr(response, "close", None)
                 if callable(close):
                     close()
@@ -372,7 +380,8 @@ class HttpClient:
             return ""
         return f"?{describe_params(params, limit=PARAMS_LOG_LIMIT)}"
 
-    def _retry_delay(self, response: requests.Response, attempt: int = 1) -> float:
+    def _retry_delay(self, response: requests.Response, attempt: int = 1,
+                     operation: OperationPolicy | None = None) -> float:
         raw = str(response.headers.get("Retry-After", "") or "").strip()
         delay: float | None = None
         if raw:
@@ -390,7 +399,10 @@ class HttpClient:
             # Cổng thường chỉ chặn burst ngắn và không gửi Retry-After.
             # 2s, 4s, 8s... nhanh hơn nhiều so với chờ cứng 15s; nếu cổng
             # vẫn chặn, các lần sau tự lùi tiếp và tôn trọng Retry-After.
-            delay = self.min_backoff * (2 ** (max(1, attempt) - 1))
+            # Endpoint bị chặn mạnh khai báo hệ số nhỏ hơn để tổng thời gian chờ
+            # không phình ra 62 giây cho một thông báo.
+            growth = operation.retry_growth if operation is not None else 2.0
+            delay = self.min_backoff * (growth ** (max(1, attempt) - 1))
         if not math.isfinite(delay) or delay < 0:
             delay = self.default_backoff
         return min(self.max_backoff, max(self.min_backoff, delay))

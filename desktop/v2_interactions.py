@@ -38,21 +38,22 @@ from .documents import (
 )
 from .domain import INTEGRITY_LABELS, INTEGRITY_NOT_CHECKED, submission_key
 from .errors import issue_hint
+from .library import catalog_view
 from .notices import STATE_LABELS, attachment_totals, row_attachment_problem
-from .state import TabState
+from .services import RunConfig
 from .table_model import COLUMNS
 
 
 class V2InteractionMixin:
     def dates_changed(self, *_args):
+        if self.applying_preset:
+            return
         if not self.applying_preset:
             self.preset.blockSignals(True)
             self.preset.setCurrentIndex(self.preset.findData('custom'))
             self.preset.blockSignals(False)
         self.warning_update()
-        if self.result and all(self.result.date_range) and self.result.date_range != (
-                self.from_date.date().toString('dd/MM/yyyy'), self.to_date.date().toString('dd/MM/yyyy')):
-            self.status.setText('Điều kiện đã đổi; danh sách vẫn thuộc kỳ đã tra cứu trước đó')
+        self.apply_local_date_filter()
 
     def apply_preset(self, *_args):
         kind = self.preset.currentData()
@@ -77,17 +78,11 @@ class V2InteractionMixin:
         self.to_date.setDate(end)
         self.applying_preset = False
         self.warning_update()
+        self.apply_local_date_filter()
 
     def collapse_conditions(self, collapsed=True):
-        self.conditions_collapsed = bool(collapsed and self.mode != 'offline')
-        self.config_panel.setVisible(not self.conditions_collapsed)
-        self.condition_summary.setVisible(self.conditions_collapsed)
-        dates = self.result.date_range if self.result and all(self.result.date_range) else (
-            self.from_date.date().toString('dd/MM/yyyy'), self.to_date.date().toString('dd/MM/yyyy'))
-        path = self.result.output if self.result else Path(self.output.text())
-        label = {'tax': 'Ngày nộp', 'gnt': 'Ngày lập', 'notice': 'Ngày gửi'}.get(self.mode, 'Khoảng tra cứu')
-        self.summary_text.setText(f'{label}: {dates[0]} – {dates[1]}  ·  Nơi lưu: {path.name}')
-        self.summary_text.setToolTip(f'Kết quả theo {label.lower()} {dates[0]} – {dates[1]}\n{path}')
+        self.conditions_collapsed = False
+        self.config_panel.show()
         self.responsive()
 
     def save_tab(self):
@@ -111,6 +106,10 @@ class V2InteractionMixin:
         state.message = self.status.text()
         state.conditions_collapsed = self.conditions_collapsed
         state.last_task = self.last_task
+        state.from_date = self.from_date.date().toString('dd/MM/yyyy')
+        state.to_date = self.to_date.date().toString('dd/MM/yyyy')
+        state.preset = self.preset.currentData() or 'custom'
+        self.persist_ui_state()
 
     def mode_changed(self, index):
         if not hasattr(self, 'model'):
@@ -133,6 +132,7 @@ class V2InteractionMixin:
         for widget in [self.account_label, self.source_badge, self.account_button, self.logout_button]:
             widget.setVisible(not offline)
         state = self.tab_states[self.mode]
+        self.restore_dates(state)
         self.result = state.result
         self.last_task = state.last_task
         self.model.reset(self.mode, state.rows)
@@ -157,6 +157,19 @@ class V2InteractionMixin:
         self.warning_update()
         self.responsive()
         self.update_empty()
+        if self.mode != 'offline' and not getattr(self, '_initializing', False):
+            self.apply_local_date_filter()
+
+    def restore_dates(self, state):
+        self.applying_preset = True
+        for widget, value in ((self.from_date, state.from_date), (self.to_date, state.to_date)):
+            day = QDate.fromString(value, 'dd/MM/yyyy')
+            if day.isValid():
+                widget.setDate(day)
+        self.preset.blockSignals(True)
+        self.preset.setCurrentIndex(max(0, self.preset.findData(state.preset)))
+        self.preset.blockSignals(False)
+        self.applying_preset = False
 
     def set_file_filter(self):
         self.proxy_model.set_status_filter(self.file_filter.currentData())
@@ -200,6 +213,81 @@ class V2InteractionMixin:
         self.update_filtered_count()
         self.update_empty()
 
+    def load_local_library(self, *, after=None) -> bool:
+        """Nạp danh mục đã lưu của tài khoản hiện tại trước mọi thao tác mạng."""
+        account = self.controller.sessions.account
+        base = str(self.output.text() or '').strip()
+        if not account.username or not base:
+            return False
+        if self.controller.busy:
+            return False
+        config = RunConfig(
+            'library', Path(base).expanduser(), username=account.username,
+            from_date=self.from_date.date().toString('dd/MM/yyyy'),
+            to_date=self.to_date.date().toString('dd/MM/yyyy'),
+            preferences=replace(self.preferences),
+        )
+        self.local_after = after
+        self.status.setText('Đang đọc hồ sơ đã lưu trên máy…')
+        self.launch(config, clear=False)
+        return True
+
+    def apply_local_date_filter(self, *_args, completed=None):
+        """Update visible rows; return the catalog outcome independently of the job."""
+        if not hasattr(self, 'proxy_model') or getattr(self, '_initializing', False):
+            return
+        if (completed is None and self.result and self.result.operation == 'saved'
+                and not (self.active_config and self.active_config.mode in {'tax', 'gnt', 'notice', 'batch'})):
+            self.proxy_model.set_date_range(self.from_date.date().toPython(), self.to_date.date().toPython())
+            self.update_filtered_count()
+            self.update_empty()
+            return
+        account = self.controller.sessions.account
+        if self.mode == 'offline' or not account.username:
+            self.proxy_model.set_date_range(None, None)
+            return
+        try:
+            selected = catalog_view(self.output.text(), account.username, self.mode,
+                                    self.from_date.date().toString('dd/MM/yyyy'),
+                                    self.to_date.date().toString('dd/MM/yyyy'),
+                                    unknown=self.unknown_dates.isChecked())
+        except Exception:
+            self.status.setText('Không đọc được kho local; dữ liệu hiện tại được giữ. Kiểm tra nơi lưu và quyền sở hữu.')
+            self.status.setToolTip(self.status.text())
+            return
+        if selected.state == 'ERROR':
+            self.status.setText(selected.message)
+            self.status.setToolTip(selected.message)
+            return selected
+        catalog_result = selected
+        checked = set(self.model.checked)
+        origin = completed or self.result
+        if origin and origin.account_key == selected.account_key and origin.output == selected.output:
+            selected.files = list(origin.files)
+            if completed and completed.date_range == selected.date_range and not self.unknown_dates.isChecked():
+                # The catalog supplies the rows; the job remains the authority
+                # for search completion, cancellation and errors in this range.
+                selected = replace(completed, rows=selected.rows, discovered=selected.discovered,
+                                   inventory_total=selected.inventory_total,
+                                   unknown_dates=selected.unknown_dates, quarantined=selected.quarantined,
+                                   state='PARTIAL' if selected.state == 'PARTIAL' and completed.state == 'SUCCESS' else completed.state,
+                                   errors=max(1, completed.errors) if selected.state == 'PARTIAL' else completed.errors,
+                                   message=completed.message + ('; ' + selected.message if selected.state == 'PARTIAL' else ''))
+        self.result = selected
+        self.proxy_model.set_date_range(None, None)
+        self.model.reset(self.mode, selected.rows)
+        self.model.checked = checked & {document_id(self.mode, row) for row in selected.rows}
+        self.populate_result(selected)
+        self.refresh_type_filter()
+        self.close_drawer()
+        if not self.controller.busy:
+            self.status.setText('Hồ sơ trên máy — không gọi mạng' if selected.rows else
+                                'Chưa có dữ liệu lưu trên máy trong kỳ này — bấm Tra cứu để đối soát')
+        self.save_tab()
+        self.update_filtered_count()
+        self.update_empty()
+        return catalog_result
+
     def refresh_type_filter(self, *_args):
         """Nạp loại thông báo thực có trong tab; không bịa nhóm không có dữ liệu."""
         if not hasattr(self, 'type_filter'):
@@ -229,7 +317,7 @@ class V2InteractionMixin:
     def can_target_download(self):
         account = self.controller.sessions.account
         return bool(self.result and self.mode != 'offline' and all(self.result.date_range)
-                    and self.result.operation in {'query', 'query_and_download', 'download_selected'}
+                    and self.result.operation in {'query', 'query_and_download', 'download_selected', 'library'}
                     and self.result.account_key == hashlib.sha256(account.username.encode()).hexdigest())
 
     def sync_actions(self):
@@ -259,7 +347,6 @@ class V2InteractionMixin:
         if hasattr(self, 'export_action'):
             self.export_action.setVisible(online)
             self.export_action.setEnabled(not busy and online and bool(rows))
-        self.edit_conditions.setEnabled(not busy)
         if hasattr(self, 'selection_bar'):
             self.selection_bar.setEnabled(not busy)
         if hasattr(self, 'detail_download'):
@@ -342,7 +429,8 @@ class V2InteractionMixin:
             self.open_login(after=lambda: self.download_rows(rows))
             return
         config = replace(self.make_config(self.mode), output=self.result.output,
-                         from_date=self.result.date_range[0], to_date=self.result.date_range[1],
+                         from_date=self.from_date.date().toString('dd/MM/yyyy'),
+                         to_date=self.to_date.date().toString('dd/MM/yyyy'),
                          case_id='', action='download_selected',
                          target_ids=tuple(dict.fromkeys(document_id(self.mode, row) for row in rows)),
                          input_rows=[dict(row) for row in rows])
@@ -662,7 +750,7 @@ class V2InteractionMixin:
         else:
             parts.append('<p>Chỉ phân tích XML cục bộ; không xác thực chữ ký số hoặc tính đúng của nghĩa vụ thuế.</p>')
         self.detail_text.setHtml(''.join(parts))
-        self.detail_open.setText('Xem tệp' if self.mode == 'notice' else 'Mở tệp')
+        self.detail_open.setText('Xem file' if self.mode == 'tax' else 'Xem tệp')
         self.detail_open.setEnabled(bool(row.get('_file_path') and Path(row['_file_path']).is_file()))
         notices = row.get('_notices') or []
         self.detail_notices.setVisible(self.mode == 'tax')
@@ -701,12 +789,31 @@ class V2InteractionMixin:
             return
         target = self.detail_row.get('_file_path')
         if target and Path(target).is_file():
-            self.open_path(Path(target))
+            if self.mode == 'tax' and Path(target).suffix.lower() == '.zip':
+                self.open_declaration_file()
+            else:
+                self.open_path(Path(target))
         else:
             self.detail_row.update(_file_status='not_downloaded', _file_path='', _file_reason='Tệp đã bị xóa hoặc di chuyển; kiểm tra lại tệp trên máy')
             self.model.layoutChanged.emit()
             self.populate_result(self.result)
             self.details()
+
+    def open_declaration_file(self) -> None:
+        """Mở XML chính của tờ khai đã tải bằng ứng dụng mặc định (giữ nguyên ZIP)."""
+        from gdt_tax.declaration_view import DeclarationViewError, declaration_xml
+        source = Path(str((self.detail_row or {}).get('_file_path') or ''))
+        try:
+            xml = declaration_xml(source)
+        except DeclarationViewError as error:
+            self.error(str(error))
+            if source.parent.is_dir():
+                self.open_path(source.parent)
+            return
+        except OSError:
+            self.error('Không đọc được tệp đã tải; kiểm tra quyền hoặc tải lại hồ sơ.')
+            return
+        self.open_path(xml)
 
     def download_detail(self):
         if self.detail_row:
@@ -742,7 +849,7 @@ class V2InteractionMixin:
             menu.addAction('Xuất hồ sơ ZIP…', lambda: self.export_submission(row))
         if self.mode != 'offline':
             if row.get('_file_status') == 'downloaded':
-                menu.addAction('Mở tệp', lambda: (self.details(), self.open_detail_file()))
+                menu.addAction('Xem file' if self.mode == 'tax' else 'Mở tệp', lambda: (self.details(), self.open_detail_file()))
             else:
                 action = menu.addAction('Tải riêng tệp này', lambda: self.download_rows([row]))
                 action.setEnabled(self.can_target_download() and not self.controller.busy)
@@ -762,7 +869,11 @@ class V2InteractionMixin:
             self.counts.setText(f"Bản ghi {len(rows) or (result.discovered if result else 0)}    Đã mapping {mapped}    Cần kiểm tra {result.skipped if result else 0}    Lỗi {result.errors if result else 0}")
         else:
             count = counters(rows)
-            self.counts.setText(f"Tìm thấy {count['found']}    Đã tải {count['downloaded']}    Chưa tải {count['pending']}    Tải lỗi {count['failed']}")
+            total = max(result.inventory_total, count['found']) if result else count['found']
+            self.counts.setText(f"Kho: {total}  |  Kỳ đang xem: {count['found']}  |  Đã tải: {count['downloaded']}  |  Thiếu: {count['pending']}  |  Lỗi: {count['failed']}")
+            if result:
+                self.unknown_dates.setText(f'Ngày chưa xác định ({result.unknown_dates})')
+                self.counts.setToolTip(f'Kho tích lũy của tài khoản/tab; không giảm khi đổi kỳ. Cần xác minh định danh: {result.quarantined}')
         if result:
             for path in result.files:
                 self.files.addItem(path.name, str(path))
@@ -776,7 +887,7 @@ class V2InteractionMixin:
                   'WAITING_CAPTCHA': 'Chờ nhập CAPTCHA…', 'STOPPING': 'Đang dừng an toàn…'}
         self.status.setText(labels.get(state, state))
         busy = self.controller.busy
-        for widget in [self.config_panel, self.tabs, self.navigation, self.settings_button, self.query, self.start_button]:
+        for widget in [self.tabs, self.navigation, self.settings_button, self.query, self.start_button]:
             widget.setEnabled(not busy)
         self.batch_action.setEnabled(not busy)
         self.stop_button.setEnabled(busy and state != 'STOPPING')
@@ -795,9 +906,17 @@ class V2InteractionMixin:
             if payload['session'] == 'AUTHENTICATING':
                 self.status.setText('Đang đăng nhập eTax…')
         if 'stage' in payload:
-            self.status.setText('Đang xuất Excel…' if payload['stage'] == 'export' else 'Đang phân tích XML cục bộ…')
+            self.status.setText({'export': 'Đang xuất Excel…',
+                                 'finalize': 'Đang kiểm tra tệp và hoàn tất danh mục…'}.get(
+                                     payload['stage'], 'Đang phân tích XML cục bộ…'))
         if 'active_mode' in payload:
             self.status.setText('Đang xử lý: ' + TITLES[MODES.index(payload['active_mode'])])
+        if ('record' in payload and self.active_config
+                and self.active_config.mode in {'tax', 'gnt', 'notice', 'batch'}
+                and not self.catalog_refresh_timer.isActive()):
+            # Read committed rows on a bounded UI timer, including reused records
+            # and the final partial batch. A record-count modulus misses both.
+            self.catalog_refresh_timer.start()
         if 'record' in payload and self.active_config and self.active_config.mode != 'batch':
             row = dict(payload['record'])
             key = document_id(self.mode, row)
@@ -808,10 +927,10 @@ class V2InteractionMixin:
                 file_status = old.get('_file_status', 'not_downloaded')
             row.update(_file_status=file_status, _file_state=FILE_LABELS[file_status])
             self.pending_rows[key] = {**old, **row}
-            self.model.reset(self.mode, list(self.pending_rows.values()))
             done = payload.get('downloaded', 0)
-            target = len(self.active_config.target_ids) if self.active_config.target_ids is not None else payload.get('discovered', 0)
-            self.status.setText('Đang tra cứu hồ sơ…' if self.active_config.dry_run else f'Đang tải {done}/{target} · Lỗi {payload.get("errors", 0)}')
+            discovered = payload.get('discovered', 0)
+            self.status.setText(f'Đang tra cứu · Đã tìm thấy {discovered} hồ sơ' if self.active_config.dry_run else
+                                f'Đang xử lý · Đã tìm thấy {discovered} | Tệp hoàn tất: {done} | Lỗi: {payload.get("errors", 0)}')
             if self.active_config.target_ids:
                 self.progress.setRange(0, len(self.active_config.target_ids))
                 self.progress.setValue(done)
@@ -820,6 +939,7 @@ class V2InteractionMixin:
             self.refresh_feedback_panel()
 
     def on_completed(self, result):
+        self.catalog_refresh_timer.stop()
         config, self.active_config = self.active_config, None
         self.last_task = result
         task_result = result
@@ -828,35 +948,58 @@ class V2InteractionMixin:
             self.save_login(config, result.state == 'SUCCESS')
             self.status.setText(result.message)
             after, self.after_login = self.after_login, None
-            if result.state == 'SUCCESS' and after:
-                QTimer.singleShot(0, after)
+            if result.state == 'SUCCESS':
+                # LOCAL FIRST: danh mục trên máy hiện ra ngay, không cần bấm Tra cứu.
+                self.load_local_library(after=after)
             elif result.state == 'ERROR':
                 self.error(result.message)
+        elif config and config.mode == 'library':
+            for mode, child in result.children.items():
+                state = self.tab_states[mode]
+                state.result, state.rows, state.message = child, child.rows, child.message
+            current = self.tab_states[self.mode]
+            self.result = current.result
+            self.model.reset(self.mode, current.rows)
+            self.refresh_feedback_panel()
+            self.populate_result(current.result)
+            self.status.setText(result.message)
+            self.status.setStyleSheet('color:#67768C;')
+            self.status.setToolTip(result.message)
+            self.apply_local_date_filter()
+            after, self.local_after = self.local_after, None
+            if after:
+                QTimer.singleShot(0, after)
         else:
             previous = self.result
             if config and config.action in {'verify', 'export_report'} and previous:
                 files = list(dict.fromkeys(result.files + previous.files))
                 result = replace(previous, rows=result.rows or previous.rows, files=files)
-            elif config and config.target_ids and previous:
-                updates = {document_id(self.mode, row): row for row in result.rows}
-                result.rows = [{**row, **updates.get(document_id(self.mode, row), {})} for row in previous.rows]
-                issue_map = {issue.get('document_id'): issue.get('message') for issue in result.issues}
-                for row in result.rows:
-                    key = document_id(self.mode, row)
-                    if key in config.target_ids and row.get('_file_status') != 'downloaded' and (key in issue_map or result.state == 'ERROR'):
-                        row.update(_file_status='failed', _error_message=issue_map.get(key) or result.message)
-                result.discovered = len(result.rows)
-                result.files = previous.files
             if result.children:
                 for mode, child in result.children.items():
-                    self.tab_states[mode] = TabState(result=child, rows=child.rows, message=child.message, conditions_collapsed=True)
+                    state = self.tab_states[mode]
+                    state.result, state.rows, state.message = child, child.rows, child.message
                 selected = self.tab_states[self.mode].result
             else:
                 selected = result
-            self.result = selected
-            self.model.reset(self.mode, selected.rows if selected else [])
+            refresh_catalog = bool(config and config.mode in {'tax', 'gnt', 'notice', 'batch', 'import'})
+            refresh_problem = ''
+            if refresh_catalog:
+                # Never replace the visible period with raw rows from a job
+                # that may have finished after the user changed dates.
+                projection = self.apply_local_date_filter(completed=selected)
+                if projection is None or projection.state in {'ERROR', 'PARTIAL'}:
+                    refresh_problem = self.status.toolTip() if projection is None else projection.message
+                    result = replace(result, state='PARTIAL' if result.state == 'SUCCESS' else result.state,
+                                     message=result.message + '; Không cập nhật đầy đủ kho trên máy: ' + refresh_problem,
+                                     errors=max(1, result.errors),
+                                     issues=result.issues + [{'document_id': '', 'message': refresh_problem}])
+                    task_result = self.last_task = result
+                selected = self.result
+            else:
+                self.result = selected
+                self.model.reset(self.mode, selected.rows if selected else [])
             self.refresh_feedback_panel()
-            if config and config.action not in {'verify', 'export_report'} and config.mode not in {'saved', 'import'}:
+            if config and config.action not in {'verify', 'export_report'} and config.mode not in {'saved', 'import', 'library'}:
                 self.history.insert(0, {'mode': config.mode, 'result': result, 'action': result.operation})
                 self.history = self.history[:100]
             status_result = task_result if config and config.action in {'verify', 'export_report'} else result
@@ -868,13 +1011,30 @@ class V2InteractionMixin:
             elif config and config.action == 'export_report' and status_result.state == 'SUCCESS':
                 short = 'Đã xuất danh sách Excel'
             elif status_result.state == 'SUCCESS' and status_result.discovered == 0:
-                short = 'Không tìm thấy hồ sơ trong kỳ này'
-            self.status.setText("<a href='issues'>" + short + '</a>' if status_result.state in {'ERROR', 'PARTIAL'} else short)
-            self.status.setStyleSheet('color:' + {'SUCCESS': '#15805B', 'PARTIAL': '#93631B', 'ERROR': '#C94242'}.get(status_result.state, '#67768C') + ';')
-            self.status.setToolTip(status_result.message)
+                short = ('Online không trả hồ sơ; đang xem hồ sơ đã lưu' if refresh_catalog and self.model.rowCount()
+                         else 'Không tìm thấy hồ sơ trong kỳ này')
             self.populate_result(selected)
-            if config and config.mode in {'tax', 'gnt', 'notice'} and result.state in {'SUCCESS', 'PARTIAL'}:
-                self.collapse_conditions(True)
+            if refresh_catalog:
+                if config.mode == 'import':
+                    short += f" · Nhập từ máy: {task_result.discovered} | Cần kiểm tra: {task_result.skipped} | Lỗi: {task_result.errors}"
+                elif config.action not in {'verify', 'export_report'}:
+                    metrics = task_result.sync_metrics
+                    short += f" · Online: {task_result.discovered} | Mới: {metrics.get('new', 0)} | Dùng lại: {task_result.reused} | Lỗi: {task_result.errors}"
+                    requested = (config.from_date, config.to_date)
+                    visible = (self.from_date.date().toString('dd/MM/yyyy'), self.to_date.date().toString('dd/MM/yyyy'))
+                    short += ' · Tra cứu: ' + ' – '.join(requested)
+                    if requested != visible:
+                        short += ' · Đang xem: ' + ' – '.join(visible)
+                    if self.unknown_dates.isChecked():
+                        short += ' · Đang xem nhóm ngày chưa xác định'
+                    if self.proxy_model.rowCount() < self.model.rowCount():
+                        short += f' · Đang lọc: {self.proxy_model.rowCount()}/{self.model.rowCount()}'
+                if refresh_problem:
+                    short += ' · Không cập nhật đầy đủ kho trên máy'
+            self.status.setText("<a href='issues'>" + html.escape(short) + '</a>' if status_result.state in {'ERROR', 'PARTIAL'} else short)
+            self.status.setStyleSheet('color:' + {'SUCCESS': '#15805B', 'PARTIAL': '#93631B', 'ERROR': '#C94242'}.get(status_result.state, '#67768C') + ';')
+            self.status.setToolTip(status_result.message + '\n' + short)
+            self.collapse_conditions(False)
             self.save_tab()
             self.update_empty()
         if self.captcha_dialog:
@@ -1150,6 +1310,10 @@ class V2InteractionMixin:
             message = 'Không thể hoàn tất tác vụ. Nhấn Xem chi tiết ở thanh dưới để biết nguyên nhân và cách xử lý.'
         elif self.result and self.result.state in {'CANCELLED', 'PARTIAL'}:
             message = 'Tra cứu chưa đầy đủ nên chưa thể kết luận không có hồ sơ.\nChạy lại tra cứu hoặc xem tổng kết trong Lịch sử tải.'
+        elif self.result and self.result.operation == 'library':
+            message = ('Chưa có hồ sơ đã lưu trong khoảng ngày này.\nBạn có thể bấm Tra cứu để lấy dữ liệu từ cơ quan thuế.'
+                       if not self.model.rowCount() else
+                       'Không có hồ sơ đã lưu trong khoảng ngày đang chọn.\nĐổi ngày hoặc xóa bộ lọc để xem lại.')
         elif self.result:
             message = 'Không tìm thấy hồ sơ trong kỳ đã tra cứu.'
         elif self.mode == 'offline':

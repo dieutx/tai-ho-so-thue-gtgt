@@ -388,7 +388,8 @@ class DesktopUpgradeTests(unittest.TestCase):
             self.assertEqual(result.downloaded, 1)
             target = self.root / 'new'
             target.mkdir()
-            copied = load_saved(replace(config, output=target, mode='import'), RunHooks(), copy_files=True)
-        self.assertEqual(copied.state, 'SUCCESS')
-        self.assertEqual((target / 'record.xml').read_bytes(), fixture)
+            from gdt_tax.identity import IdentityError
+            with self.assertRaises(IdentityError):
+                load_saved(replace(config, output=target, mode='import', username='synthetic-import'), RunHooks(), copy_files=True)
+        self.assertFalse((target / 'record.xml').exists())
         self.assertEqual((source / 'record.xml').read_bytes(), fixture)

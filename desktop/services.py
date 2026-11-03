@@ -92,7 +92,7 @@ class RunConfig:
         return replace(self, target_ids=targets, case_id=case_id)
 
     def validate(self) -> None:
-        if self.mode not in {"tax", "gnt", "notice", "offline", "login", "batch", "import", "saved"}:
+        if self.mode not in {"tax", "gnt", "notice", "offline", "login", "batch", "import", "saved", "library"}:
             raise ValueError("Chế độ không hợp lệ")
         if self.action not in {"", "download_selected", "verify", "export_report"}:
             raise ValueError("Thao tác không hợp lệ")
@@ -116,10 +116,10 @@ class RunConfig:
                 raise ValueError("Bước offline không hợp lệ")
             if self.forms_dir and not Path(self.forms_dir).is_dir():
                 raise ValueError("Thư mục mapping tùy chỉnh không tồn tại")
-        elif self.mode != "saved":
+        elif self.mode not in {"saved", "library"}:
             self.settings()
             self.normalized_selection()
-        if self.mode in {"login", "saved"}:
+        if self.mode in {"login", "saved", "library"}:
             return
         if self.dry_run and self.mode in ONLINE:
             return  # GUI query writes neither attachments nor catalog/report files.
@@ -150,6 +150,10 @@ class JobResult:
     requested: int = 0
     error_code: str = ""
     attachment_results: dict[str, dict] = field(default_factory=dict)
+    inventory_total: int = 0
+    unknown_dates: int = 0
+    quarantined: int = 0
+    sync_metrics: dict[str, int] = field(default_factory=dict)
 
 
 ONLINE = {
@@ -163,6 +167,25 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
                logger: logging.Logger, http: Any = None, portal_factory: Any = None,
                *, close_resources: bool = True, propagate_auth: bool = False) -> JobResult:
     settings = config.settings()
+    from gdt_tax.identity import account_fingerprint
+    from gdt_tax.local_catalog import LocalCatalog
+    catalog = LocalCatalog(config.output, account_fingerprint(config.username))
+    catalog.import_json(config.mode)
+    run_id = catalog.start_sync_run(config.mode, config.from_date, config.to_date,
+                                    config.action or ('query' if config.dry_run else 'query_and_download'))
+    changes = {'new': 0, 'updated': 0, 'unchanged': 0, 'quarantined': 0}
+    observed = set()
+    previous_checkpoint = hooks.catalog_checkpoint
+
+    def checkpoint(row):
+        key = document_id(config.mode, row)
+        counts = catalog.upsert_documents(config.mode, [row], online=True)
+        if key not in observed:
+            for name, value in counts.items():
+                changes[name] += value
+            observed.add(key)
+
+    hooks.catalog_checkpoint = checkpoint
     kind, writer, report = ONLINE[config.mode]
     http = http or HttpClient(timeout=settings.request_timeout, retries=settings.http_retries,
                               header_profile=settings.header_profile, proxy=parse_proxy(config.proxy),
@@ -171,7 +194,10 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     if config.mode == 'tax':
         kwargs['store'] = DesktopZipStore(config.output, logger, config.input_rows)
     pipeline = kind(settings, http, captcha, hooks=hooks, logger=logger,
-                    persist_metadata=not config.dry_run and config.target_ids is None,
+                    # SQLite owns crash checkpoints. Materialize legacy exports
+                    # once in finally, rather than re-serializing the full JSON
+                    # and workbook at every growing pipeline checkpoint.
+                    persist_metadata=False,
                     target_ids=set(config.target_ids) if config.target_ids is not None else None, **kwargs)
     result = JobResult("ERROR", "Tác vụ thất bại", config.output)
     metadata_saved = False
@@ -225,6 +251,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     finally:
         # Flush a discovered record even if a detail request/captcha was cancelled.
         try:
+            hooks.emit(stage='finalize')
             if pipeline.records:
                 verified_rows = verify_rows(config.mode, [record.to_dict() for record in pipeline.records.values()],
                     config.output, failed_ids=pipeline.failed_ids, errors=pipeline.record_errors,
@@ -241,10 +268,14 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
                     result.message = storage_message(error, 'Không lưu được danh mục')
                     logger.error(result.message)
         finally:
+            hooks.catalog_checkpoint = previous_checkpoint
+            catalog.upsert_documents(config.mode, verified_rows, online=True)
+            catalog.finish_sync_run(run_id, result.state, changes)
             if close_resources:
                 http.close()
                 captcha.close()
     result.rows = verified_rows
+    result.sync_metrics = changes
     result.discovered = len(result.rows)
     result.downloaded = len(pipeline.downloaded_ids)
     missing = set(pipeline.target_ids or ()) - pipeline.records.keys()
@@ -266,6 +297,9 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     # Only advertise reports actually produced by this job.
     if metadata_saved and (config.output / report).is_file():
         result.files = [config.output / report]
+    catalog.finish_sync_run(run_id, result.state, {**result.sync_metrics, 'found_online': result.discovered,
+                            'downloaded': result.downloaded, 'reused': result.reused, 'errors': result.errors,
+                            'http': hooks.http_metrics.snapshot()})
     return result
 
 

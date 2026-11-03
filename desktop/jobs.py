@@ -187,6 +187,14 @@ class Worker(QObject):
                 from .migration import load_saved
                 result = load_saved(self.config, hooks, copy_files=self.config.mode == "import")
                 result.rows = verify_rows(self.config.stage, result.rows, result.output, hooks)
+                if self.config.mode == 'import':
+                    from gdt_tax.identity import account_fingerprint
+                    from gdt_tax.local_catalog import LocalCatalog
+                    LocalCatalog(result.output, account_fingerprint(self.config.username)).upsert_documents(self.config.stage, result.rows)
+            elif self.config.mode == "library":
+                # LOCAL FIRST: đọc danh mục đã lưu của đúng tài khoản, không gọi mạng.
+                from .library import load_library
+                result = load_library(self.config, hooks)
             elif self.config.mode == "offline":
                 result = run_offline(self.config, hooks, logger)
             elif self.config.action == "verify":
@@ -194,6 +202,9 @@ class Worker(QObject):
                 counts = counters(rows)
                 result = JobResult("SUCCESS", "Đã kiểm tra tệp trên máy", self.config.output,
                     rows=rows, discovered=len(rows), downloaded=counts["downloaded"], errors=counts["failed"])
+                from gdt_tax.identity import account_fingerprint
+                from gdt_tax.local_catalog import LocalCatalog
+                LocalCatalog(self.config.output, account_fingerprint(self.config.username)).upsert_documents(self.config.mode, rows)
             elif self.config.action == 'export_report':
                 from .reports import export_document_report
                 result = export_document_report(self.config, hooks)
@@ -245,7 +256,7 @@ class Worker(QObject):
         if result.state == 'ERROR' and not result.issues:
             result.errors = max(1, result.errors)
             result.issues.append({'document_id': '', 'message': result.message})
-        result.operation = self.config.action or (self.config.mode if self.config.mode in {"offline", "login", "saved", "import"}
+        result.operation = self.config.action or (self.config.mode if self.config.mode in {"offline", "login", "saved", "import", "library"}
                                                   else "query" if self.config.dry_run else "query_and_download")
         result.started_at, result.ended_at = started_at, datetime.now(timezone.utc).isoformat()
         result.account_key = hashlib.sha256(self.config.username.encode()).hexdigest()

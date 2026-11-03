@@ -130,6 +130,20 @@ def self_test(source: Path, output: Path, report: Path) -> int:
             result['captcha_fallback_bounded'] = captcha_retry_check()
             from .portal_checks import portal_regression_check
             result['portal_regressions'] = portal_regression_check()
+            from gdt_tax.identity import account_fingerprint
+            from gdt_tax.local_catalog import LocalCatalog
+            from gdt_tax.models import CaseRecord
+            owner = account_fingerprint('synthetic-frozen-catalog')
+            catalog = LocalCatalog(output / 'persistent-smoke', owner)
+            catalog.upsert_documents('tax', [CaseRecord('old', 'DVC', account_key=owner, ngay_nop='01/06/2025').to_dict(),
+                                             CaseRecord('new', 'DVC', account_key=owner, ngay_nop='01/10/2026').to_dict()])
+            catalog = LocalCatalog(output / 'persistent-smoke', owner)
+            if (catalog.get_counts('tax')['total'] != 2
+                    or len(catalog.get_documents('tax', '01/06/2025', '30/06/2025')) != 1
+                    or len(catalog.get_documents('tax', '01/10/2026', '31/10/2026')) != 1
+                    or catalog.integrity_check() != 'ok'):
+                raise AssertionError('Persistent catalog multi-year/reopen contract failed')
+            result['persistent_catalog'] = True
             from gdt_tax.table_contracts import TABLE_CONTRACT_VERSION
             result['schema_contract_version'] = TABLE_CONTRACT_VERSION
             if os.name == 'nt':

@@ -250,11 +250,12 @@ class DvcFlowTests(PipelineTestCase):
         self.assertEqual(dates["tuNgay"], "01/01/2026")
         self.assertEqual(dates["denNgay"], "31/01/2026")
 
-    def test_di_qua_buoc_kiem_tra_truoc_khi_tai(self):
+    def test_chi_do_kha_nang_ajax_mot_lan_cho_ca_luot_tai(self):
         _, http = self.run_pipeline(make_handler(search=dvc_search), self.dvc_settings())
         validates = [call for call in http.calls if route_of(call.path) == DVC_VALIDATE]
         downloads = [call for call in http.calls if route_of(call.path) == DVC_DOWNLOAD]
-        self.assertEqual(len(validates), 2)
+        # Cổng không đổi khả năng giữa hai hồ sơ, nên request dò chỉ gửi một lần.
+        self.assertEqual(len(validates), 1)
         self.assertEqual(len(downloads), 2)
         self.assertEqual(downloads[0].kwargs["json"], {"maHoSo": "G12.18-260120-21010800254723"})
 

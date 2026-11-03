@@ -1,0 +1,36 @@
+{
+  "synthetic_only": true,
+  "original_sha256_before": {
+    "original.zip": "68bd7fa1ffdd567b79aed773798b2e185f0259cbf9ce9126434ded29ec6d2e17",
+    "danh_sach_ho_so.json": "126d67e7645e59e5b572654de38408f6e51f918fddedff99dc495bf417ac5254"
+  },
+  "original_sha256_after": {
+    "original.zip": "68bd7fa1ffdd567b79aed773798b2e185f0259cbf9ce9126434ded29ec6d2e17",
+    "danh_sach_ho_so.json": "126d67e7645e59e5b572654de38408f6e51f918fddedff99dc495bf417ac5254"
+  },
+  "original_files_unchanged": true,
+  "dry_run": {
+    "state": "DRY_RUN",
+    "rows": 2,
+    "new": 2,
+    "updated": 0,
+    "unchanged": 0,
+    "quarantined": 0
+  },
+  "migration": {
+    "state": "IMPORTED",
+    "rows": 2,
+    "backup": "catalog.backup-894ba940ab6047b5848b972454e4d02e.sqlite3",
+    "new": 2,
+    "updated": 0,
+    "unchanged": 0,
+    "quarantined": 0
+  },
+  "second_run_state": "ALREADY_IMPORTED",
+  "inventory": {
+    "total": 2,
+    "unknown": 0,
+    "quarantined": 0
+  },
+  "integrity": "ok"
+}

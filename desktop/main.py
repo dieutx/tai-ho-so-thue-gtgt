@@ -17,6 +17,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ui-size", default="1024x728")
     parser.add_argument("--quit-after", type=int, default=0, help=argparse.SUPPRESS)
     parser.add_argument("--online-check", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument('--live-pilot', action='store_true', help='Kiểm thử live có giới hạn, tài khoản nhập trực tiếp trong ứng dụng')
     args = parser.parse_args(argv)
     if args.online_check:
         from desktop.online_check import online_check
@@ -32,7 +33,11 @@ def main(argv: list[str] | None = None) -> int:
     application.setApplicationName("TaiHoSoThue")
     application.setOrganizationName("TaiHoSoThue")
     application.setStyle("Fusion")
-    window = MainWindow()
+    if args.live_pilot:
+        from desktop.live_pilot import PilotWindow
+        window = PilotWindow()
+    else:
+        window = MainWindow()
     window.show()
     if args.ui_check:
         from desktop.smoke import ui_check

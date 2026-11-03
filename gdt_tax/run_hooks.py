@@ -9,6 +9,7 @@ from threading import Event
 from typing import Any
 
 from .errors import NetworkError
+from .metrics import HttpMetrics
 
 
 class RunCancelled(Exception):
@@ -29,6 +30,11 @@ class RunBudget:
     bytes_read: int = 0
     pages: int = 0
     auth_attempts: int = 0
+    max_records: int | None = None
+    records: int = 0
+    stop_on_http_errors: bool = False
+    min_request_interval: float = 0
+    last_request_at: float | None = field(default=None, init=False)
     started: float = field(init=False)
 
     def __post_init__(self):
@@ -45,9 +51,17 @@ class RunBudget:
 
     def request(self):
         self.remaining()
+        if self.min_request_interval and self.last_request_at is not None:
+            time.sleep(max(0, self.min_request_interval - (self.clock() - self.last_request_at)))
         if self.requests >= self.max_requests:
             raise NetworkError("RUN_BUDGET_EXCEEDED: requests")
         self.requests += 1
+        self.last_request_at = self.clock()
+
+    def record(self):
+        if self.max_records is not None and self.records >= self.max_records:
+            raise RunCancelled('Đã đạt giới hạn hồ sơ cho phép của lượt kiểm thử')
+        self.records += 1
 
     def consume(self, count: int):
         self.remaining()
@@ -78,6 +92,8 @@ class RunHooks:
         self.budget = budget
         self.support = support
         self.run_id = uuid.uuid4().hex
+        self.catalog_checkpoint: Callable[[dict[str, Any]], None] | None = None
+        self.http_metrics = HttpMetrics()
 
     def check(self) -> None:
         if self.cancel is not None and self.cancel.is_set():

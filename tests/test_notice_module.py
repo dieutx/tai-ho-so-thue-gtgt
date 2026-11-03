@@ -13,6 +13,7 @@ HAS_QT = importlib.util.find_spec('PySide6') is not None
 
 from desktop.domain import BUSINESS_UNKNOWN, TaxNotice  # noqa: E402
 from desktop.feedback_service import feedback_summary, list_tax_notices  # noqa: E402
+from tests.support import cleanup_temporary_directory  # noqa: E402
 
 
 def notice_row(path: str = '', **extra) -> dict:
@@ -60,7 +61,7 @@ class NoticeUITests(unittest.TestCase):
 
     def tearDown(self):
         self.window.close()
-        self.temp.cleanup()
+        cleanup_temporary_directory(self.temp)
 
     def test_notice_table_has_separate_business_columns(self):
         from desktop.table_model import COLUMNS

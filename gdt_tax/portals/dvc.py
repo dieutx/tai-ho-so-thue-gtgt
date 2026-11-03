@@ -27,6 +27,9 @@ class DvcPortal(Portal):
 
     source = SOURCE_DVC
     detail_loai = ""
+    #: Kết quả dò khả năng AJAX chỉ cần biết một lần cho mỗi lượt chạy: cổng
+    #: không đổi giữa hai hồ sơ, nên hồ sơ sau không phải gửi lại request dò.
+    _ajax_validation: bool | None = None
 
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         response = self.http.get(
@@ -68,20 +71,22 @@ class DvcPortal(Portal):
             'declaration-download', DOWNLOAD_OPERATION.max_bytes,
             retry_safe=True, minimum_attempts=6,
         )
-        validation = self.http.get(
-            self.capabilities.validate_endpoint,
-            params={"idTKhai": record.ma_ho_so},
-            headers=self.xhr_headers(
-                headers={
-                    "Origin": ORIGIN,
-                    "Referer": detail_url,
-                    "X-Requested-With": "XMLHttpRequest",
-                    "X-XSRF-TOKEN": csrf,
-                }
-            ),
-        )
-        raise_terminal(validation, 'DVC', authenticated=True)
-        if validation.status_code == 200 and validation.text.strip() == "200":
+        if self._ajax_validation is not True:
+            validation = self.http.get(
+                self.capabilities.validate_endpoint,
+                params={"idTKhai": record.ma_ho_so},
+                headers=self.xhr_headers(
+                    headers={
+                        "Origin": ORIGIN,
+                        "Referer": detail_url,
+                        "X-Requested-With": "XMLHttpRequest",
+                        "X-XSRF-TOKEN": csrf,
+                    }
+                ),
+            )
+            raise_terminal(validation, 'DVC', authenticated=True)
+            self._ajax_validation = validation.status_code == 200 and validation.text.strip() == "200"
+        if self._ajax_validation:
             response = self.http.post(
                 self.capabilities.download_endpoint,
                 operation=download_operation,
@@ -99,10 +104,8 @@ class DvcPortal(Portal):
             raise_terminal(response, 'DVC', authenticated=True)
             return response
 
-        self.logger.warning(
-            "Kiểm tra AJAX không khả dụng (HTTP=%s); thử form tải dự phòng.",
-            validation.status_code,
-        )
+        if self._ajax_validation is False:
+            self.logger.warning("Kiểm tra AJAX không khả dụng; dùng form tải dự phòng.")
 
         # Đây là form submit thật (không phải AJAX), nên dùng bộ header điều hướng.
         response = self.http.post(
@@ -129,8 +132,11 @@ class DvcPortal(Portal):
     def download_notice(self, notice, detail_url: str, csrf: str):
         path = '/tchs/downloadthongbao-tdt' if notice.is_tdt else '/tchs/downloadthongbao'
         response = self.http.post(path,
+            # Cổng giới hạn riêng endpoint này: giữ 6 lượt nhưng tăng khoảng chờ
+            # chậm (2 → 2,6 → 3,4s) thay vì 2 → 4 → 8 → 16 → 32s.
             operation=OperationPolicy('notice-download', DOWNLOAD_OPERATION.max_bytes,
-                                      retry_safe=True, minimum_attempts=6),
+                                      retry_safe=True, minimum_attempts=6,
+                                      retry_growth=1.3),
             params={'loaiTraCuu': notice.loai_tra_cuu} if notice.is_tdt else None,
             json={'idTbao': notice.id, 'loaiTBao': notice.loai_tbao},
             headers=self.xhr_headers(headers={'Content-Type': 'application/json',

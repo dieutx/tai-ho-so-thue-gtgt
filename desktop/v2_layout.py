@@ -3,6 +3,7 @@
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QFrame,
@@ -65,6 +66,7 @@ def build_workspace(window):
     self.account_button = button('Đăng nhập', self.open_login)
     self.account_button.setObjectName('account')
     header.addWidget(self.account_button)
+    header.addWidget(button('Xem hồ sơ đã lưu', self.open_local_account, 'Đọc kho local đúng tài khoản, không đăng nhập cổng thuế'))
     self.logout_button = button('', self.logout, 'Đăng xuất và xóa phiên đăng nhập')
     self.logout_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCloseButton))
     header.addWidget(self.logout_button)
@@ -107,16 +109,6 @@ def build_workspace(window):
     self.warning.setObjectName('warning')
     self.warning.setWordWrap(True)
     self.layout_root.addWidget(self.warning)
-    self.condition_summary = QWidget()
-    summary = QHBoxLayout(self.condition_summary)
-    summary.setContentsMargins(8, 4, 8, 4)
-    self.summary_text = QLabel()
-    self.summary_text.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-    summary.addWidget(self.summary_text, 1)
-    self.edit_conditions = button('Sửa điều kiện', lambda: self.collapse_conditions(False))
-    summary.addWidget(self.edit_conditions)
-    self.layout_root.addWidget(self.condition_summary)
-    self.condition_summary.hide()
     self.config_panel = QWidget()
     self.config_layout = QHBoxLayout(self.config_panel)
     self.config_layout.setContentsMargins(0, 0, 0, 0)
@@ -148,6 +140,9 @@ def build_workspace(window):
         dates.addWidget(widget)
     self.preset.setCurrentIndex(1)
     self.preset.currentIndexChanged.connect(self.apply_preset)
+    self.unknown_dates = QCheckBox('Ngày chưa xác định')
+    self.unknown_dates.toggled.connect(self.apply_local_date_filter)
+    dates.addWidget(self.unknown_dates)
     self.config_layout.addWidget(self.online_panel)
     self.offline_panel = QWidget()
     source = QHBoxLayout(self.offline_panel)
@@ -187,7 +182,7 @@ def build_workspace(window):
     output.addWidget(self.open_folder_button)
     self.options_button = button('Tùy chọn', self.task_options, 'Bộ lọc và tùy chọn nghiệp vụ')
     output.addWidget(self.options_button)
-    self.query = button('Tra cứu', lambda: self.start(True), 'Chỉ tra cứu, không ghi catalog hoặc tải tệp')
+    self.query = button('Tra cứu', lambda: self.start(True), 'Tra cứu và bổ sung danh mục trên máy; không tải tệp')
     self.query.setObjectName('query')
     self.start_button = button('Tra cứu và tải', lambda: self.start(False), 'Tra cứu và tải; giữ tệp hợp lệ đã có')
     self.start_button.setObjectName('primary')
@@ -340,6 +335,7 @@ def build_workspace(window):
     self.stop_button.setEnabled(False)
     footer.addWidget(self.stop_button)
     self.status = QLabel('Sẵn sàng')
+    self.status.setWordWrap(True)
     self.status.linkActivated.connect(lambda _url: self.show_issues())
     self.status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
     footer.addWidget(self.status, 1)
@@ -399,7 +395,7 @@ def build_workspace(window):
     raw_tools.addStretch()
     drawer.addLayout(raw_tools)
     actions = QHBoxLayout()
-    self.detail_open = button('Mở tệp', self.open_detail_file)
+    self.detail_open = button('Xem file', self.open_detail_file)
     self.detail_download = button('Tải tệp', self.download_detail)
     self.detail_download.setObjectName('primary')
     actions.addWidget(self.detail_open)

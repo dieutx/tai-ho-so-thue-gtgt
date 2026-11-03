@@ -26,6 +26,7 @@ from desktop.documents import (
 )
 from desktop.services import JobResult, RunConfig, run_offline, run_online
 from desktop.settings_store import Preferences, SettingsStore
+from desktop.state import job_output
 from gdt_tax.constants import SOURCE_ETAX_LEGACY
 from gdt_tax.errors import NetworkError, StorageError
 from gdt_tax.gnt.models import GiayNopTien
@@ -157,7 +158,7 @@ class DocumentStateTests(unittest.TestCase):
         self.assertEqual(second['_file_status'], 'not_downloaded')
         self.assertIn('xóa/di chuyển', second['_file_reason'])
 
-    def test_gui_query_writes_no_catalog_or_attachment_for_all_portals(self):
+    def test_gui_query_persists_metadata_without_downloading_artifacts(self):
         for mode, factory in [('tax', make_legacy_handler), ('gnt', make_gnt_handler), ('notice', make_tb_handler)]:
             with self.subTest(mode=mode):
                 output = self.root / mode
@@ -165,7 +166,10 @@ class DocumentStateTests(unittest.TestCase):
                 config.validate()
                 result = run_online(config, RunHooks(), StubCaptcha(), logging.getLogger('gdt_tax.test'), http=FakeHttp(factory({})))
                 self.assertEqual(result.state, 'SUCCESS', result.message)
-                self.assertFalse(output.exists())
+                from gdt_tax.local_catalog import LocalCatalog
+                catalog = LocalCatalog(output, account_fingerprint(config.username))
+                self.assertEqual(catalog.get_counts(mode)['total'], result.discovered)
+                self.assertEqual(list(output.glob('*.zip')) + list(output.glob('*.xml')) + list(output.glob('*.pdf')), [])
                 self.assertEqual(result.files, [])
                 self.assertTrue(all(row['_file_status'] == 'not_downloaded' for row in result.rows))
 
@@ -336,7 +340,7 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.window.proxy_model.set_status_filter('review')
         self.assertEqual(self.window.proxy_model.rowCount(), 3)
 
-    def test_select_visible_rows_and_download_uses_original_query_period(self):
+    def test_select_visible_rows_and_download_uses_visible_period(self):
         rows = [dict(CaseRecord(str(i), SOURCE_ETAX_LEGACY, to_khai=title, account_key=account_fingerprint('fixture-user')).to_dict(), _file_status='not_downloaded')
                 for i, title in enumerate(['Match one', 'Match two', 'Other'])]
         self.window.controller.sessions.set_account('fixture-user', 'fixture-secret')
@@ -349,7 +353,7 @@ class DesktopV2InteractionTests(unittest.TestCase):
             self.window.download_checked()
         config = launch.call_args.args[0]
         self.assertEqual(set(config.target_ids), {document_id('tax', row) for row in rows[:2]})
-        self.assertEqual(config.from_date, '01/06/2025')
+        self.assertEqual(config.from_date, self.window.from_date.date().toString('dd/MM/yyyy'))
         self.assertEqual(config.output, self.root)
 
     def test_rejected_notice_column_shows_red_warning(self):
@@ -476,7 +480,12 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.assertEqual(self.window.search.text(), 'fixture')
 
     def test_selected_completion_preserves_unselected_query_rows(self):
-        rows = [dict(CaseRecord(str(i), SOURCE_ETAX_LEGACY).to_dict(), _file_status='not_downloaded') for i in range(3)]
+        from gdt_tax.local_catalog import LocalCatalog
+        rows = [dict(CaseRecord(str(i), SOURCE_ETAX_LEGACY, account_key=account_fingerprint('fixture-user'),
+                                ngay_nop='05/10/2026').to_dict(), _file_status='not_downloaded') for i in range(3)]
+        self.window.output.setText(str(self.root))
+        folder = job_output(self.root, 'fixture-user', 'tax')
+        LocalCatalog(folder, account_fingerprint('fixture-user')).upsert_documents('tax', rows)
         self.window.controller.sessions.set_account('fixture-user', 'fixture-secret')
         account = hashlib.sha256(b'fixture-user').hexdigest()
         self.window.result = JobResult('SUCCESS', 'Query', self.root, rows=rows, date_range=('01/06/2025', '30/06/2025'),
@@ -512,7 +521,8 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.window.collapse_conditions(True)
         self.window.clear_account_views()
         self.assertTrue(self.window.drawer.isHidden())
-        self.assertTrue(self.window.condition_summary.isHidden())
+        self.assertFalse(self.window.config_panel.isHidden())
+        self.assertFalse(hasattr(self.window, 'edit_conditions'))
         self.assertEqual(self.window.model.rowCount(), 0)
         self.assertIsNone(self.window.detail_row)
 

@@ -34,7 +34,7 @@ def check_owner(directory: str | Path, account_key: str, *, create: bool = False
     # Logs/settings may already exist, but tax artifacts and catalogs cannot be
     # adopted. A symlink or subdirectory is also not an empty output namespace.
     if directory.exists() and any(path.is_symlink() or path.is_dir()
-            or path.suffix.lower() in {".zip", ".xml", ".pdf", ".json", ".csv", ".xlsx"}
+            or path.suffix.lower() in {".zip", ".xml", ".pdf", ".json", ".csv", ".xlsx", ".sqlite3", ".db"}
             for path in directory.iterdir()):
         raise IdentityError("DIRECTORY_LEGACY_UNOWNED: Thư mục có dữ liệu từ phiên bản cũ chưa xác định tài khoản. "
                             "Chọn thư mục mới để tra cứu/tải tiếp; dữ liệu cũ vẫn mở được ở chế độ offline. "

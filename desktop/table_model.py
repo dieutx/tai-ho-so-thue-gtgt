@@ -213,7 +213,7 @@ class RecordsModel(QAbstractTableModel):
             if self.mode == 'notice':
                 return ('Xem tệp' if row.get('_file_status') == 'downloaded'
                         else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp')
-            return 'Mở tệp' if row.get('_file_status') == 'downloaded' else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp'
+            return 'Xem file' if row.get('_file_status') == 'downloaded' else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp'
         if key == 'so_tien':
             return display_amount(row.get(key), str(row.get('loai_tien', '')))
         if key == 'to_khai':
@@ -323,6 +323,9 @@ class RecordsProxy(QSortFilterProxyModel):
         self.status_filter = 'all'
         self.cqt_filter = 'all'
         self.type_filter = ''
+        #: Lọc theo ngày của dòng (dữ liệu local); None là không lọc.
+        self.date_from = None
+        self.date_to = None
 
     def source_row(self, index: QModelIndex) -> int | None:
         """Dòng nguồn của một chỉ số proxy; ``None`` nếu chỉ số đã cũ/không hợp lệ."""
@@ -342,6 +345,11 @@ class RecordsProxy(QSortFilterProxyModel):
 
     def set_type_filter(self, value):
         self.type_filter = value or ''
+        self.invalidateFilter()
+
+    def set_date_range(self, start, end):
+        """Giới hạn bảng theo ngày nộp/lập/gửi của dòng; không đổi dữ liệu gốc."""
+        self.date_from, self.date_to = start, end
         self.invalidateFilter()
 
     def filterAcceptsRow(self, source_row, source_parent):
@@ -365,6 +373,16 @@ class RecordsProxy(QSortFilterProxyModel):
             label = str(row.get('ten_thong_bao') or row.get('ma_tbao') or '')
             if label != self.type_filter:
                 return False
+        if self.date_from is not None or self.date_to is not None:
+            field = {'tax': 'ngay_nop', 'gnt': 'ngay_lap', 'notice': 'ngay_gui'}.get(model.mode, '')
+            if field:
+                when = event_datetime(row.get(field))
+                if when is not None:
+                    day = when.date()
+                    if self.date_from is not None and day < self.date_from:
+                        return False
+                    if self.date_to is not None and day > self.date_to:
+                        return False
         return True
 
     def lessThan(self, left, right):
