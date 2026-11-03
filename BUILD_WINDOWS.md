@@ -4,6 +4,9 @@ Chạy bản phát hành: mở `dist/TaiHoSoThue-Windows.exe`. Một file, Windo
 không cần cài Python, Qt, pip hoặc Excel. Mở workbook cần ứng dụng đọc XLSX;
 việc tạo workbook không cần Excel. Đây là phần mềm bên thứ ba.
 
+Bản cá nhân/DVC 2.1.2 ngày 03/11/2026, kết quả source/EXE và SHA-256:
+[báo cáo kiểm chứng](docs/PERSONAL_DVC_WINDOWS_20261103.md).
+
 Bản Full 2.0 onefile/windowed, giữ CAPTCHA tự
 động ddddocr. Số đo, thành phần bị loại và lý do ở
 [docs/BUILD_SIZE_REPORT.md](docs/BUILD_SIZE_REPORT.md).

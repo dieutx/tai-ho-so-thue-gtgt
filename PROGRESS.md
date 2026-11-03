@@ -1,5 +1,19 @@
 # Tiến độ sửa 26 mục core
 
+## Windows 2.1.2 và cá nhân ưu tiên DVC — 03/11/2026
+
+Đã lấy GitHub `main` 9098ae2, giữ nguyên nhánh/lịch sử GitLab cũ và sửa trên
+`fix/personal-dvc-login`. Code build tại `da7dcf2`: cá nhân dùng DVC từ cutoff,
+cổng cá nhân cũ trước cutoff; sửa nhận diện lỗi tài khoản, giữ phiên DVC riêng,
+CLI chọn adapter cá nhân và kiểm tra cập nhật chuyển sang GitHub.
+
+968 tests (6 skip OCR tùy chọn), ruff, mypy, dependency inventory, audit bundle,
+source/frozen OCR, hai lượt offline standalone và đủ 18 cấu hình UI đều đạt.
+EXE kiểm tra online: cá nhân 8 tờ khai DVC; doanh nghiệp 15 tờ khai DVC,
+12 GNT, 7 thông báo; mỗi nhóm tải thử 1 và reuse 1 thành công.
+GNT cá nhân vẫn chưa hỗ trợ. Chưa push/phát hành bản build này.
+Chi tiết/hash: [báo cáo kiểm chứng 2.1.2](docs/PERSONAL_DVC_WINDOWS_20261103.md).
+
 ## Sửa lỗi DVC 2.0.4 — 22/10/2026
 
 Đã tái hiện lỗi `lan_nop` trên DVC thật, bổ sung tiêu đề mới và xử lý đúng
