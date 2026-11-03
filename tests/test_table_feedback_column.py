@@ -117,6 +117,25 @@ class VerifiedRowStatusTests(unittest.TestCase):
             self.assertEqual(row['_feedback_count'], 1)
             self.assertFalse(row['_feedback_conflict'])
 
+    def test_verify_rows_reads_accepted_result_from_single_xml(self):
+        from desktop.documents import verify_rows
+        from gdt_tax.constants import SOURCE_DVC
+        from gdt_tax.models import CaseRecord
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / 'thong-bao-dinh-kem' / 'case-B'
+            folder.mkdir(parents=True)
+            (folder / 'result.xml').write_bytes(
+                '<TBaoThueDTu><TBaoThue><TTinTBaoThue>'
+                '<tenTBao>Thông báo tiếp nhận hồ sơ khai thuế</tenTBao>'
+                '<soTBao>9/TB</soTBao><ngayTBao>16/10/2026</ngayTBao>'
+                '</TTinTBaoThue><NDungTBao><trangThai>Đã chấp nhận</trangThai>'
+                '</NDungTBao></TBaoThue></TBaoThueDTu>'.encode())
+            row = verify_rows('tax', [CaseRecord('case-B', SOURCE_DVC).to_dict()], root)[0]
+            self.assertEqual(row['_notice_state'], 'accepted')
+            self.assertEqual(row['_cqt_status_label'], 'Đã chấp nhận')
+
 
 if __name__ == '__main__':
     unittest.main()

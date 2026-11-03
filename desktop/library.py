@@ -171,7 +171,8 @@ def library_folders(base: str | Path, username: str, mode: str) -> list[Path]:
     return [folder for index, folder in enumerate(folders) if folder not in folders[:index]]
 
 
-def catalog_view(base, username, mode, start=None, end=None, *, unknown=False, migrate=False, hooks=None):
+def catalog_view(base, username, mode, start=None, end=None, *, unknown=False, include_unknown=False,
+                 migrate=False, hooks=None):
     """SELECT the visible range; no HTTP and no full inventory file verification."""
     from .documents import verify_rows
     from .state import job_output
@@ -194,6 +195,11 @@ def catalog_view(base, username, mode, start=None, end=None, *, unknown=False, m
             review += catalog.get_counts(mode)['quarantined']
             selected = catalog.get_documents(mode, start, end, unknown=unknown)
             rows = merge_rows(mode, rows, check_files(mode, selected, folder))
+            if include_unknown and not unknown and (start or end):
+                # Hồ sơ thiếu ngày vẫn hiện (ngày "—") thay vì bị bỏ âm thầm
+                # khi bỏ nhóm lọc "Ngày chưa xác định" khỏi giao diện.
+                undated = catalog.get_documents(mode, unknown=True)
+                rows = merge_rows(mode, rows, check_files(mode, undated, folder))
         except (OSError, ValueError, IdentityError, sqlite3.Error) as error:
             problems.append(str(error))
     result = JobResult('LOADED' if not problems else 'PARTIAL' if rows else 'ERROR',

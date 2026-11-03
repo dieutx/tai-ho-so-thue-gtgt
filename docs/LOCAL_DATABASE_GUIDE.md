@@ -2,9 +2,9 @@
 
 Thanh chọn kỳ, Từ/Đến và nút tra cứu luôn hiện. Chọn kỳ là đọc local; Tra cứu hỏi cổng thuế rồi bổ sung metadata. Tra cứu và tải kiểm tra tệp đã có và tải phần thiếu. Kỳ đã tra cứu vẫn có thể tra cứu lại để tìm hồ sơ bổ sung. Không có thao tác tự xóa hồ sơ khi online trả ít hơn hoặc lỗi.
 
-`Kho` là toàn bộ hồ sơ của tài khoản/nghiệp vụ, `Kỳ đang xem` là khoảng ngày hiện tại. Ngày lọc: tờ khai=ngày nộp, GNT=ngày lập, thông báo=ngày gửi. Hồ sơ thiếu ngày nằm ở checkbox `Ngày chưa xác định`, không tự lẫn vào mọi kỳ. Tìm kiếm/CQT/trạng thái tiếp tục lọc local. `Tải chưa tải` chỉ áp dụng các hồ sơ của kỳ đang chọn; ứng dụng sẽ yêu cầu đăng nhập online khi cần.
+`Kho` là toàn bộ hồ sơ của tài khoản/nghiệp vụ, `Kỳ đang xem` là khoảng ngày hiện tại. Ngày lọc: tờ khai=ngày nộp, GNT=ngày lập, thông báo=ngày gửi. Hồ sơ thiếu ngày vẫn hiện trong danh sách với ngày “—”, không bị bỏ âm thầm. Tìm kiếm/CQT/trạng thái tiếp tục lọc local. `Tải chưa tải` chỉ áp dụng các hồ sơ của kỳ đang chọn; ứng dụng sẽ yêu cầu đăng nhập online khi cần.
 
-`Xem hồ sơ đã lưu` cho phép nhập tên tài khoản để đọc kho trên máy mà không đăng nhập cổng thuế. Đây là quyền truy cập local của người đang dùng Windows, không chứng minh phiên online. Folder và RecordKey đều phải khớp fingerprint. Dữ liệu không có owner không được tự gán tài khoản theo tên thư mục; vẫn mở được bằng luồng phân tích offline/chuyển dữ liệu cũ hiện hữu.
+`Công cụ nâng cao → Xem hồ sơ đã lưu trên máy…` cho phép nhập tên tài khoản để đọc kho trên máy mà không đăng nhập cổng thuế. Đây là quyền truy cập local của người đang dùng Windows, không chứng minh phiên online. Folder và RecordKey đều phải khớp fingerprint. Dữ liệu không có owner không được tự gán tài khoản theo tên thư mục; vẫn mở được bằng luồng phân tích offline/chuyển dữ liệu cũ hiện hữu.
 
 DB v1: `ROOT/<account-namespace>/to-khai/catalog.sqlite3`, `gnt/catalog.sqlite3`, `thong-bao/catalog.sqlite3`; nếu namespace cũ chưa có owner thì giữ policy `tai-moi/<nghiep-vu>`. Phân DB theo workspace nghiệp vụ để dùng chính manifest ownership đã có, không gán owner cho folder cha chứa nhiều nhánh legacy. Khóa gồm account+mode+RecordKey(account/source/kind/remote ID). File ZIP/XML/PDF và evidence ở ngoài DB. DB không nằm trong EXE hay `_MEIPASS`.
 

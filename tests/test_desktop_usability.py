@@ -34,6 +34,20 @@ class DesktopUsabilityTests(unittest.TestCase):
         self.window.close()
         cleanup_temporary_directory(self.temp)
 
+    def test_header_no_longer_offers_saved_library_or_unknown_date_filter(self):
+        from PySide6.QtWidgets import QPushButton
+        labels = [widget.text() for widget in self.window.findChildren(QPushButton)]
+        self.assertNotIn('Xem hồ sơ đã lưu', labels)
+        self.assertFalse(hasattr(self.window, 'unknown_dates'))
+        menu = [action.text() for action in self.window.file_menu.actions()]
+        self.assertIn('Xem hồ sơ đã lưu trên máy…', menu)
+
+    def test_hovering_a_cell_does_not_reveal_row_details(self):
+        from PySide6.QtCore import Qt
+        self.window.model.reset('tax', [self.row('first')])
+        self.assertIsNone(self.window.model.index(0, 1).data(Qt.ItemDataRole.ToolTipRole))
+        self.assertFalse(self.window.drawer.isVisible())
+
     @staticmethod
     def row(case, status='downloaded'):
         return {'ma_ho_so': case, 'nguon': 'DVC', 'to_khai': 'Tờ khai GTGT',

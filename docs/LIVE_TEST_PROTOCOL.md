@@ -8,7 +8,7 @@ Chạy `dist/TaiHoSoThue-Windows.exe --live-pilot`. Workspace/settings riêng: `
 2. Chọn mẫu ≤7 ngày năm 2025, Tra cứu rồi Tra cứu và tải; ghi counts từ SQLite và file tồn tại.
 3. Chọn mẫu ≤7 ngày năm 2026; lặp lại, tổng kho không giảm.
 4. Chuyển hai kỳ qua lại; request count của thao tác chỉ đổi kỳ phải bằng 0.
-5. Đóng/mở EXE, Xem hồ sơ đã lưu, chọn đúng account; kiểm counts và tệp.
+5. Đóng/mở EXE, Công cụ nâng cao → Xem hồ sơ đã lưu trên máy…, chọn đúng account; kiểm counts và tệp.
 6. Tra cứu/tải lại, valid-existing download calls=0; nếu không có hồ sơ mới thực tế dùng test mock 100→105 đã có, không sửa hồ sơ thật.
 7. Thử GNT/thông báo nếu được phép và có dữ liệu trong quota; offline/cancel không làm mất kho.
 8. Chạy inspector read-only integrity/FK. Chỉ chia sẻ số tổng hợp; không commit DB/file/log/screenshot thuế thật.

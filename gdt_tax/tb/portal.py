@@ -12,6 +12,7 @@ GET kèm ``pn`` (đúng như ``gotoPage`` trên trang thật).
 
 from __future__ import annotations
 
+from ..auth_outcomes import raise_terminal
 from ..dates import format_date
 from ..errors import LegacyEtaxError
 from ..headers import build_page_headers
@@ -106,14 +107,20 @@ class TbPortal(LegacyBusinessPortal):
         empty = any(marker in response.text for marker in _EMPTY_MARKERS)
         form_id = self._form_id_for_operation(response.text, self.capabilities.operation, self._search_form_id)
         if not form_id or (self.capabilities.table_id not in response.text and not empty):
-            if self.session_state is not None:
-                raise LegacyEtaxError(
-                    "Cổng trả HTTP 200 nhưng thiếu bảng/form thông báo. "
-                    "Hãy thử lại; nếu vẫn lỗi, đăng xuất rồi đăng nhập hoặc xem nhật ký."
-                )
             self.logger.warning(
-                "SCHEMA_CHANGED: legacy thiếu bảng hoặc form thông báo"
+                "SCHEMA_CHANGED: legacy thiếu bảng hoặc form thông báo (HTTP %s)",
+                response.status_code,
             )
+            if self.session_state is not None:
+                # HTTP 200 có thể là trang đăng nhập/xác minh chứ không phải
+                # danh sách rỗng; phân loại bằng chứng trước khi báo lỗi.
+                raise_terminal(response, 'ETAX_LEGACY', phase='page', authenticated=True)
+                raise LegacyEtaxError(
+                    "Cổng trả HTTP 200 nhưng thiếu bảng/form thông báo; có thể cổng "
+                    "đã đổi cấu trúc hoặc phiên đã hết hạn. Dữ liệu đã tải trước đó "
+                    "vẫn được giữ. Hãy thử lại; nếu vẫn lỗi, đăng xuất rồi đăng nhập "
+                    "hoặc xem nhật ký kỹ thuật."
+                )
             return TbPageResult(http_status=response.status_code, diagnostics=ParseDiagnostics(reasons=["RESULT_FORM_OR_TABLE_MISSING"]))
         self._search_form_id = form_id
         self._search_page_html = response.text

@@ -250,7 +250,7 @@ class V2InteractionMixin:
             selected = catalog_view(self.output.text(), account.username, self.mode,
                                     self.from_date.date().toString('dd/MM/yyyy'),
                                     self.to_date.date().toString('dd/MM/yyyy'),
-                                    unknown=self.unknown_dates.isChecked())
+                                    include_unknown=True)
         except Exception:
             self.status.setText('Không đọc được kho local; dữ liệu hiện tại được giữ. Kiểm tra nơi lưu và quyền sở hữu.')
             self.status.setToolTip(self.status.text())
@@ -264,7 +264,7 @@ class V2InteractionMixin:
         origin = completed or self.result
         if origin and origin.account_key == selected.account_key and origin.output == selected.output:
             selected.files = list(origin.files)
-            if completed and completed.date_range == selected.date_range and not self.unknown_dates.isChecked():
+            if completed and completed.date_range == selected.date_range:
                 # The catalog supplies the rows; the job remains the authority
                 # for search completion, cancellation and errors in this range.
                 selected = replace(completed, rows=selected.rows, discovered=selected.discovered,
@@ -872,7 +872,6 @@ class V2InteractionMixin:
             total = max(result.inventory_total, count['found']) if result else count['found']
             self.counts.setText(f"Kho: {total}  |  Kỳ đang xem: {count['found']}  |  Đã tải: {count['downloaded']}  |  Thiếu: {count['pending']}  |  Lỗi: {count['failed']}")
             if result:
-                self.unknown_dates.setText(f'Ngày chưa xác định ({result.unknown_dates})')
                 self.counts.setToolTip(f'Kho tích lũy của tài khoản/tab; không giảm khi đổi kỳ. Cần xác minh định danh: {result.quarantined}')
         if result:
             for path in result.files:
@@ -1025,8 +1024,6 @@ class V2InteractionMixin:
                     short += ' · Tra cứu: ' + ' – '.join(requested)
                     if requested != visible:
                         short += ' · Đang xem: ' + ' – '.join(visible)
-                    if self.unknown_dates.isChecked():
-                        short += ' · Đang xem nhóm ngày chưa xác định'
                     if self.proxy_model.rowCount() < self.model.rowCount():
                         short += f' · Đang lọc: {self.proxy_model.rowCount()}/{self.model.rowCount()}'
                 if refresh_problem:

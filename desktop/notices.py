@@ -11,6 +11,7 @@ import json
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from pathlib import Path
 
 from gdt_tax.dvc_notices import NOTICE_DIRECTORY
@@ -40,7 +41,8 @@ _FIELDS = {"maTBao": "ma_thong_bao", "tenTBao": "ten_thong_bao", "soTBao": "so_t
            "kyTinhThue": "ky_tinh_thue", "loaiToKhai": "loai_to_khai"}
 _REJECT_MARKERS = ("khong chap nhan", "khong duoc chap nhan", "tu choi")
 _REJECT_STATUS = {"n", "no", "0", "false", "khong", "khong chap nhan"}
-_ACCEPT_STATUS = {"y", "chap nhan"}
+#: ``Y`` chỉ là cờ xử lý chung, không phải bằng chứng "Đã chấp nhận".
+_ACCEPT_STATUS = {"chap nhan"}
 
 
 def _fold(value: str) -> str:
@@ -63,7 +65,13 @@ def _read_fields(data: bytes) -> dict[str, str]:
         return {}
     fields: dict[str, str] = {}
     for element in root.iter():
-        key = _FIELDS.get(element.tag.rsplit("}", 1)[-1])
+        tag = element.tag.rsplit("}", 1)[-1]
+        if tag == 'NDungTBao' and 'noi_dung' not in fields:
+            # Nội dung nghiệp vụ (kết quả xử lý) tách khỏi tiêu đề văn bản.
+            content = ' '.join(part.strip() for part in element.itertext() if part.strip())
+            if content:
+                fields['noi_dung'] = content
+        key = _FIELDS.get(tag)
         if not key or key in fields:
             continue
         value = ' '.join(part.strip() for part in element.itertext() if part.strip()) if key == 'ly_do' else (element.text or '').strip()
@@ -87,21 +95,48 @@ def _kind(name: str, fields: dict[str, str]) -> str:
 
 
 def _state(kind: str, fields: dict[str, str]) -> str:
+    """Kết quả nghiệp vụ từ nội dung XML; tiêu đề chỉ là phương án cuối.
+
+    Một thông báo có tiêu đề "Tiếp nhận" vẫn có thể mang kết quả cuối cùng
+    "Đã chấp nhận" trong ``trangThai``/nội dung. Đọc bằng chứng trước, không
+    suy ra trạng thái chỉ từ tên văn bản.
+    """
     if not fields:
         return ''
+    status = _fold(fields.get("trang_thai", ""))
+    content = _fold(fields.get("noi_dung", ""))
+    combined = "chap nhan/khong chap nhan" in content or "chap nhan khong chap nhan" in content
+    # Lý do xử lý cụ thể là bằng chứng không chấp nhận.
+    if (fields.get("ly_do") or "").strip():
+        return REJECTED
+    if status:
+        if any(marker in status for marker in _REJECT_MARKERS) or status in _REJECT_STATUS:
+            return REJECTED
+        if "tiep nhan" in status:
+            return RECEIVED
+        if status in _ACCEPT_STATUS or "chap nhan" in status or "xac nhan" in status:
+            return ACCEPTED
+        # Cờ Y/N chung được xét tiếp theo tiêu đề; trạng thái lạ thì không đoán.
+        if status != "y":
+            return ""
+    # Văn bản legacy gộp "Chấp nhận/Không chấp nhận" trong tiêu đề/nội dung
+    # không đủ để kết luận nếu không có trạng thái hay lý do.
+    if content and not combined:
+        if any(marker in content for marker in _REJECT_MARKERS):
+            return REJECTED
+        if "da chap nhan" in content or "chap nhan ho so" in content:
+            return ACCEPTED
+        if "da tiep nhan" in content or "tiep nhan ho so" in content:
+            return RECEIVED
+    # Tiêu đề legacy gộp "Chấp nhận/Không chấp nhận", không có lý do từ chối
+    # và cổng đánh dấu đã xử lý (Y): giữ kết quả chấp nhận đã kiểm chứng.
+    if kind == "khac" and status == "y":
+        return ACCEPTED
     if kind == "khong-chap-nhan":
         return REJECTED
     if kind == "tiep-nhan":
         return RECEIVED
-    # Văn bản legacy gộp "Chấp nhận/Không chấp nhận": phải đọc nội dung.
-    if (fields.get("ly_do") or "").strip():
-        return REJECTED
-    if _fold(fields.get("trang_thai", "")) in _REJECT_STATUS:
-        return REJECTED
-    status = _fold(fields.get('trang_thai', ''))
-    if status and status not in _ACCEPT_STATUS:
-        return ''
-    if kind == "chap-nhan" or status in _ACCEPT_STATUS:
+    if kind == "chap-nhan":
         return ACCEPTED
     return ""
 
@@ -185,16 +220,41 @@ def read_notices(output: str | Path, case_id: str, *, parent_key: str = '') -> l
     return notices
 
 
+def _event_date(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    for pattern in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y",
+                    "%d-%m-%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, pattern)
+        except ValueError:
+            pass
+    return None
+
+
 def notice_state(notices: list[dict]) -> str:
-    """Trạng thái tổng hợp của hồ sơ; từ chối thắng mọi trạng thái khác."""
-    states = {item.get("state") for item in notices}
+    """Trạng thái nghiệp vụ có hiệu lực, ưu tiên sự kiện mới nhất có ngày.
+
+    Nhiều phản hồi cho cùng hồ sơ: kết quả mới nhất thay thế kết quả cũ.
+    Khi không có ngày đủ tin cậy hoặc cùng ngày mâu thuẫn, giữ quy tắc
+    thận trọng: từ chối > chấp nhận > tiếp nhận.
+    """
+    valid = [item for item in notices
+             if item.get("state") in {ACCEPTED, REJECTED, RECEIVED}]
+    if not valid:
+        return ""
+    dated = [(when, item["state"]) for item in valid
+             if (when := _event_date(item.get("ngay_thong_bao")))]
+    if dated:
+        latest = max(when for when, _ in dated)
+        current = {state for when, state in dated if when == latest}
+        if len(current) == 1:
+            return current.pop()
+    states = {item["state"] for item in valid}
     if REJECTED in states:
         return REJECTED
     if ACCEPTED in states:
         return ACCEPTED
-    if RECEIVED in states:
-        return RECEIVED
-    return ""
+    return RECEIVED
 
 
 def notice_summary(notices: list[dict]) -> str:

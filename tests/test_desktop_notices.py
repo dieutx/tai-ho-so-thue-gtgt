@@ -10,9 +10,11 @@ from pathlib import Path
 from desktop.notices import notice_state, read_notices
 
 
-def xml(title='Chấp nhận hồ sơ', status='Y', reason=''):
+def xml(title='Chấp nhận hồ sơ', status='Y', reason='', date='', content=''):
+    issued = f'<ngayTBao>{date}</ngayTBao>' if date else ''
     return (f'<TBaoThueDTu><TBaoThue><TTinTBaoThue><tenTBao>{title}</tenTBao>'
-            '<soTBao>123/TB</soTBao></TTinTBaoThue><NDungTBao>'
+            f'<soTBao>123/TB</soTBao>{issued}'
+            f'</TTinTBaoThue><NDungTBao>{content}'
             f'<trangThai>{status}</trangThai>{reason}</NDungTBao></TBaoThue></TBaoThueDTu>').encode()
 
 
@@ -39,6 +41,32 @@ class NoticeReferenceTests(unittest.TestCase):
         self.save('xac-nhan.xml', b'<broken>')
         self.assertEqual(notice_state(read_notices(self.root, 'case')), '')
         self.assertEqual(len(read_notices(self.root, 'case')), 2)
+
+    def test_single_accepted_xml_is_not_downgraded_by_receipt_title(self):
+        self.save('result.xml', xml(title='Thông báo tiếp nhận hồ sơ khai thuế',
+                                    status='Đã chấp nhận'))
+        notices = read_notices(self.root, 'case')
+        self.assertEqual(notices[0]['state'], 'accepted')
+        self.assertEqual(notice_state(notices), 'accepted')
+
+    def test_accepted_result_in_content_overrides_receipt_title(self):
+        self.save('result.xml', xml(title='Tiếp nhận hồ sơ khai thuế', status='',
+                                    content='Hồ sơ của bạn đã chấp nhận.'))
+        self.assertEqual(notice_state(read_notices(self.root, 'case')), 'accepted')
+
+    def test_receipt_title_without_final_result_stays_received(self):
+        self.save('result.xml', xml(title='Tiếp nhận hồ sơ khai thuế', status=''))
+        self.assertEqual(notice_state(read_notices(self.root, 'case')), 'received')
+
+    def test_newer_response_supersedes_older_result(self):
+        self.save('older.xml', xml(title='Không chấp nhận hồ sơ', status='N',
+                                   date='01/10/2026'))
+        self.save('newer.xml', xml(title='Chấp nhận hồ sơ', status='Y',
+                                   date='05/10/2026'))
+        self.assertEqual(notice_state(read_notices(self.root, 'case')), 'accepted')
+        self.save('latest.xml', xml(title='Không chấp nhận hồ sơ', status='N',
+                                    date='06/10/2026'))
+        self.assertEqual(notice_state(read_notices(self.root, 'case')), 'rejected')
 
     def test_nested_rejection_reason_is_read_and_overrides_generic_title(self):
         self.save('combined.xml', xml(title='Chấp nhận/Không chấp nhận hồ sơ',

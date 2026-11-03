@@ -1,7 +1,6 @@
 """Virtualized table, typed sorting, independent file filters and selection."""
 from __future__ import annotations
 
-import json
 from decimal import Decimal
 
 from PySide6.QtCore import (
@@ -168,7 +167,9 @@ class RecordsModel(QAbstractTableModel):
                 return str(row.get('so_thong_bao') or 'Chưa có số thông báo')
             if self.mode == 'notice' and key == 'co_quan_gui':
                 return str(row.get('co_quan_gui') or 'Chưa có thông tin cơ quan phát hành')
-            return json.dumps(row, ensure_ascii=False, indent=2)
+            # Không tự bật bảng/tooltip chi tiết khi rê chuột; chi tiết chỉ mở
+            # bằng cách bấm hàng hoặc nút Chi tiết.
+            return None
         if role == Qt.ItemDataRole.TextAlignmentRole and key == 'so_tien':
             return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         if role == Qt.ItemDataRole.BackgroundRole and self.mode == 'tax' and row.get('_notice_state') == 'rejected':

@@ -351,20 +351,31 @@ def assets_from_row(row: dict, *, taxpayer_key: str = "") -> list[DocumentAsset]
 def aggregate_feedback_result(feedbacks: list[SubmissionFeedback]) -> str:
     """Trạng thái tổng hợp có quy tắc rõ ràng, không đoán.
 
-    Thứ tự ưu tiên giữ đúng quy tắc đã kiểm chứng ở ``desktop.notices``:
-    từ chối > chấp nhận > tiếp nhận. Danh sách rỗng là "chưa có phản hồi
-    trong dữ liệu hiện có", không phải "đang chờ CQT".
+    Kết quả mới nhất có ngày thông báo sẽ thay thế kết quả cũ của cùng hồ sơ
+    (ví dụ "Đã tiếp nhận" → "Đã chấp nhận"). Khi thiếu ngày đủ tin cậy hoặc
+    cùng ngày mâu thuẫn, giữ thứ tự thận trọng: từ chối > chấp nhận > tiếp
+    nhận. Danh sách rỗng là "chưa có phản hồi trong dữ liệu hiện có".
     """
-    results = {feedback.business_result for feedback in feedbacks}
     if not feedbacks:
         return BUSINESS_NONE
+    valid = [feedback for feedback in feedbacks
+             if feedback.business_result in {BUSINESS_REJECTED, BUSINESS_ACCEPTED,
+                                             BUSINESS_RECEIVED}]
+    if not valid:
+        return BUSINESS_UNKNOWN
+    dated = [(event_datetime(item.issued_at), item.business_result) for item in valid]
+    dated = [(when, result) for when, result in dated if when != datetime.min]
+    if dated:
+        latest = max(when for when, _ in dated)
+        current = {result for when, result in dated if when == latest}
+        if len(current) == 1:
+            return current.pop()
+    results = {item.business_result for item in valid}
     if BUSINESS_REJECTED in results:
         return BUSINESS_REJECTED
     if BUSINESS_ACCEPTED in results:
         return BUSINESS_ACCEPTED
-    if BUSINESS_RECEIVED in results:
-        return BUSINESS_RECEIVED
-    return BUSINESS_UNKNOWN
+    return BUSINESS_RECEIVED
 
 
 def has_conflicting_results(feedbacks: list[SubmissionFeedback]) -> bool:

@@ -3,7 +3,6 @@
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDateEdit,
     QFrame,
@@ -66,7 +65,6 @@ def build_workspace(window):
     self.account_button = button('Đăng nhập', self.open_login)
     self.account_button.setObjectName('account')
     header.addWidget(self.account_button)
-    header.addWidget(button('Xem hồ sơ đã lưu', self.open_local_account, 'Đọc kho local đúng tài khoản, không đăng nhập cổng thuế'))
     self.logout_button = button('', self.logout, 'Đăng xuất và xóa phiên đăng nhập')
     self.logout_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCloseButton))
     header.addWidget(self.logout_button)
@@ -140,9 +138,6 @@ def build_workspace(window):
         dates.addWidget(widget)
     self.preset.setCurrentIndex(1)
     self.preset.currentIndexChanged.connect(self.apply_preset)
-    self.unknown_dates = QCheckBox('Ngày chưa xác định')
-    self.unknown_dates.toggled.connect(self.apply_local_date_filter)
-    dates.addWidget(self.unknown_dates)
     self.config_layout.addWidget(self.online_panel)
     self.offline_panel = QWidget()
     source = QHBoxLayout(self.offline_panel)
@@ -359,6 +354,7 @@ def build_workspace(window):
     self.file_menu.addSeparator()
     self.batch_action = self.file_menu.addAction('Tải các nhóm liên tiếp…', self.batch_dialog)
     self.file_menu.addAction('Đọc / sao chép dữ liệu cũ…', self.import_legacy)
+    self.file_menu.addAction('Xem hồ sơ đã lưu trên máy…', self.open_local_account)
     self.outputs_menu = self.file_menu.addMenu('Tệp đã tạo')
     self.menu_button = QPushButton('Công cụ nâng cao')
     self.menu_button.setObjectName('files')

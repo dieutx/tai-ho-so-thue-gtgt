@@ -362,14 +362,14 @@ class PersistentUITests(unittest.TestCase):
         self.window.dates_changed()
 
     def test_switch_years_no_http_restart_and_unknown_date_group(self):
+        self.assertFalse(hasattr(self.window, 'unknown_dates'))
         with patch('requests.sessions.Session.request', side_effect=AssertionError('unexpected HTTP')):
             for year, month in [(2025, 6), (2026, 10), (2025, 6)]:
                 self.period(year, month)
-                self.assertEqual([row['ma_ho_so'] for row in self.window.model.rows], [str(year)])
+                names = {row['ma_ho_so'] for row in self.window.model.rows}
+                # Hồ sơ thiếu ngày vẫn hiện với ngày "—", không bị bỏ âm thầm.
+                self.assertEqual(names, {str(year), 'unknown'})
                 self.assertEqual(self.catalog.get_counts('tax')['total'], 3)
-            self.window.unknown_dates.setChecked(True)
-            self.assertEqual(self.window.model.rows[0]['ma_ho_so'], 'unknown')
-        self.window.unknown_dates.setChecked(False)
         self.window.save_tab()
         restored = self.window._restore_tab_state('tax')
         self.assertEqual(restored.from_date, '01/06/2025')

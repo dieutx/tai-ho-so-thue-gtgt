@@ -23,7 +23,7 @@ Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không
 **Tra cứu & tải** lấy luôn hồ sơ trong khoảng đã chọn. Tệp hợp lệ đã có sẽ được dùng lại.
 Kho hồ sơ được lưu bền vững trong SQLite theo tài khoản/nghiệp vụ. Đổi kỳ đọc ngay
 dữ liệu local; tra cứu online bổ sung hồ sơ mới, không xóa các kỳ đã lưu. Có thể chọn
-**Xem hồ sơ đã lưu** khi offline. Thanh chọn ngày luôn hiện và giữ kỳ đã chọn.
+**Công cụ nâng cao → Xem hồ sơ đã lưu trên máy…** khi offline. Thanh chọn ngày luôn hiện và giữ kỳ đã chọn; hồ sơ thiếu ngày vẫn hiện với ngày “—”.
 Chi tiết migration, vị trí DB và phục hồi: [Hướng dẫn kho local](docs/LOCAL_DATABASE_GUIDE.md).
 CAPTCHA được thử tự động tối đa **5 lần**; nếu vẫn chưa thành công, app thông báo và mở ô nhập tay.
 DVC được bật mặc định. **Trạng thái thuế** và **trạng thái tệp** được hiển thị riêng;
