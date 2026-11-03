@@ -44,6 +44,7 @@ class Pipeline:
         persist_metadata: bool = True,
         target_ids: set[str] | None = None,
         download_notices: bool = True,
+        authenticate: bool = True,
     ) -> None:
         self.settings = settings
         self.http = http
@@ -69,6 +70,8 @@ class Pipeline:
         self.failed_ids: set[str] = set()
         self.reused_ids: set[str] = set()
         self.download_notices = download_notices
+        #: Có thể bỏ qua bước đăng nhập khi phiên DVC đã được xác thực trước đó.
+        self.authenticate = authenticate
         self.notice_store = NoticeStore(settings.download_dir / NOTICE_DIRECTORY)
         self.attachments: dict[str, AttachmentResult] = {}
 
@@ -135,7 +138,7 @@ class Pipeline:
         # Legacy có phiên DSE riêng. Không phụ thuộc đăng nhập hay CSRF của DVC.
         csrf = ""
         if any(period.source != SOURCE_ETAX_LEGACY for period in active):
-            if not login(self.http, self.captcha, self.settings, self.logger):
+            if self.authenticate and not login(self.http, self.captcha, self.settings, self.logger):
                 raise LoginError("ĐĂNG NHẬP THẤT BẠI")
             landing = open_landing(self.http, self.logger, profile=self.settings.header_profile)
             csrf = csrf_token(landing)

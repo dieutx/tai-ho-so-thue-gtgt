@@ -34,6 +34,9 @@ def login(
     """Thử đăng nhập; trả ``True`` khi cổng xác nhận ``status = 200``."""
     logger = logger or logging.getLogger(LOGGER_NAME)
     payload = base64.b64encode(settings.password.encode("utf-8")).decode("ascii")
+    # Cổng phân biệt tài khoản cá nhân (CN) và doanh nghiệp (DN) bằng
+    # ``doiTuong``; đã xác minh từ HAR luồng đăng nhập cá nhân.
+    doi_tuong = "CN" if getattr(settings, "account_type", "DN") == "CN" else "DN"
 
     hooks = getattr(http, "hooks", RunHooks())
     last_outcome = AuthOutcome.SCHEMA_UNKNOWN
@@ -75,7 +78,7 @@ def login(
             data={
                 "tenDN": settings.username,
                 "matKhau": payload,
-                "doiTuong": "DN",
+                "doiTuong": doi_tuong,
                 "captcha": captcha_text,
             },
             headers=build_xhr_headers(

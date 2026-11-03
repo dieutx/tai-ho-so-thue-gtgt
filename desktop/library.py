@@ -172,12 +172,12 @@ def library_folders(base: str | Path, username: str, mode: str) -> list[Path]:
 
 
 def catalog_view(base, username, mode, start=None, end=None, *, unknown=False, include_unknown=False,
-                 migrate=False, hooks=None):
+                 migrate=False, hooks=None, account_type="DN"):
     """SELECT the visible range; no HTTP and no full inventory file verification."""
     from .documents import verify_rows
     from .state import job_output
     account_key = account_fingerprint(username)
-    used = job_output(Path(base), username, mode)
+    used = job_output(Path(base), username, mode, account_type)
     rows, keys, unknown_keys, review, problems = [], set(), set(), 0, []
     for folder in library_folders(base, username, mode):
         if not (folder / 'catalog.sqlite3').exists() and not (folder / CATALOGS[mode]).exists():
@@ -220,7 +220,8 @@ def load_library(config, hooks: RunHooks) -> JobResult:
     for mode in ("tax", "gnt", "notice"):
         hooks.check()
         children[mode] = catalog_view(base, config.username, mode, config.from_date or None,
-                                      config.to_date or None, migrate=True, hooks=hooks)
+                                      config.to_date or None, migrate=True, hooks=hooks,
+                                      account_type=getattr(config, 'account_type', 'DN'))
         total += len(children[mode].rows)
     failures = sum(1 for child in children.values() if child.state == "ERROR")
     message = (f"Đã nạp {total} hồ sơ từ máy — không gọi mạng" if not failures

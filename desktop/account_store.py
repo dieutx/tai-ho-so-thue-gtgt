@@ -13,8 +13,10 @@ class AccountStoreError(Exception):
     pass
 
 
-def target_name(username: str) -> str:
-    return PREFIX + hashlib.sha256(username.encode('utf-8')).hexdigest()
+def target_name(username: str, account_type: str = 'DN') -> str:
+    """Namespace riêng cho cá nhân; giữ nguyên khóa cũ của doanh nghiệp."""
+    digest = hashlib.sha256(username.encode('utf-8')).hexdigest()
+    return PREFIX + ('CN/' + digest if account_type == 'CN' else digest)
 
 
 class _Credential(ctypes.Structure):
@@ -53,11 +55,12 @@ class AccountStore:
     def _failed() -> None:
         raise AccountStoreError('Không truy cập được Windows Credential Manager; có thể đăng nhập bằng cách nhập mật khẩu.')
 
-    def accounts(self) -> list[str]:
+    def accounts(self, account_type: str = 'DN') -> list[str]:
         api = self._vault()
         count = wintypes.DWORD()
         entries = ctypes.POINTER(ctypes.POINTER(_Credential))()
-        if not api.CredEnumerateW(PREFIX + '*', 0, ctypes.byref(count), ctypes.byref(entries)):
+        if not api.CredEnumerateW(PREFIX + ('CN/*' if account_type == 'CN' else '*'), 0,
+                                  ctypes.byref(count), ctypes.byref(entries)):
             if ctypes.get_last_error() == 1168:
                 return []
             self._failed()
@@ -66,16 +69,16 @@ class AccountStore:
             for index in range(count.value):
                 item = entries[index].contents
                 username = item.UserName or ''
-                if item.Type == 1 and username and item.TargetName == target_name(username):
+                if item.Type == 1 and username and item.TargetName == target_name(username, account_type):
                     names.add(username)
             return sorted(names, key=str.casefold)
         finally:
             api.CredFree(entries)
 
-    def password(self, username: str) -> str | None:
+    def password(self, username: str, account_type: str = 'DN') -> str | None:
         api = self._vault()
         entry = ctypes.POINTER(_Credential)()
-        if not api.CredReadW(target_name(username), 1, 0, ctypes.byref(entry)):
+        if not api.CredReadW(target_name(username, account_type), 1, 0, ctypes.byref(entry)):
             if ctypes.get_last_error() == 1168:
                 return None
             self._failed()
@@ -90,7 +93,7 @@ class AccountStore:
         finally:
             api.CredFree(entry)
 
-    def save(self, username: str, password: str) -> None:
+    def save(self, username: str, password: str, account_type: str = 'DN') -> None:
         if not username.strip() or '\0' in username or not password:
             raise AccountStoreError('Tài khoản hoặc mật khẩu trống/không hợp lệ.')
         encoded = password.encode('utf-16-le')
@@ -98,7 +101,7 @@ class AccountStore:
             raise AccountStoreError('Mật khẩu vượt giới hạn lưu của Windows Credential Manager.')
         api = self._vault()
         blob = (ctypes.c_ubyte * len(encoded)).from_buffer_copy(encoded)
-        entry = _Credential(Type=1, TargetName=target_name(username), UserName=username,
+        entry = _Credential(Type=1, TargetName=target_name(username, account_type), UserName=username,
                             CredentialBlobSize=len(encoded), CredentialBlob=blob, Persist=2)
         try:
             if not api.CredWriteW(ctypes.byref(entry), 0):
@@ -106,7 +109,7 @@ class AccountStore:
         finally:
             ctypes.memset(blob, 0, len(encoded))
 
-    def forget(self, username: str) -> None:
+    def forget(self, username: str, account_type: str = 'DN') -> None:
         api = self._vault()
-        if not api.CredDeleteW(target_name(username), 1, 0) and ctypes.get_last_error() != 1168:
+        if not api.CredDeleteW(target_name(username, account_type), 1, 0) and ctypes.get_last_error() != 1168:
             self._failed()

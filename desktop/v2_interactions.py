@@ -1372,6 +1372,34 @@ class V2InteractionMixin:
         self.position_drawer()
         self.refresh_account()
 
+    def change_account_type(self, *_args):
+        """Đổi DN ↔ CN: cô lập phiên/kho, không trộn hồ sơ giữa hai loại."""
+        if getattr(self, '_changing_account_type', False):
+            return
+        selected = self.account_type.currentData() or 'DN'
+        current = self.controller.sessions.account_type
+        if selected == current:
+            return
+        if self.controller.busy:
+            self._changing_account_type = True
+            self.account_type.setCurrentIndex(max(0, self.account_type.findData(current)))
+            self._changing_account_type = False
+            self.error('Dừng tác vụ hiện tại trước khi đổi loại tài khoản.')
+            return
+        self.save_tab()
+        self.controller.sessions.set_account_type(selected)
+        self.preferences.account_type = selected
+        try:
+            self.store.save(self.preferences)
+        except (OSError, ValueError, TypeError):
+            pass
+        self.clear_account_views()
+        self.refresh_account()
+        self.warning_update()
+        self.status.setText('Đã chuyển sang tài khoản '
+                            + ('cá nhân' if selected == 'CN' else 'doanh nghiệp')
+                            + '. Hãy đăng nhập để tiếp tục.')
+
     def account_context_menu(self, point):
         menu = QMenu(self)
         action = menu.addAction('Sao chép MST / tài khoản đầy đủ',

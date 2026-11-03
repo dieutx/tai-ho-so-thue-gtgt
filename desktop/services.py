@@ -36,6 +36,7 @@ class RunConfig:
     mode: str
     output: Path
     username: str = ""
+    account_type: str = "DN"
     password: str = field(default="", repr=False)
     from_date: str = "01/06/2025"
     to_date: str = "30/06/2025"
@@ -61,6 +62,7 @@ class RunConfig:
 
     def settings(self) -> Settings:
         p = self.preferences
+        personal = self.account_type == "CN"
         # Leave room for five automatic challenges followed by manual fallback.
         attempts = max(6, p.login_attempts) if p.solver == "ddddocr" else p.login_attempts
         searches = max(6, p.search_attempts) if p.solver == "ddddocr" else p.search_attempts
@@ -73,7 +75,11 @@ class RunConfig:
             pause_between_records=p.record_delay, pause_between_pages=p.page_delay,
             pause_jitter=p.jitter, page_size=p.page_size, max_days_per_search=p.max_days,
             header_profile=p.header_profile, proxy_url=self.proxy, extra_headers=self.extra_headers,
-            etax_cutoff=p.cutoff, legacy_etax=True, dvc_enabled=self.dvc,
+            # Tài khoản cá nhân luôn dùng DVC cho toàn bộ khoảng ngày; không có
+            # luồng legacy thuedientu tương ứng.
+            etax_cutoff="01/01/1900" if personal else p.cutoff,
+            legacy_etax=not personal, dvc_enabled=True if personal else self.dvc,
+            account_type=self.account_type,
             log_file="", http_dump_dir="", captcha_plugins="", captcha_options={},
         )
 
@@ -165,7 +171,8 @@ ONLINE = {
 
 def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
                logger: logging.Logger, http: Any = None, portal_factory: Any = None,
-               *, close_resources: bool = True, propagate_auth: bool = False) -> JobResult:
+               *, close_resources: bool = True, propagate_auth: bool = False,
+               authenticate: bool = True) -> JobResult:
     settings = config.settings()
     from gdt_tax.identity import account_fingerprint
     from gdt_tax.local_catalog import LocalCatalog
@@ -193,6 +200,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     kwargs = {"portal_factory": portal_factory} if portal_factory is not None else {}
     if config.mode == 'tax':
         kwargs['store'] = DesktopZipStore(config.output, logger, config.input_rows)
+        kwargs['authenticate'] = authenticate
     pipeline = kind(settings, http, captcha, hooks=hooks, logger=logger,
                     # SQLite owns crash checkpoints. Materialize legacy exports
                     # once in finally, rather than re-serializing the full JSON

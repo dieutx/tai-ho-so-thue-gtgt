@@ -99,8 +99,8 @@ def online_check(path: Path) -> int:
     queue = [(config, 'login')]
     mode = request.get('mode', 'tax')
     for period in request['periods']:
-        queue.append((replace(config, mode=mode, dry_run=True,
-            output=job_output(config.output, config.username, mode),
+        queue.append((replace(config, mode=mode, dry_run=True,                output=job_output(config.output, config.username, mode,
+                                  getattr(config, 'account_type', 'DN')),
             from_date=period['from'], to_date=period['to']), 'query'))
     results = []
     keep = []

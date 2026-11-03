@@ -164,6 +164,9 @@ class Settings:
     etax_profile: PortalProfile = ETAX_PROFILE
     legacy_profiles: tuple[LegacyProfile, ...] = LEGACY_PROFILES
     routing_policy: RoutingPolicy | None = None
+    #: ``DN`` = doanh nghiệp/tổ chức, ``CN`` = cá nhân. Chỉ dùng cho đăng nhập
+    #: DVC (``doiTuong``); dữ liệu vẫn tách theo thư mục tài khoản.
+    account_type: str = "DN"
 
     # --- Dẫn xuất ---
     def periods(self) -> list[SearchPeriod]:
@@ -182,6 +185,8 @@ class Settings:
         )
 
     def validate(self) -> None:
+        if self.account_type not in {"DN", "CN"}:
+            raise ConfigError("GDT_ACCOUNT_TYPE phải là DN hoặc CN")
         if not self.username:
             raise ConfigError(
                 "Thiếu GDT_USERNAME. Hãy đặt biến môi trường hoặc ghi vào file .env."
@@ -285,6 +290,7 @@ class Settings:
                 proxy_url=pick("proxy_url", env.text, "PROXY_URL"),
                 legacy_etax=bool(pick("legacy_etax", env.boolean, "LEGACY_ETAX", True)),
                 dvc_enabled=bool(pick("dvc_enabled", env.boolean, "DVC_ENABLED", False)),
+                account_type=pick("account_type", env.text, "ACCOUNT_TYPE", "DN"),
             )
         except ValueError as error:  # parse_date
             raise ConfigError(str(error)) from error

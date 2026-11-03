@@ -217,7 +217,8 @@ class Worker(QObject):
                             config = replace(self.config, mode=mode)
                             try:
                                 hooks.check()
-                                config = replace(config, output=job_output(self.config.output, self.config.username, mode))
+                                config = replace(config, output=job_output(self.config.output, self.config.username,
+                                                                         mode, self.config.account_type))
                                 hooks.emit(active_mode=mode)
                                 config.validate()
                                 child = self.sessions.execute(config, hooks, solver, logger)

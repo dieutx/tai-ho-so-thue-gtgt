@@ -8,8 +8,9 @@ from datetime import timedelta
 from threading import RLock
 from typing import Any
 
+from gdt_tax.auth import login as dvc_login
 from gdt_tax.auth_outcomes import AuthFailure, AuthOutcome, classify_response
-from gdt_tax.constants import LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
+from gdt_tax.constants import LEGACY_ETAX_ORIGIN, SOURCE_DVC, SOURCE_ETAX_LEGACY
 from gdt_tax.errors import LegacyPageError
 from gdt_tax.gnt.portal import GntPortal
 from gdt_tax.http import HttpClient
@@ -17,6 +18,7 @@ from gdt_tax.identity import RecordKey, account_fingerprint
 from gdt_tax.legacy_session import LegacySessionState, SessionExpired
 from gdt_tax.ownership import prepare_output
 from gdt_tax.portals import build_portals
+from gdt_tax.portals.dvc import DvcPortal
 from gdt_tax.portals.etax_legacy import EtaxLegacyPortal
 from gdt_tax.proxy import parse_proxy
 from gdt_tax.run_hooks import RunCancelled, RunHooks
@@ -31,6 +33,8 @@ class AccountContext:
     password: str = field(default="", repr=False)
     version: int = 0
     state: str = "DISCONNECTED"
+    #: ``DN`` (doanh nghiệp) hoặc ``CN`` (cá nhân); tách phiên, kho và mật khẩu.
+    account_type: str = "DN"
 
     def clear(self) -> None:
         self.username = self.password = ""
@@ -98,6 +102,7 @@ class ETaxSessionManager:
         self.session = LegacySessionState()
         self.lock = RLock()
         self._fingerprint: tuple = ()
+        self.dvc_authenticated = False
 
     def set_account(self, username: str, password: str) -> None:
         with self.lock:
@@ -105,6 +110,20 @@ class ETaxSessionManager:
                 self._close_clients()
                 self.account.clear()
                 self.account.username, self.account.password = username, password
+
+    @property
+    def account_type(self) -> str:
+        return self.account.account_type
+
+    def set_account_type(self, account_type: str) -> None:
+        """Đổi loại tài khoản phải cô lập phiên, cookie và mật khẩu đang giữ."""
+        account_type = "CN" if account_type == "CN" else "DN"
+        with self.lock:
+            if account_type == self.account.account_type:
+                return
+            self._close_clients()
+            self.account.clear()
+            self.account.account_type = account_type
 
     def _close_clients(self) -> None:
         for client in (self.http, self.dvc_http):
@@ -114,6 +133,7 @@ class ETaxSessionManager:
                     session.cookies.clear()
                 client.close()
         self.http = self.dvc_http = None
+        self.dvc_authenticated = False
         self.session.clear()
         self._fingerprint = ()
 
@@ -161,15 +181,82 @@ class ETaxSessionManager:
         finally:
             http.authenticating = False
 
+    def _dvc_client(self, config: RunConfig, hooks: RunHooks, logger) -> Any:
+        """Một phiên DVC dùng chung cho tài khoản cá nhân; không dùng cookie ETAX."""
+        settings = config.settings()
+        if self.dvc_http is None:
+            self.dvc_http = self.dvc_factory(
+                timeout=settings.request_timeout, retries=settings.http_retries,
+                header_profile=settings.header_profile, proxy=parse_proxy(config.proxy),
+                extra_headers=config.extra_headers, hooks=hooks, logger=logger)
+        else:
+            self.dvc_http.hooks = hooks
+            self.dvc_http.logger = logger
+        return self.dvc_http
+
+    def _execute_personal(self, config: RunConfig, hooks: RunHooks, captcha, logger,
+                          settings) -> JobResult:
+        """Luồng đã xác minh từ HAR tài khoản cá nhân: đăng nhập DVC + tờ khai."""
+        if config.mode in {"gnt", "notice"}:
+            return JobResult(
+                "ERROR",
+                "Tài khoản cá nhân: Giấy nộp tiền và Thông báo thuế dùng luồng "
+                "canhan.gdt.gov.vn riêng, chưa được tích hợp trong bản này. "
+                "Hồ sơ đã tải trước đó vẫn được giữ nguyên.",
+                config.output, errors=1, error_code='UNSUPPORTED_ACCOUNT_FLOW')
+        if config.mode not in {"login", "tax"}:
+            return JobResult("ERROR", "Tài khoản cá nhân chưa hỗ trợ chế độ này.",
+                             config.output, errors=1, error_code='UNSUPPORTED_ACCOUNT_FLOW')
+        http = self._dvc_client(config, hooks, logger)
+        if config.mode == "login":
+            try:
+                dvc_login(http, captcha, settings, logger)
+            except SessionExpired:
+                self.invalidate()
+                return JobResult("ERROR", "Phiên DVC đã hết hạn; hãy đăng nhập lại.",
+                                 config.output, errors=1, error_code='AUTH_EXPIRED_SESSION')
+            except AuthFailure as error:
+                self.invalidate()
+                return JobResult("ERROR", str(error), config.output, errors=1, error_code=error.code)
+            self.dvc_authenticated = True
+            self.account.state = 'CONNECTED'
+            return JobResult("SUCCESS", "DVC cá nhân: Đã kết nối", config.output)
+
+        def personal_portals(*_args):
+            return {SOURCE_DVC: DvcPortal(http, captcha, settings, logger)}
+
+        try:
+            result = run_online(config, hooks, captcha, logger, http=http,
+                                portal_factory=personal_portals, close_resources=False,
+                                propagate_auth=True,
+                                authenticate=not self.dvc_authenticated)
+        except SessionExpired:
+            self.invalidate()
+            return JobResult("ERROR", "Phiên đăng nhập DVC đã hết hạn; hãy đăng nhập lại.",
+                             config.output, errors=1, error_code='AUTH_EXPIRED_SESSION')
+        except AuthFailure as error:
+            self.invalidate()
+            return JobResult("ERROR", str(error), config.output, errors=1, error_code=error.code)
+        if result.state in {"SUCCESS", "PARTIAL"}:
+            self.dvc_authenticated = True
+            self.account.state = 'CONNECTED'
+        elif str(getattr(result, 'error_code', '')).startswith('AUTH_'):
+            self.invalidate()
+        return result
+
     def execute(self, config: RunConfig, hooks: RunHooks, captcha, logger=None) -> JobResult:
         logger = logger or logging.getLogger("gdt_tax.desktop")
         with self.lock:
             hooks.check()
             config = config.normalized_selection()
+            if config.account_type != self.account.account_type:
+                self.set_account_type(config.account_type)
             self.set_account(config.username, config.password)
             settings = config.settings()
             if config.mode != "login":
                 prepare_output(settings)
+            if config.account_type == "CN":
+                return self._execute_personal(config, hooks, captcha, logger, settings)
             if config.mode == "tax" and config.dvc and settings.from_date < settings.etax_cutoff <= settings.to_date:
                 return self._mixed_tax(config, hooks, captcha, logger)
             needs_legacy = config.mode in {"login", "gnt", "notice"} or any(

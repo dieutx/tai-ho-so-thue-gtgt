@@ -60,6 +60,7 @@ class Preferences:
     cutoff: str = "01/07/2025"
     theme: str = "light"
     dvc_enabled: bool = True
+    account_type: str = "DN"
     #: Trạng thái giao diện theo tab (filter/sort/độ rộng cột); không chứa dữ liệu hồ sơ.
     ui_state: dict[str, dict] = field(default_factory=dict)
     #: Phiên bản người dùng đã bấm "Để sau"; chỉ ẩn đúng bản đó.
@@ -81,6 +82,8 @@ class SettingsStore:
         result = Preferences(**safe)
         if result.solver not in {"ddddocr", "manual"} or result.theme not in {"light", "dark"}:
             raise ValueError("Thiết lập CAPTCHA/giao diện không hợp lệ")
+        if result.account_type not in {"DN", "CN"}:
+            raise ValueError("Loại tài khoản đã lưu không hợp lệ")
         return result
 
     def save(self, preferences: Preferences) -> None:

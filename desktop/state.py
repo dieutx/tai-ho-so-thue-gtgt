@@ -14,13 +14,15 @@ from .services import JobResult
 FOLDERS = {"tax": "to-khai", "gnt": "gnt", "notice": "thong-bao", "offline": "phan-tich"}
 
 
-def job_output(base: Path, username: str, mode: str) -> Path:
+def job_output(base: Path, username: str, mode: str, account_type: str = "DN") -> Path:
     if mode == "offline":
         return base / FOLDERS[mode]
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", username)[:48].strip("_") or "tai-khoan"
     account = f"{safe}-{hashlib.sha256(username.encode()).hexdigest()[:8]}"
-    target = base / account / FOLDERS[mode]
-    fresh = base / account / 'tai-moi' / FOLDERS[mode]
+    # Tách hẳn kho cá nhân/doanh nghiệp; không di chuyển hay ghi đè dữ liệu cũ.
+    root = base / "ca-nhan" if account_type == "CN" else base
+    target = root / account / FOLDERS[mode]
+    fresh = root / account / 'tai-moi' / FOLDERS[mode]
     key = account_fingerprint(username)
     # Preserve existing verified output; keep unowned legacy files untouched.
     # Once a new namespace is in use, keep using it even if old files are moved.

@@ -17,9 +17,11 @@ from .account_store import AccountStore, AccountStoreError
 
 
 class AccountDialog(QDialog):
-    def __init__(self, parent=None, username: str = "", password: str = "", *, store=None) -> None:
+    def __init__(self, parent=None, username: str = "", password: str = "", *, store=None,
+                 account_type: str = "DN") -> None:
         super().__init__(parent)
-        self.setWindowTitle("Đăng nhập ETAX")
+        self.account_type = "CN" if account_type == "CN" else "DN"
+        self.setWindowTitle("Đăng nhập DVC — Cá nhân" if self.account_type == "CN" else "Đăng nhập ETAX")
         form = QFormLayout(self)
         self.store = store if store is not None else AccountStore()
         self.accounts = QComboBox()
@@ -50,11 +52,16 @@ class AccountDialog(QDialog):
         self.message.setWordWrap(True)
         form.addRow(self.message)
         try:
-            self.accounts.addItems(self.store.accounts())
+            names = (self.store.accounts(self.account_type) if self.account_type == "CN"
+                     else self.store.accounts())
+            self.accounts.addItems(names)
         except AccountStoreError as error:
             self.message.setText(str(error))
             self.remember.setChecked(False)
             self.remember.setEnabled(False)
+        if self.account_type == "CN":
+            self.message.setText('Tài khoản cá nhân: dùng đúng tài khoản/MST cá nhân trên Cổng Dịch vụ công. '
+                                 'Mật khẩu được lưu riêng bằng Windows Credential Manager sau khi đăng nhập thành công.')
         self.username.textChanged.connect(self.select_account)
         self.username.setText(username)
         self.select_account(username)
@@ -78,14 +85,19 @@ class AccountDialog(QDialog):
         self.forget.setEnabled(saved)
         if saved:
             try:
-                self.password.setText(self.store.password(username) or '')
+                saved_password = (self.store.password(username, self.account_type)
+                                  if self.account_type == "CN" else self.store.password(username))
+                self.password.setText(saved_password or '')
             except AccountStoreError as error:
                 self.message.setText(str(error))
 
     def forget_account(self) -> None:
         username = self.username.text()
         try:
-            self.store.forget(username)
+            if self.account_type == "CN":
+                self.store.forget(username, self.account_type)
+            else:
+                self.store.forget(username)
         except AccountStoreError as error:
             self.message.setText(str(error))
             return

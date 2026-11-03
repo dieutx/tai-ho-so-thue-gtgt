@@ -319,6 +319,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         self.controller.completed.connect(self.on_completed)
         self.controller.captcha.connect(self.on_captcha)
         self.controller.logs.connect(self.on_logs)
+        self.controller.sessions.set_account_type(self.preferences.account_type)
         self.build_ui()
         self.apply_theme()
         self.resize(1080, 670)
@@ -437,7 +438,9 @@ class MainWindow(V2InteractionMixin, QMainWindow):
     def warning_update(self, *_args) -> None:
         if not hasattr(self, "from_date"):
             return
-        warning = self.mode == "tax" and not self.dvc and self.to_date.date() >= QDate.fromString(self.preferences.cutoff, "dd/MM/yyyy")
+        warning = (self.mode == "tax" and self.controller.sessions.account_type != "CN"
+                   and not self.dvc
+                   and self.to_date.date() >= QDate.fromString(self.preferences.cutoff, "dd/MM/yyyy"))
         self.warning.setText(f"Từ {self.preferences.cutoff}: chưa tra cứu DVC — kết quả có thể chưa đầy đủ" if warning else "")
         self.warning.setVisible(warning)
         date_type = {"tax": "ngày nộp tờ khai", "gnt": "ngày lập GNT", "notice": "ngày gửi/nộp thông báo", "offline": "offline"}[self.mode]
@@ -449,13 +452,20 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         if not hasattr(self, "account_label"):
             return
         account = self.controller.sessions.account
-        self.account_label.setText(self.fontMetrics().elidedText("MST: " + (account.username or "—"),
+        personal = account.account_type == "CN"
+        prefix = "Cá nhân" if personal else "MST"
+        self.account_label.setText(self.fontMetrics().elidedText(prefix + ": " + (account.username or "—"),
                                   Qt.TextElideMode.ElideMiddle, self.account_label.maximumWidth()))
         self.account_label.setToolTip(account.username)
-        labels = {"DISCONNECTED": "Chưa đăng nhập", "AUTHENTICATING": "Đang đăng nhập", "CONNECTED": "ETAX: Đã kết nối", "EXPIRED": "Cần đăng nhập lại"}
+        labels = {"DISCONNECTED": "Chưa đăng nhập", "AUTHENTICATING": "Đang đăng nhập",
+                  "CONNECTED": "DVC cá nhân: Đã kết nối" if personal else "ETAX: Đã kết nối",
+                  "EXPIRED": "Cần đăng nhập lại"}
         self.source_badge.setText(labels[account.state])
         self.source_badge.setStyleSheet("color:" + ("#15803D" if account.state == "CONNECTED" else "#92400E") + ";")
-        self.source_badge.setToolTip("DVC: Thử nghiệm, phiên riêng" if self.dvc else "DVC: Chưa bật; ETAX legacy trước cutoff")
+        if personal:
+            self.source_badge.setToolTip("Tài khoản cá nhân: phiên DVC riêng; không dùng phiên ETAX doanh nghiệp")
+        else:
+            self.source_badge.setToolTip("DVC: Thử nghiệm, phiên riêng" if self.dvc else "DVC: Chưa bật; ETAX legacy trước cutoff")
         self.account_button.setText("Đổi tài khoản" if account.username else "Đăng nhập")
         self.account_button.setToolTip(labels[account.state] + " • " + account.username)
         self.logout_button.setEnabled(bool(account.username))
@@ -592,7 +602,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         if not self.account_action_allowed(lambda: self.open_login(initial=initial, after=after)):
             return
         account = self.controller.sessions.account
-        dialog = AccountDialog(self, *(initial or (account.username, "")), store=self.account_store)
+        dialog = AccountDialog(self, *(initial or (account.username, "")), store=self.account_store,
+                              account_type=self.controller.sessions.account_type)
         accepted = dialog.exec()
         credentials = dialog.take_credentials()
         remember = dialog.remember.isChecked()
@@ -601,6 +612,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             return
         old_username = account.username
         self.save_tab()
+        self.controller.sessions.set_account_type(self.account_type.currentData() or "DN")
         self.controller.sessions.set_account(*credentials)
         if old_username != account.username:
             self.clear_account_views()
@@ -614,7 +626,10 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         remember, self.remember_login = self.remember_login, False
         if success and remember and config:
             try:
-                self.account_store.save(config.username, config.password)
+                if config.account_type == "CN":
+                    self.account_store.save(config.username, config.password, config.account_type)
+                else:
+                    self.account_store.save(config.username, config.password)
             except AccountStoreError as error:
                 self.error('Đã đăng nhập thành công. ' + str(error))
 
@@ -622,7 +637,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         from PySide6.QtWidgets import QMenu
         menu = QMenu(self)
         try:
-            names = self.account_store.accounts()
+            names = self.account_store.accounts(self.controller.sessions.account_type)
         except AccountStoreError as error:
             self.error(str(error))
             names = []
@@ -643,6 +658,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         if not accepted or not username.strip():
             return
         self.save_tab()
+        self.controller.sessions.set_account_type(self.account_type.currentData() or "DN")
         self.controller.sessions.set_account(username.strip(), '')
         self.clear_account_views()
         self.refresh_account()
@@ -716,7 +732,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         config = self.make_config("import" if copy else "saved")
         config.stage = self.mode
         config.source = Path(source)
-        config.output = job_output(Path(self.output.text()), config.username, self.mode) if copy else Path(source)
+        config.output = (job_output(Path(self.output.text()), config.username, self.mode,
+                                    config.account_type) if copy else Path(source))
         self.launch(config)
 
     def browse(self, widget: QLineEdit) -> None:
@@ -773,8 +790,10 @@ class MainWindow(V2InteractionMixin, QMainWindow):
     def make_config(self, mode: str, dry_run: bool = False) -> RunConfig:
         account = self.controller.sessions.account
         base = Path(self.output.text()).expanduser().resolve()
-        target = job_output(base, account.username, mode) if mode in MODES else base
+        target = (job_output(base, account.username, mode, account.account_type)
+                  if mode in MODES else base)
         return RunConfig(mode, target, username=account.username if mode != "offline" else "", password=account.password if mode != "offline" else "",
+            account_type=account.account_type,
             from_date=self.from_date.date().toString("dd/MM/yyyy"), to_date=self.to_date.date().toString("dd/MM/yyyy"),
             case_id=self.case_filter, dry_run=dry_run, source=Path(self.input_path.text()).expanduser().resolve() if self.input_path.text().strip() else None,
             stage=self.stage.currentData(), preferences=replace(self.preferences), proxy=self.proxy, extra_headers=dict(self.extra_headers),
