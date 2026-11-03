@@ -10,7 +10,7 @@ Nếu tiếp tục công việc trên máy khác, đọc
 trước; chỉ làm phần còn thiếu. Tạo lại venv, không copy môi trường từ máy cũ.
 
 ```bash
-git clone https://gitlab.com/dieutx/tai-ho-so-thue-gtgt.git
+git clone https://github.com/dieutx/tai-ho-so-thue-gtgt.git
 cd tai-ho-so-thue-gtgt
 python -m venv .venv
 ```
@@ -37,9 +37,9 @@ python -m ruff check .
 python -m mypy gdt_tax
 ```
 
-Test phải xanh trước khi mở merge request — CI trên GitLab chạy đúng các lệnh ở
+Test phải xanh trước khi mở pull request — CI trên GitHub Actions chạy đúng các lệnh ở
 trên trên Linux; nếu bạn sửa code liên quan tới Windows thì chạy thử thêm trên
-Windows trước khi mở MR.
+Windows trước khi mở PR.
 
 ## Chuẩn cho một bộ nhận dạng CAPTCHA mới
 
@@ -95,15 +95,15 @@ Cổng từ chối khoảng dài kể cả trước mốc 01/07/2025, nên chư�
 nhỏ và tự chuyển nguồn tại mốc đó.
 ```
 
-## Quy trình merge request
+## Quy trình pull request
 
 1. Tạo nhánh từ `main`: `git switch -c fix/ten-ngan`.
 2. Chạy test và lint.
-3. Mở merge request, mô tả hiện tượng trước — sau, và cách bạn đã kiểm chứng.
+3. Mở pull request, mô tả hiện tượng trước — sau, và cách bạn đã kiểm chứng.
 4. Nếu thay đổi luồng chạy hoặc module, cập nhật `docs/ARCHITECTURE.md`.
 
-Merge request cần pipeline xanh (job `test` và `lint` trong `.gitlab-ci.yml`)
-trước khi được duyệt.
+Pull request cần pipeline xanh (job `test`, `lint` và `desktop` trong
+`.github/workflows/ci.yml`) trước khi được duyệt.
 
 ## Báo lỗi khi cổng đổi giao diện
 
@@ -126,4 +126,4 @@ trước khi được duyệt.
   của bạn vào issue.**
 
 Đưa bản HTML đã ẩn danh vào `tests/fixtures/` để người khác tái hiện lỗi.
-Không commit `.env`, ZIP/XML tải thật, log/dump thô hoặc token GitLab.
+Không commit `.env`, ZIP/XML tải thật, log/dump thô hoặc token GitHub.

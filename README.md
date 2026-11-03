@@ -7,6 +7,8 @@ Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không
 
 **[🐍 Chạy bằng Python như trước — cài đặt, cấu hình .env và các lệnh CLI](docs/CLI_GUIDE.md)**
 
+**[Mã nguồn trên GitHub](https://github.com/dieutx/tai-ho-so-thue-gtgt)**
+
 ![Giao diện Tải Hồ Sơ Thuế 2.0](docs/images/desktop-v2.png)
 
 *Ảnh giao diện mới với dữ liệu kiểm thử; không chứa hồ sơ thuế thật.*

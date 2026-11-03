@@ -3,7 +3,7 @@
 Hướng dẫn cài đặt, cấu hình `.env` và các lệnh Python/CLI như trước đây.
 Nếu cần chạy giao diện desktop từ Python, xem [hướng dẫn phát triển](../BUILD_WINDOWS.md#build).
 
-[![CI](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/badges/main/pipeline.svg)](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/pipelines)
+[![CI](https://github.com/dieutx/tai-ho-so-thue-gtgt/actions/workflows/ci.yml/badge.svg)](https://github.com/dieutx/tai-ho-so-thue-gtgt/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](../pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](../LICENSE)
 
@@ -53,10 +53,10 @@ trạng thái tệp đã có hợp lệ. Xem
 
 ## Cài đặt nhanh
 
-Clone từ GitLab — đây là repository chính:
+Clone từ GitHub — đây là repository chính:
 
 ```bash
-git clone https://gitlab.com/dieutx/tai-ho-so-thue-gtgt.git
+git clone https://github.com/dieutx/tai-ho-so-thue-gtgt.git
 cd tai-ho-so-thue-gtgt
 ```
 
@@ -92,8 +92,8 @@ Khi chưa kích hoạt venv, thay `python` trong các ví dụ bằng
 Cài bằng `requirements.txt` vẫn chạy được qua `python -m` từ repo nhưng không
 tạo các lệnh `gdt-*`.
 
-Repo private sẽ yêu cầu credential GitLab. Không đưa token vào URL, `.env`,
-issue, log hoặc commit.
+Repo public, không cần credential. Không đưa token vào URL, `.env`, issue, log
+hoặc commit.
 
 ## Cấu hình bằng `.env`
 
@@ -368,7 +368,7 @@ python -m mypy gdt_tax
 ```
 
 Các test backend OCR tùy chọn có thể được skip nếu thiếu thư viện tương ứng.
-GitLab CI chạy test trên Python 3.10 và 3.12, cùng lint/mypy. Test offline không
+GitHub Actions chạy test trên Python 3.10 và 3.12, cùng lint/mypy. Test offline không
 xác nhận cổng thuế hiện đang hoạt động hoặc mọi mẫu XML đều được hỗ trợ.
 
 ## Chẩn đoán và khắc phục

@@ -45,8 +45,8 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt"
-Issues = "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/issues"
+Repository = "https://github.com/dieutx/tai-ho-so-thue-gtgt"
+Issues = "https://github.com/dieutx/tai-ho-so-thue-gtgt/issues"
 
 [project.scripts]
 gdt-tax = "gdt_tax.cli:main"
