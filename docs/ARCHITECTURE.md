@@ -8,8 +8,8 @@ Trạng thái triển khai, test thật và quy trình chuyển máy ở
 [HANDOFF](development/HANDOFF.md); backlog và giới hạn ở
 [REVIEW](development/REVIEW.md). Đã có inventory/profile cấu trúc XML, phân loại
 artifact, khung parser theo mapping và export offline. Hiện mapping đã kiểm chứng
-cho 01/GTGT, hai mẫu 05/KK-TNCN và 03/TNDN mã 892 phiên bản 2.5.1/2.9.4; các
-mẫu còn lại vẫn cần làm.
+cho 01/GTGT, hai mẫu 05/KK-TNCN, 05/QTT-TNCN mã 953 và 03/TNDN mã 892; các mẫu
+còn lại vẫn cần làm.
 
 ## Bản đồ module
 
@@ -47,7 +47,9 @@ tự đăng nhập phiên DSE riêng ở lần tra cứu đầu. `EtaxLegacyFall
 | `captcha/` | Nhận dạng CAPTCHA (nhiều backend) | Gọi endpoint nghiệp vụ |
 | `portals/` | Tra cứu và tải theo từng nguồn | Đọc/ghi file |
 | `portals/etax_legacy.py` | Nguồn chính trước cutoff: login DSE, kiểm tra XML rồi gói ZIP; adapter fallback cũ được giữ | Đọc/ghi file |
-| `auth.py` | Đăng nhập, mở trang hồ sơ | Đọc/ghi file |
+| `portals/personal.py` | Hai nguồn tài khoản cá nhân: tờ khai DVC (scope SELF) và thông báo CQT qua SSO cổng cá nhân | Lẫn hồ sơ doanh nghiệp vào metadata cá nhân |
+| `taxpayer.py` | Đọc tên người nộp thuế từ trang hồ sơ và lưu theo MST | Gọi mạng |
+| `auth.py` | Đăng nhập (``doiTuong=DN``/``CN``), mở trang hồ sơ | Đọc/ghi file |
 | `pipeline.py` | Ghép các giai đoạn | Chi tiết giao thức |
 | `cli.py` | Tham số dòng lệnh, mã thoát, log | Nghiệp vụ |
 
@@ -114,8 +116,27 @@ sau, không gọi khi `GDT_DVC_ENABLED=false`. Luồng mặc định chỉ dùng
 | DVC | Kiểm tra trước khi tải | `GET /tthc/tchs/validateIdTkhai` |
 | DVC | Tải ZIP | `POST /tthc/tchs/downloadhoso` |
 | DVC | Dự phòng khi AJAX tắt | `POST /tthc/downloadhoso` |
+| Cá nhân | SSO sang cổng thông báo | `POST /tthc/sso/redirect-to-service?module=10607` |
+| Cá nhân | Tra cứu thông báo | `POST canhan.gdt.gov.vn/ICanhan/Request` (`retailSearchTaxNoticesProc`) |
+| Cá nhân | Tải PDF thông báo | `POST canhan.gdt.gov.vn/ICanhan/Request` (`dse_nextEventName=download`) |
 
 Thứ tự cột của bảng kết quả nằm ở đầu `gdt_tax/parsing.py`.
+
+## Tài khoản cá nhân
+
+`GDT_ACCOUNT_TYPE=personal` (hoặc `--account-type personal`) chọn luồng riêng,
+không dùng chính sách cutoff và không tạo portal doanh nghiệp:
+
+* `auth.login(..., doi_tuong="CN")` mở phiên cá nhân; sau đó pipeline đọc tên +
+  số định danh/MST từ `/tthc/tchs` và ghi `nguoi_nop_thue.json` theo MST.
+* `DvcPersonalPortal` tra cứu tờ khai với `scope_tdt1=SELF` và tải ZIP qua
+  `validateIdTkhai` + `downloadhoso` (cột bảng giống DVC doanh nghiệp).
+* `CanhanNoticePortal` vào `canhan.gdt.gov.vn` bằng SSO module `10607`, mở phiên
+  DSE bằng form `mainForm`, tra cứu/tải bằng form `frmtcuu`; PDF trả về được gói
+  trong ZIP tại portal nên `storage` dùng chung.
+
+Hai nguồn ghi `nguon` riêng (`DVC_PERSONAL`, `CANHAN`) để metadata và báo cáo
+không lẫn với hồ sơ doanh nghiệp.
 
 ## Một số điều đã kiểm chứng khi chạy thật
 
@@ -271,20 +292,23 @@ Chạy offline từ manifest: `python -m gdt_tax.parser.cli <folder> --output <d
 (hoặc `gdt-parse`). Kết quả `parsed_declarations.json` có schema/parser version và
 giữ `source_zip`/`source_inner_file`/`source_sha256`/`artifact_id` để truy vết.
 
-Đã đóng gói năm mapping:
+Đã đóng gói sáu mapping:
 
 * `gdt_tax/form_mappings/gtgt_842_01-gtgt.json` — 01/GTGT (mã 842), 27 chỉ tiêu `ct22`…`ct43`
 (+`ct23a`/`ct24a`), tên theo TT80/2021/TT-BTC.
 * `gdt_tax/form_mappings/tncn_864_05kk-tt80.json` — 05/KK-TNCN (mã 864), `ct16`…`ct32`, TT80/2021.
 * `gdt_tax/form_mappings/tncn_394_05kk-tt92.json` — 05/KK-TNCN (mã 394), `ct21`…`ct36`, TT92/2015.
+* `gdt_tax/form_mappings/tncn_953_05qtt-tt80.json` — 05/QTT-TNCN (mã 953),
+  26 chỉ tiêu tổng hợp `ct16`…`ct41`, TT80/2021; chỉ bật cho bốn version đã xác minh.
 * `gdt_tax/form_mappings/tndn_892_03-tndn_v2.5.1.json` — 03/TNDN (mã 892),
   63 chỉ tiêu tờ khai chính theo TT80/2021.
 * `gdt_tax/form_mappings/tndn_892_03-tndn_v2.9.4.json` — 03/TNDN (mã 892),
   65 trường; C7 là bộ thu nhập/tên thuế suất/thuế suất động.
 
 Ba mapping GTGT/TNCN khai `form_version = null` vì XPath đã kiểm chứng resolve
-trên các phiên bản hiện có. Hai mapping TNDN khai đúng version 2.5.1/2.9.4 và
-không tự áp cho version chưa xác minh. **Hai bản TNCN là hai
+trên các phiên bản hiện có. Mapping 953 dùng `verified_form_versions` để khóa
+vào 2.5.1/2.7.9/2.8.4/2.9.3; hai mapping TNDN khai đúng version 2.5.1/2.9.4.
+Các mapping này không tự áp cho version chưa xác minh. **Hai bản 05/KK-TNCN là hai
 mapping tách biệt theo `form_code`** vì mã chỉ tiêu `[21]`… trùng số nhưng khác ý
 nghĩa giữa TT80 và TT92 (spec §45). Chỉ tiêu không có trong mapping (ví dụ `ct21`
 của mẫu 842 — cờ "không phát sinh", `ct15` của 864) vẫn giữ ``NEED_MAPPING``;
@@ -295,9 +319,10 @@ mẫu/phiên bản khác chưa mapping cũng vậy. Khi mapping có XPath, extra
 Mẫu **02/KK-TNCN (TT156/2013)** chưa có mapping vì thư mục hiện tại không có XML
 nào của mẫu đó (không đủ dữ liệu để xác minh XPath).
 
-Mẫu **03/TNDN** chỉ lấy `CTieuTKhaiChinh`; báo cáo tài chính và phụ lục trong
-cùng hồ sơ không bị gán thành tờ khai chính. Chi tiết support matrix và nguồn
-đối chiếu nằm trong `gdt_tax/form_mappings/README.md`.
+Mẫu **03/TNDN** và **05/QTT-TNCN** chỉ lấy `CTieuTKhaiChinh`; báo cáo tài chính,
+bảng kê cá nhân và phụ lục trong cùng hồ sơ không bị gán thành tờ khai chính.
+Chi tiết support matrix và nguồn đối chiếu nằm trong
+`gdt_tax/form_mappings/README.md`.
 
 ### Phân loại theo nội dung (stage 03)
 

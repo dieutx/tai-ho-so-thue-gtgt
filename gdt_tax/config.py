@@ -20,7 +20,17 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from .constants import SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
+from .constants import (
+    ACCOUNT_BUSINESS,
+    ACCOUNT_PERSONAL,
+    ACCOUNT_TYPES,
+    PERSONAL_SOURCES,
+    SOURCE_CANHAN,
+    SOURCE_DVC,
+    SOURCE_DVC_PERSONAL,
+    SOURCE_ETAX,
+    SOURCE_ETAX_LEGACY,
+)
 from .dates import (
     ETAX_CUTOFF_DEFAULT,
     MAX_DAYS_PER_SEARCH_DEFAULT,
@@ -150,10 +160,28 @@ class Settings:
     legacy_etax: bool = True
     #: Tạm tắt toàn bộ request tới dichvucong.gdt.gov.vn, kể cả đăng nhập.
     dvc_enabled: bool = False
+    #: ``business`` (mặc định) hoặc ``personal`` — luồng cá nhân tách riêng,
+    #: đăng nhập ``doiTuong=CN`` và không chia mốc cutoff.
+    account_type: str = ACCOUNT_BUSINESS
 
     # --- Dẫn xuất ---
     def periods(self) -> list[SearchPeriod]:
-        """Danh sách đoạn tra cứu cần chạy, theo thứ tự thời gian."""
+        """Danh sách đoạn tra cứu cần chạy, theo thứ tự thời gian.
+
+        Tài khoản cá nhân không chia mốc cutoff: mỗi đoạn ngày được tra cứu ở
+        cả nguồn tờ khai (Dịch vụ công) và nguồn thông báo (cổng cá nhân).
+        """
+        if self.account_type == ACCOUNT_PERSONAL:
+            personal: list[SearchPeriod] = []
+            for chunk in split_periods(
+                self.from_date,
+                self.to_date,
+                cutoff=self.etax_cutoff,
+                max_days=self.max_days_per_search,
+            ):
+                personal.append(SearchPeriod(chunk.start, chunk.end, SOURCE_DVC_PERSONAL))
+                personal.append(SearchPeriod(chunk.start, chunk.end, SOURCE_CANHAN))
+            return personal
         planned = list(
             split_periods(
                 self.from_date,
@@ -169,6 +197,9 @@ class Settings:
         ]
 
     def source_enabled(self, source: str) -> bool:
+        """Nguồn được phép gọi trong chế độ tài khoản hiện tại."""
+        if self.account_type == ACCOUNT_PERSONAL:
+            return source in PERSONAL_SOURCES
         return source == SOURCE_ETAX_LEGACY or (
             self.dvc_enabled and source in {SOURCE_ETAX, SOURCE_DVC}
         )
@@ -184,6 +215,11 @@ class Settings:
             )
         if self.from_date > self.to_date:
             raise ConfigError("GDT_FROM_DATE phải nhỏ hơn hoặc bằng GDT_TO_DATE")
+        if self.account_type not in ACCOUNT_TYPES:
+            raise ConfigError(
+                f"GDT_ACCOUNT_TYPE phải là {' hoặc '.join(ACCOUNT_TYPES)}, nhận được "
+                f"{self.account_type!r}"
+            )
         if self.max_days_per_search < 1:
             raise ConfigError("GDT_MAX_DAYS_PER_SEARCH phải lớn hơn 0")
         if self.page_size < 1:
@@ -265,6 +301,9 @@ class Settings:
                 proxy_url=pick("proxy_url", env.text("PROXY_URL")),
                 legacy_etax=bool(pick("legacy_etax", env.boolean("LEGACY_ETAX", True))),
                 dvc_enabled=bool(pick("dvc_enabled", env.boolean("DVC_ENABLED", False))),
+                account_type=pick(
+                    "account_type", env.text("ACCOUNT_TYPE", ACCOUNT_BUSINESS)
+                ).strip().lower(),
             )
         except ValueError as error:  # parse_date
             raise ConfigError(str(error)) from error

@@ -30,15 +30,27 @@ import re
 
 from bs4 import BeautifulSoup, Tag
 
-from .constants import ALL_SOURCES, SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
+from .constants import (
+    ALL_SOURCES,
+    SOURCE_CANHAN,
+    SOURCE_DVC,
+    SOURCE_ETAX,
+    SOURCE_ETAX_LEGACY,
+)
 from .csrf import attribute
 from .models import CaseRecord
 
 ETAX_MIN_CELLS = 10
 DVC_MIN_CELLS = 12
 ETAX_LEGACY_MIN_CELLS = 11
+CANHAN_MIN_CELLS = 5
 SOURCES = (SOURCE_ETAX, SOURCE_DVC)
 LEGACY_RESULT_TABLE_ID = "data_content_onday"
+#: Nút tải trên bảng thông báo cá nhân: ``downloadGNT(81214446,'KDT')``.
+CANHAN_DOWNLOAD_RE = re.compile(
+    r"downloadGNT\(\s*['\"]?(?P<id>[^'\",)\s]+)['\"]?\s*,\s*"
+    r"['\"]?(?P<loai>[^'\")]*?)['\"]?\s*\)"
+)
 
 
 def legacy_message_id(row_html: str, event: str = "downloadTkhai") -> str:
@@ -139,6 +151,29 @@ def etax_legacy_record(cells: list[str], row: Tag) -> CaseRecord | None:
     )
 
 
+def canhan_notice_record(cells: list[str], row: Tag) -> CaseRecord | None:
+    """Đọc một dòng bảng thông báo của cơ quan thuế trên cổng cá nhân.
+
+    Cột: ``STT | Mã giao dịch | Số thông báo | Thông báo | Ngày gửi | Tải về``.
+    ``ma_ho_so`` là ``idTBao`` mà cổng dùng khi tải, còn số văn bản được giữ
+    riêng để tra cứu.
+    """
+    match = CANHAN_DOWNLOAD_RE.search(str(row))
+    if match is None or len(cells) < CANHAN_MIN_CELLS:
+        return None
+    return CaseRecord(
+        ma_ho_so=match.group("id"),
+        nguon=SOURCE_CANHAN,
+        to_khai=cells[3],
+        ngay_nop=cells[4],
+        so_thong_bao=cells[2],
+        ma_loai_thong_bao=match.group("loai"),
+        loai_tai_lieu="NOTICE",
+        quy_tac_phan_loai="canhan-notice-v1",
+        ly_do_phan_loai="bảng thông báo của cơ quan thuế (cổng cá nhân)",
+    )
+
+
 def parse_records(html: str, source: str) -> list[CaseRecord]:
     """Đọc mọi hồ sơ trong bảng kết quả, bỏ trùng theo mã hồ sơ."""
     _check_source(source)
@@ -159,6 +194,15 @@ def parse_records(html: str, source: str) -> list[CaseRecord]:
             records.append(record)
         return records
 
+    if source == SOURCE_CANHAN:
+        for row in soup.find_all("tr"):
+            record = canhan_notice_record(direct_cells(row), row)
+            if record is None or record.ma_ho_so in seen:
+                continue
+            seen.add(record.ma_ho_so)
+            records.append(record)
+        return records
+
     for row in soup.select("tbody tr"):
         cells = direct_cells(row)
         if source == SOURCE_ETAX:
@@ -167,6 +211,8 @@ def parse_records(html: str, source: str) -> list[CaseRecord]:
         else:
             case_id = case_id_from_row(row, cells, fallback_index=2)
             record = dvc_record(cells, case_id)
+            if record is not None:
+                record.nguon = source
         if record is None or record.ma_ho_so in seen:
             continue
         seen.add(record.ma_ho_so)
@@ -188,6 +234,12 @@ def page_count(html: str, source: str) -> int | None:
     soup = BeautifulSoup(html, "lxml")
     if source == SOURCE_ETAX:
         return _int_attribute(soup, "goToPage_tdt", "max")
+    if source == SOURCE_CANHAN:
+        text = soup.get_text(" ", strip=True)
+        match = re.search(r"Tổng số\s*(\d+)\s*trang", text, re.I)
+        if match:
+            return max(1, int(match.group(1)))
+        return 1 if "downloadGNT(" in html else None
 
     total = soup.find(id="totalPage")
     if total and total.get_text(strip=True).isdigit():
@@ -197,10 +249,12 @@ def page_count(html: str, source: str) -> int | None:
 
 __all__ = [
     "DVC_MIN_CELLS",
+    "CANHAN_MIN_CELLS",
     "ETAX_LEGACY_MIN_CELLS",
     "ETAX_MIN_CELLS",
     "LEGACY_RESULT_TABLE_ID",
     "SOURCES",
+    "canhan_notice_record",
     "case_id_from_row",
     "direct_cells",
     "dvc_record",

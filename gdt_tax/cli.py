@@ -18,6 +18,7 @@ import sys
 from . import __version__
 from .captcha import available_solvers, create_solver, register_plugins
 from .config import DEFAULT_ENV_FILE, Settings
+from .constants import ACCOUNT_TYPES
 from .errors import CaptchaError, ConfigError, GdtError
 from .headers import PROFILE_BROWSER, PROFILE_MINIMAL, PROFILES, header_names
 from .http import HttpClient
@@ -36,6 +37,7 @@ Ví dụ:
   python -m gdt_tax --from-date 01/01/2025 --to-date 31/01/2025
   python -m gdt_tax --from-date 01/01/2026 --to-date 31/01/2026 --output-dir download/2026-01 --enable-dvc
   python -m gdt_tax --case-id 11320250292469209
+  python -m gdt_tax --account-type personal    # tài khoản cá nhân: tờ khai + thông báo
   python -m gdt_tax --solver manual            # tự nhập CAPTCHA từng lần
   python -m gdt_tax --dry-run                  # chỉ tra cứu, không tải
 
@@ -93,6 +95,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--from-date", metavar="dd/mm/yyyy", help="Ngày bắt đầu tra cứu")
     parser.add_argument("--to-date", metavar="dd/mm/yyyy", help="Ngày kết thúc tra cứu")
     parser.add_argument("--case-id", help="Chỉ tải một mã hồ sơ cụ thể")
+    parser.add_argument(
+        "--account-type",
+        choices=list(ACCOUNT_TYPES),
+        help=(
+            "Loại tài khoản: business (mặc định, hồ sơ doanh nghiệp) hoặc personal "
+            "(tài khoản cá nhân, luồng riêng gồm tờ khai và thông báo của CQT)"
+        ),
+    )
     parser.add_argument("--output-dir", help="Thư mục lưu ZIP và metadata")
     parser.add_argument(
         "--solver",
@@ -204,6 +214,7 @@ def _main(argv: list[str] | None = None) -> int:
             from_date=args.from_date,
             to_date=args.to_date,
             case_id=args.case_id,
+            account_type=args.account_type,
             download_dir=args.output_dir,
             captcha_solver=args.solver,
             captcha_options=parse_solver_options(args.solver_option) or None,

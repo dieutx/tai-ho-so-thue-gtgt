@@ -9,14 +9,21 @@ from collections.abc import Callable
 
 from .auth import login, open_landing
 from .classification import classify_record
-from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX, SOURCE_ETAX_LEGACY
+from .constants import (
+    ACCOUNT_PERSONAL,
+    METADATA_CSV,
+    METADATA_JSON,
+    METADATA_XLSX,
+    SOURCE_ETAX_LEGACY,
+)
 from .csrf import csrf_token
 from .dates import format_date
-from .errors import LoginError, SearchError
+from .errors import LoginError, SearchError, StorageError
 from .http import HttpClient
 from .models import CaseRecord, PageResult, RunSummary
 from .portals import build_portals
 from .storage import ZipStore, write_metadata
+from .taxpayer import Taxpayer, parse_taxpayer, save_taxpayer
 
 LOGGER_NAME = "gdt_tax.pipeline"
 SEARCH_RETRY_PAUSE = 4.0
@@ -37,12 +44,14 @@ class Pipeline:
         self.portal_factory = portal_factory
         self.logger = logger or logging.getLogger(LOGGER_NAME)
         self.sleep = sleep
+        self.taxpayer: Taxpayer | None = None
 
     def run(self) -> RunSummary:
         summary = RunSummary(dry_run=self.settings.dry_run)
         self.logger.info(
-            "Bắt đầu: %s → %s (cutoff %s; DVC %s)",
+            "Bắt đầu: %s → %s (tài khoản %s; cutoff %s; DVC %s)",
             format_date(self.settings.from_date), format_date(self.settings.to_date),
+            self.settings.account_type,
             format_date(self.settings.etax_cutoff),
             "bật" if self.settings.dvc_enabled else "tạm tắt",
         )
@@ -60,9 +69,13 @@ class Pipeline:
         # Legacy có phiên DSE riêng. Không phụ thuộc đăng nhập hay CSRF của DVC.
         csrf = ""
         if any(period.source != SOURCE_ETAX_LEGACY for period in active):
-            if not login(self.http, self.captcha, self.settings, self.logger):
+            doi_tuong = "CN" if self.settings.account_type == ACCOUNT_PERSONAL else "DN"
+            if not login(
+                self.http, self.captcha, self.settings, self.logger, doi_tuong=doi_tuong
+            ):
                 raise LoginError("ĐĂNG NHẬP THẤT BẠI")
             landing = open_landing(self.http, self.logger, profile=self.settings.header_profile)
+            self._remember_taxpayer(landing)
             csrf = csrf_token(landing)
         portals = self.portal_factory(self.http, self.captcha, self.settings, csrf, self.logger)
 
@@ -110,6 +123,7 @@ class Pipeline:
                 if self.settings.case_id and found.ma_ho_so != self.settings.case_id:
                     continue
                 record = records.setdefault(found.ma_ho_so, classify_record(found))
+                self._attach_taxpayer(record)
                 self.logger.info("TẢI trang=%s mục=%s/%s: %s", page, index, len(result.records), record.ma_ho_so)
                 success = self._download(portal, record, succeeded)
                 write_metadata(self.settings.download_dir, records)
@@ -122,6 +136,33 @@ class Pipeline:
             if total_pages is None or page <= total_pages:
                 self._pause(self.settings.pause_between_pages)
         return False
+
+    def _remember_taxpayer(self, landing: str) -> None:
+        """Đọc tên người nộp thuế từ trang hồ sơ và lưu theo mã số thuế."""
+        taxpayer = parse_taxpayer(landing, self.settings.username)
+        if taxpayer is None:
+            self.logger.debug("Trang hồ sơ không có đủ tên và MST để lưu")
+            return
+        self.taxpayer = taxpayer
+        self.logger.info(
+            "NGƯỜI NỘP THUẾ: %s (MST %s)",
+            taxpayer.ten_nguoi_nop_thue, taxpayer.mst,
+        )
+        try:
+            path = save_taxpayer(self.settings.download_dir, taxpayer)
+        except StorageError as error:
+            self.logger.warning("%s", error)
+        else:
+            self.logger.info("Đã lưu tên người nộp thuế vào %s", path.name)
+
+    def _attach_taxpayer(self, record: CaseRecord) -> None:
+        """Gắn MST/tên đã đọc sau đăng nhập vào từng hồ sơ."""
+        if self.taxpayer is None:
+            return
+        record.mst = record.mst or self.taxpayer.mst
+        record.ten_nguoi_nop_thue = (
+            record.ten_nguoi_nop_thue or self.taxpayer.ten_nguoi_nop_thue
+        )
 
     def _pause(self, seconds: float) -> None:
         jitter = self.settings.pause_jitter

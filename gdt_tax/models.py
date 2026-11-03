@@ -27,6 +27,12 @@ class CaseRecord:
     trang_thai: str = ""
     ho_so_dinh_kem: str = ""
     tep_zip: str = ""
+    #: Mã số thuế/số định danh của người nộp thuế; điền sau khi đăng nhập.
+    mst: str = ""
+    ten_nguoi_nop_thue: str = ""
+    #: Thông báo của cơ quan thuế: số văn bản và mã loại dùng khi tải tệp.
+    so_thong_bao: str = ""
+    ma_loai_thong_bao: str = ""
     #: Nhóm thuế khác với loai_to_khai (chính thức/bổ sung).
     nhom_to_khai: str = "UNKNOWN"
     loai_tai_lieu: str = "UNKNOWN"

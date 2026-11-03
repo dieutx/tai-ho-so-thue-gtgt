@@ -22,6 +22,8 @@ Hỗ trợ Windows, Linux và macOS với Python 3.10 trở lên.
 - Trước cutoff dùng trực tiếp `thuedientu.gdt.gov.vn`.
 - DVC có thể bật lại bằng cấu hình, nhưng mặc định không được gọi.
 - Xuất danh sách tờ khai Excel 11 cột từ kết quả tra cứu.
+- Tài khoản cá nhân có luồng riêng: tờ khai Dịch vụ công và thông báo của CQT,
+  lưu tên người nộp thuế theo MST.
 - Kiểm kê, phân loại và đọc chỉ tiêu XML hoàn toàn offline.
 - Xuất workbook phân tích nhiều sheet, giữ mọi lần nộp và thông tin nguồn.
 
@@ -128,6 +130,29 @@ Chỉ tải một hồ sơ:
 python -m gdt_tax --case-id <ma-ho-so>
 ```
 
+### Tài khoản cá nhân
+
+Tài khoản cá nhân chạy luồng riêng, không chia mốc cutoff và không trộn với hồ sơ
+doanh nghiệp:
+
+```bash
+python -m gdt_tax --account-type personal \
+  --from-date 01/10/2025 --to-date 31/10/2025 \
+  --output-dir download/ca-nhan
+```
+
+- Đăng nhập bằng `doiTuong=CN`.
+- Tờ khai: tra cứu `/tthc/ho-so/search` với `scope_tdt1=SELF`, tải ZIP qua
+  `validateIdTkhai` + `downloadhoso`.
+- Thông báo của cơ quan thuế: SSO sang `canhan.gdt.gov.vn` (module `10607`),
+  tra cứu `retailSearchTaxNoticesProc`; tệp PDF được tải theo `idTBao` và gói
+  trong ZIP như các nguồn khác.
+- Sau khi đăng nhập, tên người nộp thuế được đọc từ trang hồ sơ, lưu vào
+  `nguoi_nop_thue.json` theo MST và điền vào `mst`/`ten_nguoi_nop_thue` của
+  metadata.
+- `GDT_PROXY_URL`/`--proxy` áp dụng cho cả hai cổng, nên vẫn cần proxy Việt Nam
+  khi chạy trên máy chủ ở nước ngoài.
+
 Một số lệnh hữu ích:
 
 ```bash
@@ -187,15 +212,16 @@ Mỗi dòng giữ đường dẫn ZIP/member, SHA-256 và XPath để truy vết
 | GTGT | 01/GTGT | 842 | Chỉ tiêu tổng hợp |
 | TNCN | 05/KK-TNCN TT80 | 864 | Chỉ tiêu tổng hợp |
 | TNCN | 05/KK-TNCN TT92 | 394 | Chỉ tiêu tổng hợp |
+| TNCN | 05/QTT-TNCN TT80 | 953 | 26 chỉ tiêu tổng hợp; XML 2.5.1/2.7.9/2.8.4/2.9.3 |
 | TNDN | 03/TNDN | 892 | XML 2.5.1 và 2.9.4 |
 
-Mapping 03/TNDN chỉ đọc tờ khai chính, không gán báo cáo tài chính hoặc phụ lục
-thành tờ khai. Version chưa được xác minh giữ trạng thái `NEED_MAPPING`; parser
-không suy đoán ý nghĩa chỉ tiêu.
+Mapping 03/TNDN và 05/QTT-TNCN chỉ đọc tờ khai chính; báo cáo tài chính, bảng kê
+cá nhân và phụ lục không được lấy làm chỉ tiêu tổng hợp. Version chưa được xác
+minh giữ trạng thái `NEED_MAPPING`; parser không suy đoán ý nghĩa chỉ tiêu.
 
 Kết quả kiểm chứng trên bộ dữ liệu cục bộ hiện tại: 1.265 XML, 0 lỗi parse,
-479 tờ khai `MAPPED`; riêng 03/TNDN là 20/20 hồ sơ, không warning. Dữ liệu thật
-không được đưa vào Git.
+515 tờ khai `MAPPED`; riêng 03/TNDN là 20/20 và 05/QTT-TNCN là 36/36 hồ sơ,
+không warning. Dữ liệu thật không được đưa vào Git.
 
 ## Nguyên tắc dữ liệu
 
@@ -221,7 +247,7 @@ python -m ruff check .
 python -m mypy gdt_tax
 ```
 
-Hiện có 352 test; 6 test backend OCR tùy chọn được skip nếu chưa cài EasyOCR
+Hiện có 357 test; 6 test backend OCR tùy chọn được skip nếu chưa cài EasyOCR
 hoặc PaddleOCR. GitLab CI chạy test trên Python 3.10 và 3.12, cùng lint/mypy.
 
 ## Khắc phục nhanh

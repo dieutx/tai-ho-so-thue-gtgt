@@ -3,6 +3,10 @@
 Cổng đăng nhập bằng ``POST /tchs/loginLDAP`` với mật khẩu mã hoá Base64, kèm
 CAPTCHA và header ``X-XSRF-TOKEN`` lấy từ thẻ meta của trang đăng nhập. Vì
 CAPTCHA có thể đọc sai, hàm :func:`login` thử lại nhiều lần theo cấu hình.
+
+``doi_tuong`` là ``DN`` (doanh nghiệp, mặc định) hoặc ``CN`` (cá nhân). Cổng
+dùng cùng endpoint cho cả hai, nhưng tài khoản cá nhân phải khai đúng ``CN``
+mới nhận được phiên của mình.
 """
 
 from __future__ import annotations
@@ -12,7 +16,7 @@ import logging
 import time
 
 from .captcha import KIND_LOGIN, CaptchaSolver, fetch_captcha
-from .constants import LANDING, LOGIN_ENDPOINT, LOGIN_PAGE, ORIGIN
+from .constants import ACCOUNT_PERSONAL, LANDING, LOGIN_ENDPOINT, LOGIN_PAGE, ORIGIN
 from .csrf import token_from_meta
 from .errors import LoginError
 from .headers import DEFAULT_PROFILE, build_page_headers, build_xhr_headers
@@ -28,9 +32,18 @@ def login(
     captcha: CaptchaSolver,
     settings,
     logger: logging.Logger | None = None,
+    *,
+    doi_tuong: str | None = None,
 ) -> bool:
-    """Thử đăng nhập; trả ``True`` khi cổng xác nhận ``status = 200``."""
+    """Thử đăng nhập; trả ``True`` khi cổng xác nhận ``status = 200``.
+
+    Không truyền ``doi_tuong`` thì lấy theo ``settings.account_type``
+    (``personal`` → ``CN``, còn lại → ``DN``).
+    """
     logger = logger or logging.getLogger(LOGGER_NAME)
+    if doi_tuong is None:
+        personal = getattr(settings, "account_type", "") == ACCOUNT_PERSONAL
+        doi_tuong = "CN" if personal else "DN"
     payload = base64.b64encode(settings.password.encode("utf-8")).decode("ascii")
 
     for attempt in range(1, settings.login_attempts + 1):
@@ -68,7 +81,7 @@ def login(
             data={
                 "tenDN": settings.username,
                 "matKhau": payload,
-                "doiTuong": "DN",
+                "doiTuong": doi_tuong,
                 "captcha": captcha_text,
             },
             headers=build_xhr_headers(
