@@ -1,0 +1,197 @@
+{
+  "mapping_id": "TNCN_953_05QTT-TT80",
+  "mapping_version": "1",
+  "tax_type": "TNCN",
+  "form_code": "953",
+  "form_version": null,
+  "verified_form_versions": ["2.5.1", "2.7.9", "2.8.4", "2.9.3"],
+  "note": "Mẫu 05/QTT-TNCN theo Thông tư 80/2021/TT-BTC. Tên chỉ tiêu đối chiếu Phụ lục II trong Công báo/VBHN chính thức; XPath kiểm chứng trên toàn bộ XML mã 953 phiên bản 2.5.1, 2.7.9, 2.8.4 và 2.9.3 trong tập dữ liệu cục bộ. Chỉ mapping tờ khai chính CTieuTKhaiChinh; không đọc các bảng kê 05-1, 05-2, 05-3 hoặc phụ lục KHBS có dữ liệu cá nhân.",
+  "detect": {
+    "root": "HSoThueDTu",
+    "namespace": "http://kekhaithue.gdt.gov.vn/TKhaiThue"
+  },
+  "fields": {
+    "employee_count": {
+      "indicator_code": "ct16",
+      "display_name": "Tổng số người lao động",
+      "official_indicator_name": "Tổng số người lao động",
+      "datatype": "integer",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct16"
+    },
+    "resident_with_contract": {
+      "indicator_code": "ct17",
+      "display_name": "Cá nhân cư trú có hợp đồng lao động",
+      "official_indicator_name": "Trong đó: Cá nhân cư trú có hợp đồng lao động",
+      "datatype": "integer",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct17"
+    },
+    "deducted_persons_total": {
+      "indicator_code": "ct18",
+      "display_name": "Tổng số cá nhân đã khấu trừ thuế",
+      "official_indicator_name": "Tổng số cá nhân đã khấu trừ thuế [18]=[19]+[20]",
+      "datatype": "integer",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct18"
+    },
+    "deducted_resident_count": {
+      "indicator_code": "ct19",
+      "display_name": "Cá nhân cư trú đã khấu trừ thuế",
+      "official_indicator_name": "Cá nhân cư trú",
+      "datatype": "integer",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct19"
+    },
+    "deducted_non_resident_count": {
+      "indicator_code": "ct20",
+      "display_name": "Cá nhân không cư trú đã khấu trừ thuế",
+      "official_indicator_name": "Cá nhân không cư trú",
+      "datatype": "integer",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct20"
+    },
+    "treaty_exempt_person_count": {
+      "indicator_code": "ct21",
+      "display_name": "Cá nhân được miễn, giảm thuế theo Hiệp định tránh đánh thuế hai lần",
+      "official_indicator_name": "Tổng số cá nhân thuộc diện được miễn, giảm thuế theo Hiệp định tránh đánh thuế hai lần",
+      "datatype": "integer",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct21"
+    },
+    "family_deduction_person_count": {
+      "indicator_code": "ct22",
+      "display_name": "Tổng số cá nhân giảm trừ gia cảnh",
+      "official_indicator_name": "Tổng số cá nhân giảm trừ gia cảnh",
+      "datatype": "integer",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct22"
+    },
+    "taxable_income_total": {
+      "indicator_code": "ct23",
+      "display_name": "Tổng thu nhập chịu thuế trả cho cá nhân",
+      "official_indicator_name": "Tổng thu nhập chịu thuế trả cho cá nhân [23]=[24]+[25]",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct23"
+    },
+    "taxable_income_resident": {
+      "indicator_code": "ct24",
+      "display_name": "TNCT trả cho cá nhân cư trú",
+      "official_indicator_name": "Cá nhân cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct24"
+    },
+    "taxable_income_non_resident": {
+      "indicator_code": "ct25",
+      "display_name": "TNCT trả cho cá nhân không cư trú",
+      "official_indicator_name": "Cá nhân không cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct25"
+    },
+    "insurance_premium_taxable_income": {
+      "indicator_code": "ct26",
+      "display_name": "TNCT từ phí bảo hiểm do doanh nghiệp bảo hiểm không thành lập tại Việt Nam",
+      "official_indicator_name": "Trong đó: Tổng thu nhập chịu thuế từ tiền phí mua bảo hiểm nhân thọ, bảo hiểm không bắt buộc khác của doanh nghiệp bảo hiểm không thành lập tại Việt Nam cho người lao động",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct26"
+    },
+    "oil_contract_exempt_income": {
+      "indicator_code": "ct27",
+      "display_name": "TNCT được miễn theo Hợp đồng dầu khí",
+      "official_indicator_name": "Trong đó tổng thu nhập chịu thuế được miễn theo quy định của Hợp đồng dầu khí",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct27"
+    },
+    "income_subject_to_withholding_total": {
+      "indicator_code": "ct28",
+      "display_name": "Tổng TNCT thuộc diện phải khấu trừ thuế",
+      "official_indicator_name": "Tổng thu nhập chịu thuế trả cho cá nhân thuộc diện phải khấu trừ thuế [28]=[29]+[30]",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct28"
+    },
+    "income_subject_to_withholding_resident": {
+      "indicator_code": "ct29",
+      "display_name": "TNCT phải khấu trừ - cá nhân cư trú",
+      "official_indicator_name": "Cá nhân cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct29"
+    },
+    "income_subject_to_withholding_non_resident": {
+      "indicator_code": "ct30",
+      "display_name": "TNCT phải khấu trừ - cá nhân không cư trú",
+      "official_indicator_name": "Cá nhân không cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct30"
+    },
+    "tax_withheld_total": {
+      "indicator_code": "ct31",
+      "display_name": "Tổng số thuế TNCN đã khấu trừ",
+      "official_indicator_name": "Tổng số thuế thu nhập cá nhân đã khấu trừ [31]=[32]+[33]",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct31"
+    },
+    "tax_withheld_resident": {
+      "indicator_code": "ct32",
+      "display_name": "Thuế TNCN đã khấu trừ - cá nhân cư trú",
+      "official_indicator_name": "Cá nhân cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct32"
+    },
+    "tax_withheld_non_resident": {
+      "indicator_code": "ct33",
+      "display_name": "Thuế TNCN đã khấu trừ - cá nhân không cư trú",
+      "official_indicator_name": "Cá nhân không cư trú",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct33"
+    },
+    "tax_withheld_insurance": {
+      "indicator_code": "ct34",
+      "display_name": "Thuế TNCN đã khấu trừ trên phí bảo hiểm",
+      "official_indicator_name": "Trong đó: Tổng số thuế thu nhập cá nhân đã khấu trừ trên tiền phí mua bảo hiểm nhân thọ, bảo hiểm không bắt buộc khác của doanh nghiệp bảo hiểm không thành lập tại Việt Nam cho người lao động",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuKhauTruThue/ct34"
+    },
+    "authorized_person_count": {
+      "indicator_code": "ct35",
+      "display_name": "Tổng số cá nhân ủy quyền quyết toán thay",
+      "official_indicator_name": "Tổng số cá nhân ủy quyền cho tổ chức, cá nhân trả thu nhập quyết toán thay",
+      "datatype": "integer",
+      "xpath": "CTieuTKhaiChinh/NVuQToanThay/ct35"
+    },
+    "authorized_tax_withheld_total": {
+      "indicator_code": "ct36",
+      "display_name": "Tổng số thuế TNCN đã khấu trừ của cá nhân ủy quyền",
+      "official_indicator_name": "Tổng số thuế thu nhập cá nhân đã khấu trừ",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuQToanThay/ct36"
+    },
+    "transferred_employee_tax_withheld": {
+      "indicator_code": "ct37",
+      "display_name": "Thuế đã khấu trừ tại tổ chức trước khi điều chuyển",
+      "official_indicator_name": "Trong đó: Số thuế thu nhập cá nhân đã khấu trừ tại tổ chức trước khi điều chuyển (trường hợp có đánh dấu vào chỉ tiêu [04])",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuQToanThay/ct37"
+    },
+    "authorized_tax_payable": {
+      "indicator_code": "ct38",
+      "display_name": "Tổng số thuế TNCN phải nộp của cá nhân ủy quyền",
+      "official_indicator_name": "Tổng số thuế thu nhập cá nhân phải nộp",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuQToanThay/ct38"
+    },
+    "small_balance_tax_exempt": {
+      "indicator_code": "ct39",
+      "display_name": "Thuế được miễn do số còn phải nộp không quá 50.000 đồng",
+      "official_indicator_name": "Tổng số thuế thu nhập cá nhân được miễn do cá nhân có số thuế còn phải nộp sau ủy quyền quyết toán từ 50.000 đồng trở xuống",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuQToanThay/ct39"
+    },
+    "authorized_tax_due": {
+      "indicator_code": "ct40",
+      "display_name": "Tổng số thuế TNCN còn phải nộp",
+      "official_indicator_name": "Tổng số thuế thu nhập cá nhân còn phải nộp [40]=([38]-[36]-[39])>0",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuQToanThay/ct40"
+    },
+    "authorized_tax_overpaid": {
+      "indicator_code": "ct41",
+      "display_name": "Tổng số thuế TNCN đã nộp thừa",
+      "official_indicator_name": "Tổng số thuế thu nhập cá nhân đã nộp thừa [41]=([38]-[36]-[39])<0",
+      "datatype": "decimal",
+      "xpath": "CTieuTKhaiChinh/NVuQToanThay/ct41"
+    }
+  }
+}

@@ -40,6 +40,7 @@ class FormMapping:
     mapping_version: str
     form_code: str
     form_version: str | None = None
+    verified_form_versions: tuple[str, ...] = ()
     tax_type: str | None = None
     effective_from: str | None = None
     effective_to: str | None = None
@@ -59,13 +60,19 @@ class MappingRegistry:
     """Tập mapping đã nạp, tra theo ``(form_code, form_version)``."""
 
     def __init__(self) -> None:
+        #: Danh sách mapping theo file cấu hình (không nhân bản theo version alias).
+        self._mappings: list[FormMapping] = []
         #: Mapping theo đúng ``(form_code, form_version)``.
         self._by_key: dict[tuple[str, str], FormMapping] = {}
         #: Mapping khai ``form_version = null`` (áp cho mọi phiên bản của mã mẫu).
         self._by_code_any: dict[str, FormMapping] = {}
 
     def add(self, mapping: FormMapping) -> None:
-        if mapping.form_version is None:
+        self._mappings.append(mapping)
+        if mapping.verified_form_versions:
+            for version in mapping.verified_form_versions:
+                self._by_key[(mapping.form_code, version)] = mapping
+        elif mapping.form_version is None:
             self._by_code_any[mapping.form_code] = mapping
         else:
             self._by_key[(mapping.form_code, mapping.form_version)] = mapping
@@ -83,10 +90,10 @@ class MappingRegistry:
         return self._by_code_any.get(form_code)
 
     def __len__(self) -> int:
-        return len(self._by_key) + len(self._by_code_any)
+        return len(self._mappings)
 
     def mappings(self) -> list[FormMapping]:
-        return [*self._by_key.values(), *self._by_code_any.values()]
+        return list(self._mappings)
 
 
 def _parse_mapping(payload: dict, source: str) -> FormMapping:
@@ -106,11 +113,19 @@ def _parse_mapping(payload: dict, source: str) -> FormMapping:
             xpath=spec.get("xpath"),
         )
     detect = payload.get("detect") or {}
+    raw_versions = payload.get("verified_form_versions") or []
+    if not isinstance(raw_versions, list) or not all(
+        isinstance(version, str) and version.strip() for version in raw_versions
+    ):
+        raise ValueError(f"{source}: verified_form_versions phải là danh sách chuỗi")
+    if payload.get("form_version") and raw_versions:
+        raise ValueError(f"{source}: chỉ dùng form_version hoặc verified_form_versions")
     return FormMapping(
         mapping_id=str(payload["mapping_id"]),
         mapping_version=str(payload["mapping_version"]),
         form_code=str(payload["form_code"]),
         form_version=str(payload["form_version"]) if payload.get("form_version") else None,
+        verified_form_versions=tuple(raw_versions),
         tax_type=payload.get("tax_type"),
         effective_from=payload.get("effective_from"),
         effective_to=payload.get("effective_to"),

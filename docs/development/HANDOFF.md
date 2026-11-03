@@ -45,10 +45,12 @@ provenance XPath, phân biệt NULL/0, CLI offline
 (`python -m gdt_tax.parser.cli <folder> --output <dir>`). Mapping đầu tiên
 ba mapping (`gtgt_842_01-gtgt`, `tncn_864_05kk-tt80`, `tncn_394_05kk-tt92`) dựng
 từ logic VBA người dùng cung cấp, kèm fixture ẩn danh + golden JSON trong
-`tests/fixtures/`. Chạy trên `download/`: 1265 tờ khai, 0 lỗi, **479 `MAPPED`**
-(842: 245, 864: 138, 394: 76, 892: 20), phần còn lại `NEED_MAPPING`.
+`tests/fixtures/`. Chạy trên `download/`: 1265 tờ khai, 0 lỗi, **515 `MAPPED`**
+(842: 245, 864: 138, 394: 76, 892: 20, 953: 36), phần còn lại `NEED_MAPPING`.
 03/TNDN mã 892 có mapping riêng cho 2.5.1/2.9.4 vì cấu trúc C7 khác nhau;
 20/20 hồ sơ thật map không warning, BCTC/phụ lục không bị lấy làm tờ khai chính.
+05/QTT-TNCN mã 953 có mapping khóa vào 2.5.1/2.7.9/2.8.4/2.9.3; 36/36 hồ sơ
+thật map không warning. Chỉ lấy 26 chỉ tiêu tổng hợp, không đọc bảng kê cá nhân.
 Mẫu 02/KK-TNCN (TT156) chưa làm vì không có XML nào trong thư mục.
 
 **Đã thêm (stage 03 + 08, 02/10/2026):** `gdt_tax/classify.py` (phân loại từng
@@ -56,7 +58,7 @@ artifact theo nội dung) và `gdt_tax/export.py` (Excel 11 sheet + CSV + lọc 
 log). Chạy `download/`: 1265 artifact phân loại; workbook 26282 dòng chỉ tiêu.
 
 **Chưa xong:** stage 01 còn hardening; stage 02 còn nối ZIP↔hồ sơ khi tên không
-khớp metadata; chưa có mapping quyết toán TNCN (953) — cần logic XPath.
+khớp metadata; stage 06 còn phụ lục TNCN được chọn và 02/KK-TNCN khi có fixture.
 `parsing.py` đọc bảng HTML tra cứu, không phải parser XML thuế. DVC vẫn
 hoãn, chưa xác minh lại cổng hiện tại.
 
@@ -77,6 +79,8 @@ hoãn, chưa xác minh lại cổng hiện tại.
    vòng lặp tự quét workbook đầu ra; 347 test OK, ruff/mypy qua 43 file.
 8. Thêm 03/TNDN 892 v2.5.1/v2.9.4: 352 test offline, parser thật tăng từ 459
    lên 479 `MAPPED`; workbook 26282 dòng chỉ tiêu. Xem pipeline GitLab của MR.
+9. Thêm 05/QTT-TNCN 953 cho bốn version đã xác minh: 357 test offline, 36/36
+   hồ sơ thật map không warning; tổng tăng lên 515 `MAPPED`.
 
 Chi tiết và giới hạn trong [REVIEW](REVIEW.md). Chưa kiểm tra lại CI Linux
 Python 3.10/3.12; xem pipeline GitLab của commit sau push, không suy ra CI xanh
@@ -211,16 +215,16 @@ DVC cần một nhiệm vụ riêng ở stage 09, không bật chỉ để trán
    staged không có secrets/data thật. Commit mô tả hành vi và kiểm chứng;
    push khi được yêu cầu, kiểm tra remote và CI. Không force push.
 
-Đã xong 02 (inventory), 03 (classify), 04–05 (parser + GTGT), 06 (TNCN 864/394),
-08 (export), 07 (03/TNDN 892). Tiếp theo: **quyết toán TNCN (953)** — cần logic
-XPath như các mapping đã có; hoàn tất phần còn thiếu **stage 01** (bảo vệ
-log/dump, identity/resume) và **stage 02** (nối ZIP↔hồ sơ theo danh mục). Stage
-09 DVC hoãn và không chặn các stage còn lại. Chạy `python -m gdt_tax.inventory download --output download`
+Đã xong 02 (inventory), 03 (classify), 04–05 (parser + GTGT), phần tổng hợp stage
+06 (TNCN 864/394/953), 08 (export), 07 (03/TNDN 892). Tiếp theo: hoàn tất phần
+còn thiếu **stage 01** (bảo vệ log/dump, identity/resume) và **stage 02** (nối
+ZIP↔hồ sơ theo danh mục). Stage 09 DVC hoãn và không chặn các stage còn lại.
+Chạy `python -m gdt_tax.inventory download --output download`
 để sinh `manifest_artifact.json` và `bao_cao_discovery.md` làm đầu vào cho stage 03;
 dùng phần “Điểm cần xác nhận”/“Câu hỏi mở” trong báo cáo để hỏi người dùng.
 
-Inventory đã xác nhận nhiều mẫu nhưng mới có mapping 842/864/394. Trước khi thêm
-TNCN 953 hoặc mẫu mới, phải tạo fixture ẩn danh và đối chiếu XPath/chỉ tiêu;
+Inventory đã xác nhận nhiều mẫu; hiện có mapping 842/864/394/892/953. Trước khi
+thêm mẫu mới, phải tạo fixture ẩn danh và đối chiếu XPath/chỉ tiêu;
 không lấy kết quả tải thành công làm bằng chứng parser đã đúng.
 
 Prompt ngắn để mở phiên làm việc trên máy mới (gửi kèm master + stage 01):

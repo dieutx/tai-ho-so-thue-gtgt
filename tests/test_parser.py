@@ -311,6 +311,62 @@ class TncnGoldenTests(unittest.TestCase):
         self.assertEqual(tt80.indicator("ct21").canonical_name, "taxable_income_total")
 
 
+class TncnSettlementGoldenTests(unittest.TestCase):
+    """Golden cho 05/QTT-TNCN mã 953; chỉ đọc tờ khai tổng hợp."""
+
+    def _check(self, stem: str) -> None:
+        data = (FIXTURES / f"{stem}.xml").read_bytes()
+        golden = json.loads((FIXTURES / f"{stem}.golden.json").read_text("utf-8"))
+        decl = extract_declaration(data, registry=load_registry())
+        self.assertEqual(decl.form_code, golden["form_code"])
+        self.assertEqual(decl.form_version, golden["form_version"])
+        self.assertEqual(decl.status, golden["status"])
+        self.assertEqual(decl.mapping_id, golden["mapping_id"])
+        self.assertEqual(decl.filing_type, golden["filing_type"])
+        self.assertEqual(decl.supplement_number, golden["supplement_number"])
+        self.assertEqual(decl.taxpayer.tax_code, golden["taxpayer_tax_code"])
+        self.assertEqual(decl.period.raw, golden["period_raw"])
+        self.assertEqual(decl.period.period_type, golden["period_type"])
+        self.assertEqual(decl.period.year, golden["period_year"])
+        self.assertEqual(decl.period.period_from, golden["period_from"])
+        self.assertEqual(decl.period.period_to, golden["period_to"])
+        self.assertEqual(len(decl.indicators), 26)
+        for code, expected in golden["indicators"].items():
+            indicator = decl.indicator(code)
+            self.assertIsNotNone(indicator, f"thiếu chỉ tiêu {code}")
+            self.assertEqual(indicator.value, expected, f"sai giá trị {code}")
+            self.assertEqual(indicator.status, "MAPPED")
+
+    def test_v2_5_1_official(self) -> None:
+        self._check("tncn_953_05qtt_v2.5.1")
+
+    def test_v2_9_3_supplemental(self) -> None:
+        self._check("tncn_953_05qtt_v2.9.3")
+
+    def test_detail_appendices_and_personal_data_are_not_extracted(self) -> None:
+        data = (FIXTURES / "tncn_953_05qtt_v2.9.3.xml").read_bytes()
+        decl = extract_declaration(data, registry=load_registry())
+        serialized = json.dumps(decl.to_dict(), ensure_ascii=False)
+        self.assertNotIn("NHAN_VIEN_KHONG_DUOC_XUAT", serialized)
+        self.assertNotIn("000000000001", serialized)
+        self.assertEqual(decl.indicator("ct16").value, "20")
+
+    def test_all_verified_versions_are_mapped_but_unknown_version_is_not(self) -> None:
+        data = (FIXTURES / "tncn_953_05qtt_v2.5.1.xml").read_bytes()
+        for version in (b"2.5.1", b"2.7.9", b"2.8.4", b"2.9.3"):
+            with self.subTest(version=version.decode()):
+                decl = extract_declaration(
+                    data.replace(b"2.5.1", version), registry=load_registry()
+                )
+                self.assertEqual(decl.status, "MAPPED")
+                self.assertEqual(decl.mapping_id, "TNCN_953_05QTT-TT80")
+        unknown = extract_declaration(
+            data.replace(b"2.5.1", b"9.9.9"), registry=load_registry()
+        )
+        self.assertEqual(unknown.status, "NEED_MAPPING")
+        self.assertIn("MAPPING_NOT_FOUND", unknown.warnings)
+
+
 class TndnGoldenTests(unittest.TestCase):
     """Golden cho 03/TNDN mã 892; hai version có cấu trúc C7 khác nhau."""
 
@@ -429,6 +485,19 @@ class RegistryTests(unittest.TestCase):
             current.field_for_code("ctC7_thuNhap").canonical_name,
             "taxable_income_primary_rate",
         )
+
+    def test_default_registry_contains_tncn_953_verified_versions(self) -> None:
+        registry = load_registry()
+        for version in ("2.5.1", "2.7.9", "2.8.4", "2.9.3"):
+            with self.subTest(version=version):
+                mapping = registry.lookup("953", version)
+                self.assertIsNotNone(mapping)
+                self.assertEqual(mapping.tax_type, "TNCN")
+                self.assertEqual(
+                    mapping.field_for_code("ct41").canonical_name,
+                    "authorized_tax_overpaid",
+                )
+        self.assertIsNone(registry.lookup("953", "9.9.9"))
 
 
 if __name__ == "__main__":

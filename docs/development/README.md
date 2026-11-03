@@ -25,18 +25,23 @@ khỏi mapping (`gdt_tax/form_mappings`), reader an toàn, trích metadata + ch�
 kèm provenance XPath, phân biệt NULL/0. Đã thêm mapping đầu tiên
 ba mapping: `gtgt_842_01-gtgt` (01/GTGT), `tncn_864_05kk-tt80`,
 `tncn_394_05kk-tt92`, dựng theo logic VBA người dùng cung cấp + tên theo thông tư.
-Chạy trên `download/`: 1265 tờ khai, 0 lỗi, **479 `MAPPED`** (842: 245, 864: 138,
-394: 76, 892: 20), phần còn lại `NEED_MAPPING`.
+Chạy trên `download/`: 1265 tờ khai, 0 lỗi, **515 `MAPPED`** (842: 245, 864: 138,
+394: 76, 892: 20, 953: 36), phần còn lại `NEED_MAPPING`.
 
 Cập nhật 02/10/2026 (stage 07): thêm hai mapping đúng version cho 03/TNDN mã
 892: XML 2.5.1 (17 hồ sơ, C7 cố định) và 2.9.4 (3 hồ sơ, C7 có nhãn/thuế suất
 động), fixture ẩn danh chính thức/bổ sung và golden test. Chỉ parse tờ khai
 chính; không lấy BCTC/phụ lục. Cả 20 hồ sơ thật đều `MAPPED`, không warning.
 
+Cập nhật 02/10/2026 (stage 06): thêm mapping 05/QTT-TNCN mã 953 cho bốn version
+đã xác minh, fixture ẩn danh chính thức/bổ sung và golden test. Chỉ parse 26 chỉ
+tiêu tổng hợp; không lấy bảng kê cá nhân/KHBS. Cả 36 hồ sơ thật đều `MAPPED`,
+không warning.
+
 Cập nhật 02/10/2026 (stage 03 + 08): `classify.py` phân loại từng artifact theo
 nội dung (1265 artifact); `export.py` xuất `Tax_Return_Summary.xlsx` 11 sheet +
 CSV + bộ lọc + audit log, giữ provenance và không cộng dồn lần nộp. Còn lại:
-quyết toán TNCN (953) vẫn cần logic XPath; stage 09 DVC.
+phụ lục TNCN được chọn, 02/KK-TNCN TT156 khi có fixture; stage 09 DVC.
 
 | Stage | Kết quả cần có | Phụ thuộc | Prompt | Trạng thái |
 |---|---|---|---|---|
@@ -45,7 +50,7 @@ quyết toán TNCN (953) vẫn cần logic XPath; stage 09 DVC.
 | 03 | Phân loại từng artifact theo nội dung, mã mẫu/phiên bản, conflict/unknown | 02 | [03](prompts/03-classification.md) | Đã có `classify.py` (nội dung, bằng chứng/conflict); còn rule vai trò phụ lục theo marker |
 | 04 | Framework parser và schema output chung có phiên bản | 02–03 | [04](prompts/04-parser-core.md) | Đã làm khung + extractor generic + registry + CLI offline |
 | 05 | Parser một mẫu GTGT có fixture đại diện | 04 | [05](prompts/05-gtgt.md) | Đã có mapping 01/GTGT (mã 842), fixture ẩn danh và golden test |
-| 06 | Parser TNCN, bảng chi tiết/phụ lục được chọn | 04; ưu tiên sau 05 | [06](prompts/06-tncn.md) | Đã có mapping 05/KK-TNCN TT80 (864) + TT92 (394); còn quyết toán 05/QTT-TNCN, phụ lục, 02/KK-TT156 |
+| 06 | Parser TNCN, bảng chi tiết/phụ lục được chọn | 04; ưu tiên sau 05 | [06](prompts/06-tncn.md) | Đã có 05/KK-TNCN 864/394 và 05/QTT-TNCN 953; còn phụ lục được chọn, 02/KK-TT156 |
 | 07 | Parser TNDN, phiên bản/phụ lục được chọn | 04; ưu tiên sau 05 | [07](prompts/07-tndn.md) | Đã có 03/TNDN 892 v2.5.1/v2.9.4; phụ lục chưa hỗ trợ |
 | 08 | Export và truy vấn theo nhóm/kỳ/phiên bản nộp, báo cáo chất lượng | 05; tận dụng 06–07 nếu có | [08](prompts/08-export.md) | Đã có `export.py` (Excel 11 sheet + CSV + lọc + audit log) |
 | 09 | Xác minh adapter DVC, có thể bật lại chủ động, vẫn giữ mặc định tắt | 01; không chặn 02–08 | [09](prompts/09-dvc.md) | Hoãn tới khi cần |
@@ -69,7 +74,6 @@ chiều này riêng để thêm nhóm mới không phải sửa pipeline tải.
 
 ## Lần làm tiếp được đề xuất
 
-Ưu tiên tiếp theo: quyết toán TNCN mã 953 từ fixture ẩn danh đã đối chiếu mẫu
-biểu chính thức; song song, tiếp tục phần thiếu
-stage 01 (che log/dump, identity/resume) và stage 02 (nối ZIP với hồ sơ khi tên
-không khớp metadata). Không commit raw hồ sơ thật hoặc suy đoán XPath/chỉ tiêu.
+Ưu tiên tiếp theo: hardening stage 01 (giới hạn ZIP/XML, che log/dump,
+identity/resume) và stage 02 (nối ZIP với hồ sơ khi tên không khớp metadata).
+Không commit raw hồ sơ thật hoặc suy đoán XPath/chỉ tiêu.

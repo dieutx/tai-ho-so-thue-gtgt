@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HSoThueDTu xmlns="http://kekhaithue.gdt.gov.vn/TKhaiThue">
+  <HSoKhaiThue id="ID_ANONYMIZED">
+    <TTinChung>
+      <TTinTKhaiThue>
+        <TKhaiThue>
+          <maTKhai>953</maTKhai>
+          <tenTKhai>Tờ khai quyết toán thuế thu nhập cá nhân (Mẫu số 05/QTT-TNCN)</tenTKhai>
+          <pbanTKhaiXML>2.5.1</pbanTKhaiXML>
+          <loaiTKhai>C</loaiTKhai>
+          <soLan>0</soLan>
+          <KyKKhaiThue>
+            <kieuKy>Y</kieuKy><kyKKhai>2023</kyKKhai>
+            <kyKKhaiTuNgay>01/01/2023</kyKKhaiTuNgay>
+            <kyKKhaiDenNgay>31/12/2023</kyKKhaiDenNgay>
+          </KyKKhaiThue>
+        </TKhaiThue>
+        <NNT>
+          <mst>0000000000</mst>
+          <tenNNT>CÔNG TY TNHH MẪU ẨN DANH</tenNNT>
+          <dchiNNT>ĐỊA CHỈ MẪU</dchiNNT>
+        </NNT>
+      </TTinTKhaiThue>
+    </TTinChung>
+    <CTieuTKhaiChinh>
+      <Header>
+        <hanNop>31/03/2024</hanNop>
+        <ma_THQuyetToan>00</ma_THQuyetToan>
+        <ten_THQuyetToan>Trường hợp thông thường</ten_THQuyetToan>
+        <toChucCoQTTTheoUyQuyen>1</toChucCoQTTTheoUyQuyen>
+      </Header>
+      <NVuKhauTruThue>
+        <ct16>12</ct16><ct17>10</ct17><ct18>9</ct18><ct19>8</ct19><ct20>1</ct20>
+        <ct21>0</ct21><ct22>7</ct22>
+        <ct23>1.250.000.000</ct23><ct24>1.100.000.000</ct24><ct25>150.000.000</ct25>
+        <ct26>0</ct26><ct27/><ct28>1.200.000.000</ct28><ct29>1.050.000.000</ct29>
+        <ct30>150.000.000</ct30><ct31>125.000.000</ct31><ct32>110.000.000</ct32>
+        <ct33>15.000.000</ct33><ct34>0</ct34>
+      </NVuKhauTruThue>
+      <NVuQToanThay>
+        <ct35>6</ct35><ct36>90.000.000</ct36><ct37>5.000.000</ct37>
+        <ct38>92.000.000</ct38><ct39>0</ct39><ct40>2.000.000</ct40><ct41>0</ct41>
+      </NVuQToanThay>
+    </CTieuTKhaiChinh>
+    <PLuc>
+      <PLuc_05_1_BK_QTT>
+        <HoTen>NHAN_VIEN_KHONG_DUOC_XUAT</HoTen>
+        <MST>000000000001</MST>
+        <ct16>999999</ct16>
+      </PLuc_05_1_BK_QTT>
+    </PLuc>
+  </HSoKhaiThue>
+</HSoThueDTu>

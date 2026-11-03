@@ -1,7 +1,8 @@
 # Form Mapping Registry
 
-Mỗi phiên bản tờ khai có **một file JSON** ở đây, được `gdt_tax.parser.registry`
-nạp tự động (quét cả thư mục con). Parser **không** hard-code mẫu biểu trong code.
+Mỗi cấu trúc tờ khai đã kiểm chứng có **một file JSON** ở đây, được
+`gdt_tax.parser.registry` nạp tự động (quét cả thư mục con). Parser **không**
+hard-code mẫu biểu trong code.
 
 ## Quy ước
 
@@ -38,6 +39,11 @@ nạp tự động (quét cả thư mục con). Parser **không** hard-code mẫ
 }
 ```
 
+Khi nhiều phiên bản có cấu trúc giống nhau và đều đã được kiểm chứng, dùng
+`"verified_form_versions": ["2.5.1", "2.9.3"]` thay cho `form_version`. Registry
+chỉ đăng ký đúng các phiên bản trong danh sách; phiên bản khác vẫn
+`NEED_MAPPING`. `form_version: null` chỉ dùng khi chủ động hỗ trợ mọi phiên bản.
+
 - `indicator_code`: mã chỉ tiêu **chính thức** trong XML (`ct21`, `ct43`, `ctB1`…).
 - `canonical_name`: tên chuẩn hóa dùng cho cột Excel/query.
 - Chưa có mapping ⇒ parser trả `NEED_MAPPING` cho mọi chỉ tiêu và **không** tự gán
@@ -57,6 +63,7 @@ nạp tự động (quét cả thư mục con). Parser **không** hard-code mẫ
 | GTGT | 01/GTGT | 842 | 2.5.1/2.6.8/2.7.4/2.8.3 | Tờ khai chính | XML | Chỉ tiêu tổng hợp đã mapping |
 | TNCN | 05/KK-TNCN TT80 | 864 | Các version trong fixture/dữ liệu hiện có | Tờ khai chính | XML | Chỉ tiêu `ct16`–`ct32` |
 | TNCN | 05/KK-TNCN TT92 | 394 | Các version trong fixture/dữ liệu hiện có | Tờ khai chính | XML | Chỉ tiêu `ct21`–`ct36` |
+| TNCN | 05/QTT-TNCN TT80 | 953 | 2.5.1/2.7.9/2.8.4/2.9.3 | Tờ khai chính | XML | 26 chỉ tiêu `ct16`–`ct41`; không đọc bảng kê cá nhân/KHBS |
 | TNDN | 03/TNDN TT80 | 892 | 2.5.1 | Tờ khai chính | XML | 63 chỉ tiêu; C7 cố định 20% |
 | TNDN | 03/TNDN TT80 | 892 | 2.9.4 | Tờ khai chính | XML | 65 trường; C7 có nhãn/thuế suất động |
 
@@ -67,6 +74,13 @@ Thông tư 80/2021/TT-BTC trong [Công báo bản gốc](https://congbaocdn.chin
 và [Văn bản hợp nhất 15/VBHN-BTC](https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2024/5/42004/50395-1-2024717-71815-vbhn-btc.pdf);
 cấu trúc C7 2.9.4 lấy từ XML thật. Không hỗ trợ ngầm version 892 khác hai
 version trên.
+
+TNCN 953 đã kiểm trên 36 XML cục bộ (5 chính thức, 31 bổ sung), không warning.
+Tên chỉ tiêu đối chiếu mẫu 05/QTT-TNCN trong
+[Công báo Thông tư 80/2021](https://congbao.chinhphu.vn/tai-ve-van-ban-so-80-2021-tt-btc-34774-37502?format=pdf)
+và [Văn bản hợp nhất 15/VBHN-BTC](https://congbao.chinhphu.vn/tai-ve-van-ban-so-15-vbhn-btc-42004-50398?format=pdf).
+Mapping chỉ đọc hai nhóm tổng hợp `NVuKhauTruThue` và `NVuQToanThay`; các bảng
+kê 05-1/05-2/05-3 và phụ lục KHBS có dữ liệu cá nhân nằm ngoài phạm vi.
 
 Kiểu dữ liệu mặc định là `decimal`; thuế suất dùng `percentage`, nhãn C7 của
 2.9.4 dùng `string`. Parser chỉ trích số đã khai, không tính lại công thức hoặc

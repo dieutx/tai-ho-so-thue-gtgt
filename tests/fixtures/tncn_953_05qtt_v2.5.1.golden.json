@@ -1,0 +1,25 @@
+{
+  "form_code": "953",
+  "form_version": "2.5.1",
+  "status": "MAPPED",
+  "mapping_id": "TNCN_953_05QTT-TT80",
+  "filing_type": "C",
+  "supplement_number": "0",
+  "taxpayer_tax_code": "0000000000",
+  "period_raw": "2023",
+  "period_type": "Y",
+  "period_year": 2023,
+  "period_from": "01/01/2023",
+  "period_to": "31/12/2023",
+  "indicators": {
+    "ct16": "12",
+    "ct21": "0",
+    "ct23": "1250000000",
+    "ct27": null,
+    "ct31": "125000000",
+    "ct35": "6",
+    "ct37": "5000000",
+    "ct40": "2000000",
+    "ct41": "0"
+  }
+}
