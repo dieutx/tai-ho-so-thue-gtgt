@@ -39,6 +39,8 @@ cá nhân từ kho `ca-nhan`, không lẫn dữ liệu doanh nghiệp.
 - `ruff check .`: PASS.
 - `mypy gdt_tax tests/test_core_contracts.py`: PASS, 95 source files.
 - `git diff --check`: PASS.
+- GitHub Windows runner dùng đường dẫn TEMP dạng tên ngắn 8.3; test reuse
+  so sánh đường dẫn đã resolve để nhận đúng cùng một tệp, không phụ thuộc alias.
 - Quy trình phát hành tiếp tục chạy lại gate trên commit chốt, kiểm tra inventory,
   audit bundle, source/frozen OCR, hai lượt standalone offline và 18 cấu hình UI.
   Kết quả gắn với EXE nằm trong `release-manifest.json`, `SHA256SUMS.txt` và

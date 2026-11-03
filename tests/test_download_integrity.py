@@ -114,7 +114,8 @@ class DownloadIntegrityTests(unittest.TestCase):
                 self.assertIsNotNone(saved)
                 rows = verify_rows('tax', [record.to_dict()], root)
                 self.assertEqual(rows[0]['_file_status'], 'downloaded')
-                self.assertEqual(DesktopZipStore(root, known_rows=rows).find_existing(record), saved)
+                self.assertEqual(DesktopZipStore(root, known_rows=rows).find_existing(record).resolve(),
+                                 saved.resolve())
             declaration = CaseRecord('ordinary', 'DVC')
             self.assertIsNone(ZipStore(root).save(declaration, sample_zip(NOTICE)))
 
