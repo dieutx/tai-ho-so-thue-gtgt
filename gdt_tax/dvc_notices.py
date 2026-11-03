@@ -36,6 +36,7 @@ from .integrity import (
     safe_destination,
     validate_pdf,
     validate_tax_zip,
+    validate_xlsx,
     validate_xml,
     write_evidence,
 )
@@ -238,9 +239,16 @@ def decode_notice_response(response) -> NoticeFile | None:
             return None
     if not data or len(data) > MAX_NOTICE_BYTES:
         return None
-    result = validate_notice(data)
-    actual_type = "xml" if result.kind == "notice" else result.kind
-    if not result.ok or file_type and file_type.lower() != actual_type:
+    if file_type.lower() in {"xls", "xlsx"}:
+        # Cổng ghi ``fileType=xls`` nhưng nội dung thực tế là XLSX (ZIP).
+        result = validate_xlsx(data)
+        actual_type = "xlsx"
+    else:
+        result = validate_notice(data)
+        actual_type = "xml" if result.kind == "notice" else result.kind
+        if file_type and file_type.lower() != actual_type:
+            return None
+    if not result.ok:
         return None
     return NoticeFile(file_name=file_name, data=data, file_type=actual_type)
 
@@ -249,7 +257,11 @@ def validate_notice(data: bytes):
     if data.startswith(b"%PDF-"):
         return validate_pdf(data)
     if data.startswith(b"PK"):
-        return validate_tax_zip(data, required_kind="notice")
+        result = validate_tax_zip(data, required_kind="notice")
+        if result.ok:
+            return result
+        sheet = validate_xlsx(data)
+        return sheet if sheet.ok else result
     return validate_xml(data, "notice")
 
 

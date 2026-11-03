@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import time
+
 from bs4 import BeautifulSoup
 
 from ..auth_outcomes import raise_terminal
@@ -131,25 +133,48 @@ class DvcPortal(Portal):
 
     def download_notice(self, notice, detail_url: str, csrf: str):
         path = '/tchs/downloadthongbao-tdt' if notice.is_tdt else '/tchs/downloadthongbao'
-        response = self.http.post(path,
-            # Cổng giới hạn riêng endpoint này: giữ 6 lượt nhưng tăng khoảng chờ
-            # chậm (2 → 2,6 → 3,4s) thay vì 2 → 4 → 8 → 16 → 32s.
-            operation=OperationPolicy('notice-download', DOWNLOAD_OPERATION.max_bytes,
-                                      retry_safe=True, minimum_attempts=6,
-                                      retry_growth=1.3),
-            params={'loaiTraCuu': notice.loai_tra_cuu} if notice.is_tdt else None,
-            json={'idTbao': notice.id, 'loaiTBao': notice.loai_tbao},
-            headers=self.xhr_headers(headers={'Content-Type': 'application/json',
-                'Origin': ORIGIN, 'Referer': detail_url, 'X-Requested-With': 'XMLHttpRequest',
-                'X-XSRF-TOKEN': csrf}))
-        raise_terminal(response, 'DVC', authenticated=True)
-        if response.status_code == 429:
-            raise AttachmentDownloadError('ATTACHMENT_RATE_LIMITED',
-                'Cổng đang giới hạn tải thông báo (HTTP 429); đã chờ và thử lại theo giới hạn. Tệp hồ sơ chính được giữ nguyên.')
-        if response.status_code != 200:
-            raise AttachmentDownloadError('ATTACHMENT_HTTP_ERROR',
-                f'Cổng trả HTTP {response.status_code} khi tải thông báo; tệp hồ sơ chính được giữ nguyên.')
-        return decode_notice_response(response)
+        for attempt in range(1, 4):
+            response = self.http.post(path,
+                # Cổng giới hạn riêng endpoint này: giữ 6 lượt nhưng tăng khoảng chờ
+                # chậm (2 → 2,6 → 3,4s) thay vì 2 → 4 → 8 → 16 → 32s.
+                operation=OperationPolicy('notice-download', DOWNLOAD_OPERATION.max_bytes,
+                                          retry_safe=True, minimum_attempts=6,
+                                          retry_growth=1.3),
+                params={'loaiTraCuu': notice.loai_tra_cuu} if notice.is_tdt else None,
+                json={'idTbao': notice.id, 'loaiTBao': notice.loai_tbao},
+                headers=self.xhr_headers(headers={'Content-Type': 'application/json',
+                    'Origin': ORIGIN, 'Referer': detail_url, 'X-Requested-With': 'XMLHttpRequest',
+                    'X-XSRF-TOKEN': csrf}))
+            raise_terminal(response, 'DVC', authenticated=True)
+            if response.status_code == 429:
+                # HttpClient đã tự chờ và thử lại 6 lượt cho 429; không lặp
+                # thêm ở đây để tránh nhân đôi số request khi cổng đang bận.
+                raise AttachmentDownloadError('ATTACHMENT_RATE_LIMITED',
+                    'Cổng đang giới hạn tải thông báo (HTTP 429); đã chờ và thử lại theo giới hạn. Tệp hồ sơ chính được giữ nguyên.')
+            if response.status_code != 200:
+                raise AttachmentDownloadError('ATTACHMENT_HTTP_ERROR',
+                    f'Cổng trả HTTP {response.status_code} khi tải thông báo; tệp hồ sơ chính được giữ nguyên.')
+            payload = decode_notice_response(response)
+            if payload is not None:
+                return payload
+            # Cổng có lúc trả HTTP 200 kèm body "Too Many Requests" thay vì 429.
+            if b'too many requests' in (response.content or b'').lower():
+                self.logger.warning(
+                    'Cổng giới hạn tải thông báo %s (HTTP 200, Too Many Requests); thử lại %s/3',
+                    notice.id, attempt,
+                )
+                if attempt < 3:
+                    time.sleep(min(2 * attempt, 6))
+                continue
+            # Nội dung hỏng/không đúng định dạng có thể do cổng trả tạm thời;
+            # thử lại có giới hạn trước khi báo lỗi thật.
+            self.logger.warning('Thông báo %s trả nội dung chưa đọc được (lần %s/3)', notice.id, attempt)
+            if attempt < 3:
+                time.sleep(1.5)
+        raise AttachmentDownloadError(
+            'ATTACHMENT_INVALID_OR_RATE_LIMITED',
+            'Cổng trả nội dung không đọc được hoặc giới hạn tải sau 3 lần thử; tệp hồ sơ chính được giữ nguyên.',
+        )
 
 
 __all__ = ["DvcPortal"]
