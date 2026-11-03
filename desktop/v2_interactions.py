@@ -750,7 +750,7 @@ class V2InteractionMixin:
         else:
             parts.append('<p>Chỉ phân tích XML cục bộ; không xác thực chữ ký số hoặc tính đúng của nghĩa vụ thuế.</p>')
         self.detail_text.setHtml(''.join(parts))
-        self.detail_open.setText('Xem tệp' if self.mode == 'notice' else 'Mở tệp')
+        self.detail_open.setText('Xem file' if self.mode == 'tax' else 'Xem tệp')
         self.detail_open.setEnabled(bool(row.get('_file_path') and Path(row['_file_path']).is_file()))
         notices = row.get('_notices') or []
         self.detail_notices.setVisible(self.mode == 'tax')
@@ -789,12 +789,31 @@ class V2InteractionMixin:
             return
         target = self.detail_row.get('_file_path')
         if target and Path(target).is_file():
-            self.open_path(Path(target))
+            if self.mode == 'tax' and Path(target).suffix.lower() == '.zip':
+                self.open_declaration_file()
+            else:
+                self.open_path(Path(target))
         else:
             self.detail_row.update(_file_status='not_downloaded', _file_path='', _file_reason='Tệp đã bị xóa hoặc di chuyển; kiểm tra lại tệp trên máy')
             self.model.layoutChanged.emit()
             self.populate_result(self.result)
             self.details()
+
+    def open_declaration_file(self) -> None:
+        """Mở XML chính của tờ khai đã tải bằng ứng dụng mặc định (giữ nguyên ZIP)."""
+        from gdt_tax.declaration_view import DeclarationViewError, declaration_xml
+        source = Path(str((self.detail_row or {}).get('_file_path') or ''))
+        try:
+            xml = declaration_xml(source)
+        except DeclarationViewError as error:
+            self.error(str(error))
+            if source.parent.is_dir():
+                self.open_path(source.parent)
+            return
+        except OSError:
+            self.error('Không đọc được tệp đã tải; kiểm tra quyền hoặc tải lại hồ sơ.')
+            return
+        self.open_path(xml)
 
     def download_detail(self):
         if self.detail_row:
@@ -830,7 +849,7 @@ class V2InteractionMixin:
             menu.addAction('Xuất hồ sơ ZIP…', lambda: self.export_submission(row))
         if self.mode != 'offline':
             if row.get('_file_status') == 'downloaded':
-                menu.addAction('Mở tệp', lambda: (self.details(), self.open_detail_file()))
+                menu.addAction('Xem file' if self.mode == 'tax' else 'Mở tệp', lambda: (self.details(), self.open_detail_file()))
             else:
                 action = menu.addAction('Tải riêng tệp này', lambda: self.download_rows([row]))
                 action.setEnabled(self.can_target_download() and not self.controller.busy)

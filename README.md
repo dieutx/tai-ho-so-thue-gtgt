@@ -16,7 +16,7 @@ Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không
 1. Tải và mở **TaiHoSoThue-Windows.exe**.
 2. Chọn **Đăng nhập**, nhập tài khoản Thuế điện tử và mật khẩu; nhập CAPTCHA nếu được yêu cầu.
 3. Chọn nhóm hồ sơ, khoảng ngày và nơi lưu, rồi bấm **Tra cứu**.
-4. Chọn hồ sơ cần lấy → **Tải các tệp đã chọn**; hoặc bấm **Tải chưa tải**. Bấm **Mở tệp** để xem kết quả.
+4. Chọn hồ sơ cần lấy → **Tải các tệp đã chọn**; hoặc bấm **Tải chưa tải**. Bấm **Xem file** để mở XML của hồ sơ bằng ứng dụng mặc định (ZIP gốc được giữ nguyên).
 
 **Tra cứu & tải** lấy luôn hồ sơ trong khoảng đã chọn. Tệp hợp lệ đã có sẽ được dùng lại.
 Kho hồ sơ được lưu bền vững trong SQLite theo tài khoản/nghiệp vụ. Đổi kỳ đọc ngay

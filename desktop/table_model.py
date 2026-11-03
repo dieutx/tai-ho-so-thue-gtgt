@@ -213,7 +213,7 @@ class RecordsModel(QAbstractTableModel):
             if self.mode == 'notice':
                 return ('Xem tệp' if row.get('_file_status') == 'downloaded'
                         else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp')
-            return 'Mở tệp' if row.get('_file_status') == 'downloaded' else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp'
+            return 'Xem file' if row.get('_file_status') == 'downloaded' else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp'
         if key == 'so_tien':
             return display_amount(row.get(key), str(row.get('loai_tien', '')))
         if key == 'to_khai':

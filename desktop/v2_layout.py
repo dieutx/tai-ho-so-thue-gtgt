@@ -395,7 +395,7 @@ def build_workspace(window):
     raw_tools.addStretch()
     drawer.addLayout(raw_tools)
     actions = QHBoxLayout()
-    self.detail_open = button('Mở tệp', self.open_detail_file)
+    self.detail_open = button('Xem file', self.open_detail_file)
     self.detail_download = button('Tải tệp', self.download_detail)
     self.detail_download.setObjectName('primary')
     actions.addWidget(self.detail_open)
