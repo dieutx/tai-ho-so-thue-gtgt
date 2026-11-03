@@ -1,10 +1,10 @@
 {
-  "version": "2.1.2",
-  "built_at_utc": "2026-11-03T00:10:11+00:00",
+  "version": "2.1.1",
+  "built_at_utc": "2026-11-03T00:28:16+00:00",
   "published": false,
   "profile": "Full / CPU OCR",
   "core_version": "1.0.0",
-  "source_sha": "9e66f65619a7629817b5c47f4a942931d944f34e",
+  "source_sha": "769cc1f7b074e5abe1ac22ecc244a28ad7b4da68",
   "dependency_inventory_sha256": {
     "desktop-windows-py311.inventory.json": "2d774824ebcf798a010e72fe61b06f7c3875451b62af5262e17a546e17e9d029",
     "build-tools-windows-py311.inventory.json": "7d48d81877cd8715f61b4c62cf69ed860acce81ceb294e65f4a26be30c4ec1f9"
