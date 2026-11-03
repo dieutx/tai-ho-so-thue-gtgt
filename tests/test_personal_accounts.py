@@ -211,6 +211,17 @@ class PersonalLoginTests(unittest.TestCase):
         self.assertTrue(any(data.get('_password') == 'fixture' for data in login_posts))
 
 
+class PersonalOriginTests(unittest.TestCase):
+    def test_canhan_origin_is_reviewed_but_unknown_origin_is_rejected(self):
+        from gdt_tax.errors import NetworkError
+        from gdt_tax.http_policy import OriginPolicy
+
+        policy = OriginPolicy()
+        policy.validate('https://canhan.gdt.gov.vn/ICanhan/Request')
+        with self.assertRaises(NetworkError):
+            policy.validate('https://example.invalid/ICanhan/Request')
+
+
 class PersonalConfigurationTests(unittest.TestCase):
     def test_personal_uses_canhan_for_all_dates(self):
         from desktop.services import RunConfig

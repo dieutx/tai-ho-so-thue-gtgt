@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
-from .constants import LEGACY_ETAX_ORIGIN, ORIGIN
+from .constants import CANHAN_ORIGIN, LEGACY_ETAX_ORIGIN, ORIGIN
 from .errors import NetworkError
 
 
@@ -22,7 +22,7 @@ def origin(url: str) -> str:
 
 @dataclass(frozen=True)
 class OriginPolicy:
-    allowed: frozenset[str] = frozenset({ORIGIN, LEGACY_ETAX_ORIGIN})
+    allowed: frozenset[str] = frozenset({ORIGIN, LEGACY_ETAX_ORIGIN, CANHAN_ORIGIN})
 
     def validate(self, url: str, *, previous: str | None = None) -> None:
         target = origin(url)

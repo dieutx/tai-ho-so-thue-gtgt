@@ -30,7 +30,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 from bs4 import BeautifulSoup, Tag
 
 from ..auth_outcomes import AuthFailure, AuthOutcome, classify_response, raise_terminal
-from ..constants import SOURCE_ETAX_LEGACY
+from ..constants import CANHAN_BASE, CANHAN_ORIGIN, SOURCE_ETAX_LEGACY
 from ..contracts import DownloadArtifact, Solver, Transport
 from ..dates import format_date
 from ..errors import LegacyEtaxError, LegacyPageError
@@ -42,8 +42,6 @@ from ..naming import safe_filename_part
 from ..table_contracts import ParseDiagnostics
 from ..tb.models import TbPageResult, ThongBao
 
-CANHAN_ORIGIN = "https://canhan.gdt.gov.vn"
-CANHAN_BASE = f"{CANHAN_ORIGIN}/ICanhan"
 CANHAN_REQUEST = f"{CANHAN_BASE}/Request"
 
 _DECLARATION_OPERATION = "retailSearchVoucherProc"

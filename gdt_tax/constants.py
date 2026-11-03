@@ -13,6 +13,10 @@ BASE = f"{ORIGIN}/tthc"
 LEGACY_ETAX_ORIGIN = "https://thuedientu.gdt.gov.vn"
 LEGACY_ETAX_BASE = f"{LEGACY_ETAX_ORIGIN}/etaxnnt"
 
+# --- Trang Thuế điện tử dành cho cá nhân ---
+CANHAN_ORIGIN = "https://canhan.gdt.gov.vn"
+CANHAN_BASE = f"{CANHAN_ORIGIN}/ICanhan"
+
 # --- Đăng nhập ---
 LOGIN_PAGE = "/login"
 LOGIN_ENDPOINT = "/loginLDAP"
