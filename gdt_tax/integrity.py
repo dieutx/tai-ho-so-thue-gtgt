@@ -50,7 +50,12 @@ def validate_xml(data: bytes, kind: str) -> IntegrityResult:
         return _result(data, kind, str(error))
     name, namespace = etree.QName(root).localname, etree.QName(root).namespace
     roots = {"declaration": {"HSoThueDTu", "HSoKhaiThue", "TKhai"},
-             "gnt": {"CHUNGTU"}, "notice": {"TBao", "TBaoThue", "TBaoThueDTu"}}
+             # ``TBTNhan`` là phong bì thông báo của cổng DVC hiện tại
+             # (``<TBTNhan><DLTBao ...>``), phổ biến với hồ sơ từ 2025.
+             "gnt": {"CHUNGTU"},
+             # ``THONGBAO`` là phong bì thông báo khác của cổng (đã gặp trên
+             # DVC với tệp ``Thong bao_*.xml``); vẫn phải đúng loại thông báo.
+             "notice": {"TBao", "TBaoThue", "TBaoThueDTu", "TBTNhan", "THONGBAO"}}
     namespaces = {None, DECLARATION_NS, NOTICE_NS} if kind == 'notice' else {None, DECLARATION_NS}
     if name not in roots.get(kind, set()) or namespace not in namespaces:
         return _result(data, kind, "UNSUPPORTED_XML_KIND_OR_NAMESPACE", unsupported=True)
@@ -76,6 +81,33 @@ def validate_pdf(data: bytes) -> IntegrityResult:
     except (PyPdfError, ValueError, TypeError, KeyError, OSError, RecursionError, OverflowError):
         return _result(data, "pdf", "PDF_STRUCTURE_INVALID")
     return _result(data, "pdf")
+
+
+def validate_xlsx(data: bytes) -> IntegrityResult:
+    """Kiểm tra tệp Excel (XLSX) đính kèm thông báo.
+
+    Cổng DVC có thông báo đính kèm là bảng Excel, không phải XML/PDF. Chỉ đọc
+    cấu trúc ZIP và danh sách thành phần; không mở/không thực thi nội dung.
+    """
+    if not data.startswith(b"PK"):
+        return _result(data, "xlsx", "XLSX_NOT_ZIP")
+    try:
+        with zipfile.ZipFile(BytesIO(data)) as archive:
+            names = set(archive.namelist())
+            if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
+                return _result(data, "xlsx", "XLSX_STRUCTURE_INVALID")
+            total = 0
+            for info in archive.infolist():
+                path = PurePosixPath(info.filename.replace("\\", "/"))
+                if (path.is_absolute() or ".." in path.parts or ":" in info.filename
+                        or (info.external_attr >> 16) & 0o170000 == 0o120000):
+                    return _result(data, "xlsx", "XLSX_UNSAFE_MEMBER")
+                total += info.file_size
+                if info.file_size > MAX_MEMBER_BYTES or total > MAX_ARCHIVE_BYTES:
+                    return _result(data, "xlsx", "XLSX_MEMBER_TOO_LARGE")
+    except (zipfile.BadZipFile, RuntimeError, OSError, EOFError):
+        return _result(data, "xlsx", "XLSX_READ_ERROR")
+    return _result(data, "xlsx")
 
 
 def validate_tax_zip(data: bytes, *, required_kind="declaration") -> IntegrityResult:

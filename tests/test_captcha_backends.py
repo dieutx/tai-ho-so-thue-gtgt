@@ -76,6 +76,30 @@ class PaddleOcrBackendTests(SolverSmokeTestCase):
     module_name = "paddleocr"
 
 
+class DdddOcrLengthTests(unittest.TestCase):
+    def test_personal_lengths_accept_four_and_five(self):
+        from unittest.mock import Mock
+
+        from gdt_tax.captcha.ddddocr_solver import DdddOcrSolver
+
+        solver = DdddOcrSolver(length=(4, 5))
+        solver._ocr = Mock()
+        solver._ocr.classification.return_value = 'XW00'
+        self.assertEqual(solver.solve(b'image'), 'XW00')
+        solver._ocr.classification.return_value = 'FX26V'
+        self.assertEqual(solver.solve(b'image'), 'FX26V')
+
+    def test_default_still_requires_five(self):
+        from unittest.mock import Mock
+
+        from gdt_tax.captcha.ddddocr_solver import DdddOcrSolver
+
+        solver = DdddOcrSolver()
+        solver._ocr = Mock()
+        solver._ocr.classification.return_value = 'XW00'
+        self.assertEqual(solver.solve(b'image'), '')
+
+
 class ManualBackendTests(unittest.TestCase):
     def test_nhap_tay_khong_can_thu_vien_ocr(self):
         solver = create_solver("manual")

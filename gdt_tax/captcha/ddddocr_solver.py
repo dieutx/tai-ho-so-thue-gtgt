@@ -26,7 +26,7 @@ class DdddOcrSolver(CaptchaSolver):
     def __init__(
         self,
         *,
-        length: int = 5,
+        length: int | tuple[int, ...] | list[int] = 5,
         require_length: bool = True,
         beta: bool = False,
         show_ad: bool = False,
@@ -41,7 +41,10 @@ class DdddOcrSolver(CaptchaSolver):
         Mô hình tùy chỉnh dùng ``import_onnx_path`` cùng ``charsets_path``.
         """
         super().__init__(**options)
-        self.length = length
+        # Cổng doanh nghiệp luôn dùng 5 ký tự; cổng cá nhân phát 4 hoặc 5 ký tự.
+        values = length if isinstance(length, (tuple, list, set, frozenset)) else (length,)
+        accepted = tuple(sorted({int(value) for value in values if int(value) > 0}))
+        self.lengths = accepted or (5,)
         self.require_length = require_length
         self.beta = beta
         self.show_ad = show_ad
@@ -64,9 +67,10 @@ class DdddOcrSolver(CaptchaSolver):
 
     def solve(self, image: bytes) -> str:
         text = normalize_text(self._get_ocr().classification(image))
-        if self.require_length and len(text) != self.length:
+        if self.require_length and len(text) not in self.lengths:
+            expected = "/".join(str(value) for value in self.lengths)
             self.logger.warning(
-                "ddddocr đọc ra %r (%s ký tự, cần %s)", text, len(text), self.length
+                "ddddocr đọc ra %r (%s ký tự, cần %s)", text, len(text), expected
             )
             return ""
         return text

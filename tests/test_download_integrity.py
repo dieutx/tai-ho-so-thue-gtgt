@@ -17,7 +17,13 @@ from gdt_tax.dvc_notices import DvcNotice, NoticeFile, NoticeStore, decode_notic
 from gdt_tax.gnt.models import GiayNopTien
 from gdt_tax.gnt.portal import is_gnt_xml
 from gdt_tax.gnt.storage import GntStore
-from gdt_tax.integrity import evidence_path, validate_pdf, validate_tax_zip, validate_xml
+from gdt_tax.integrity import (
+    evidence_path,
+    validate_pdf,
+    validate_tax_zip,
+    validate_xlsx,
+    validate_xml,
+)
 from gdt_tax.inventory import scan_directory
 from gdt_tax.models import CaseRecord
 from gdt_tax.storage import ZipStore, valid_zip
@@ -45,6 +51,53 @@ class DownloadIntegrityTests(unittest.TestCase):
             self.assertFalse(validate_xml(data, "declaration").ok)
         self.assertTrue(is_gnt_xml(GNT))
         self.assertEqual(validate_xml(b'<CHUNGTU xmlns="urn:new"/>', "gnt").status, "UNSUPPORTED")
+
+    def test_dvc_notice_envelope_is_a_valid_notice(self):
+        data = (b'<TBTNhan><DLTBao Id="synthetic"><MSo>01/TB-SS</MSo>'
+                b'<Ten>Thong bao synthetic</Ten></DLTBao></TBTNhan>')
+        self.assertTrue(validate_xml(data, "notice").ok)
+        self.assertFalse(validate_xml(data, "declaration").ok)
+        # Đã gặp trên DVC: thông báo tải về có gốc ``THONGBAO``.
+        self.assertTrue(validate_xml(b'<THONGBAO><MSo>01/TB-SS</MSo></THONGBAO>', "notice").ok)
+        self.assertFalse(validate_xml(b'<THONGBAO/>', "declaration").ok)
+
+    def test_xlsx_notice_attachment_is_accepted_as_excel(self):
+        from openpyxl import Workbook
+        workbook = Workbook()
+        workbook.active['A1'] = 'synthetic notice'
+        stream = BytesIO()
+        workbook.save(stream)
+        data = stream.getvalue()
+        self.assertTrue(validate_xlsx(data).ok)
+        self.assertFalse(validate_xlsx(b'not a workbook').ok)
+
+        class JsonResponse:
+            status_code = 200
+            content = b'{}'
+
+            def json(self):
+                return {'fileName': 'Thong bao.xls', 'fileType': 'xls',
+                        'content': base64.b64encode(data).decode()}
+
+        notice = decode_notice_response(JsonResponse())
+        self.assertIsNotNone(notice)
+        self.assertEqual(notice.extension, 'xlsx')
+
+    def test_dvc_notice_envelope_decodes_as_xml(self):
+        data = b'<TBTNhan><DLTBao Id="synthetic"><MSo>01/TB-SS</MSo></DLTBao></TBTNhan>'
+
+        class JsonResponse:
+            status_code = 200
+            content = b'{}'
+
+            def json(self):
+                return {'fileName': 'notice.xml', 'fileType': 'xml',
+                        'content': base64.b64encode(data).decode()}
+
+        notice = decode_notice_response(JsonResponse())
+        self.assertIsNotNone(notice)
+        self.assertEqual(notice.file_type, 'xml')
+        self.assertEqual(notice.data, data)
 
     def test_dtd_deep_tree_and_invalid_syntax_share_rejections(self):
         for data in (b'<!DOCTYPE CHUNGTU [<!ENTITY x "bad">]><CHUNGTU>&x;</CHUNGTU>',

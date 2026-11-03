@@ -161,6 +161,19 @@ python -m gdt_tax --from-date 01/07/2025 --to-date 31/07/2025 --enable-dvc
 
 ## Sử dụng
 
+Tài khoản cá nhân dùng cổng riêng `canhan.gdt.gov.vn`. Chọn `--account-type CN`
+cho cả tờ khai và thông báo; cờ này bỏ qua cutoff/DVC của doanh nghiệp và tự
+chia khoảng ngày thành các đoạn 31 ngày:
+
+```bash
+python -m gdt_tax --account-type CN --from-date 01/01/2022 --to-date 03/11/2026
+python -m gdt_tax.tb --account-type CN --from-date 01/01/2022 --to-date 03/11/2026
+```
+
+Không truyền cờ này thì mặc định là tài khoản doanh nghiệp (`DN`). CAPTCHA cổng
+cá nhân dài 4 hoặc 5 ký tự; bộ đọc `ddddocr` tự nhận cả hai độ dài khi dùng
+`--account-type CN`.
+
 Chạy theo ngày trong `.env`:
 
 ```bash

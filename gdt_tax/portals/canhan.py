@@ -49,6 +49,8 @@ _NOTICE_OPERATION = "retailSearchTaxNoticesProc"
 _SEARCH_FORM = "frm"
 _DETAIL_FORM = "frmtcuu"
 _LOGIN_FORM = "loginForm"
+_CONDUCT_FORM = "loginConductForm"
+_CONCURRENT_LOGIN_MARKER = "đang đăng nhập hệ thống"
 _SESSION_FIELDS = ("dse_sessionId", "dse_applicationId", "dse_pageId",
                    "dse_processorState", "dse_processorId", "dse_errorPage")
 
@@ -73,7 +75,10 @@ def _form_fields(html: str, form_id: str) -> tuple[str, dict[str, str]]:
     fields: dict[str, str] = {}
     for field in form.find_all("input"):
         name = field.get("name")
-        if name:
+        # Trình duyệt không gửi nút khi form.submit() bằng JS; gửi kèm
+        # ``button=Đồng ý`` làm cổng trả SystemError ở bước xác nhận.
+        if name and str(field.get("type") or "").casefold() not in {
+                "button", "submit", "reset", "image"}:
             fields[str(name)] = str(field.get("value") or "")
     return urljoin(f"{CANHAN_BASE}/", action), fields
 
@@ -136,8 +141,68 @@ def _query_parameter(url: str, name: str) -> str:
 
 def _page_count(html: str) -> int | None:
     text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
-    match = re.search(r"Trang\s*\d+\s*/\s*(\d+)", text, re.I)
+    # Cổng cá nhân ghi "Trang 1 /Tổng số 3 trang."; giữ thêm dạng cũ "Trang 1/3".
+    match = re.search(r"Tổng số\s*(\d+)\s*trang", text, re.I)
+    if match is None:
+        match = re.search(r"Trang\s*\d+\s*/\s*(\d+)", text, re.I)
     return int(match.group(1)) if match else None
+
+
+def _page_url(html: str, page: int) -> str:
+    """Lấy đúng href pager của trang ``page`` (đã unescape ``&amp;``)."""
+    soup = BeautifulSoup(html, "html.parser")
+    container = soup.find(id="divPagination") or soup
+    for anchor in container.find_all("a", href=True):
+        if anchor.get_text(strip=True) == str(page):
+            return urljoin(f"{CANHAN_BASE}/", unescape(str(anchor["href"])))
+    return ""
+
+
+def _total_pages(html: str) -> int | None:
+    """Tổng số trang; không có pager và không có link trang 2 nghĩa là một trang."""
+    pages = _page_count(html)
+    if pages is None and not _page_url(html, 2):
+        return 1
+    return pages
+
+
+def _transient_error(response) -> bool:
+    """Cổng cá nhân trả HTTP 200 nhưng là trang SystemError/đang bận."""
+    if getattr(response, "status_code", 0) != 200:
+        return False
+    content_type = (response.headers.get("content-type", "") or "").lower()
+    text = getattr(response, "text", "") or ""
+    return "text/html" in content_type and any(
+        marker in text for marker in ("SystemError", "Hệ thống bận", "Xin vui lòng thử lại sau"))
+
+
+def _has_operation_form(html: str, operation: str) -> bool:
+    soup = BeautifulSoup(html, "html.parser")
+    return any(form.find("input", attrs={"name": "dse_operationName", "value": operation})
+               is not None for form in soup.find_all("form"))
+
+
+def is_empty_declaration_page(html: str) -> bool:
+    """Trang tra cứu tờ khai hợp lệ nhưng không có bảng kết quả nào.
+
+    Cổng cá nhân vẫn hiện form tra cứu và bảng giữ chỗ ``viewTableTraCuu``
+    nhưng không render bảng ``confirm_table`` khi kỳ đã chọn không có hồ sơ.
+    Đây là bằng chứng rỗng, không phải cổng đổi cấu trúc.
+    """
+    if not _has_operation_form(html, _DECLARATION_OPERATION):
+        return False
+    if _table_with_headers(html, "Mã giao dịch", "Ngày nộp")[0]:
+        return False
+    return BeautifulSoup(html, "html.parser").find(id="viewTableTraCuu") is not None
+
+
+def is_empty_notice_page(html: str) -> bool:
+    """Trang tra cứu thông báo hợp lệ nhưng không có bảng kết quả."""
+    if not _has_operation_form(html, _NOTICE_OPERATION):
+        return False
+    if _table_with_headers(html, "Số thông báo", "Ngày gửi")[0]:
+        return False
+    return BeautifulSoup(html, "html.parser").find(id="viewTableTraCuu") is not None
 
 
 def _header_index(headers: list[str], *needles: str) -> int:
@@ -399,7 +464,15 @@ class CanhanPortal:
                 {"_password": self.settings.password, "dse_nextEventName": "ok"},
                 navigation=True,
             )
+            # Cổng chặn khi tài khoản còn phiên ở máy/trình duyệt khác và hỏi
+            # "Chọn Đồng ý để đăng nhập". Đây không phải sai mật khẩu.
+            final = self._confirm_concurrent_login(final)
             if not self._login_succeeded(final):
+                if _CONDUCT_FORM in (getattr(final, "text", "") or ""):
+                    raise LegacyEtaxError(
+                        "Tài khoản vẫn đang được đăng nhập ở nơi khác và cổng chưa "
+                        "chấp nhận phiên này. Hãy đăng xuất phiên kia rồi thử lại."
+                    )
                 raise AuthFailure(AuthOutcome.INVALID_CREDENTIALS)
             accepted = getattr(self.captcha, "accepted", None)
             if callable(accepted):
@@ -408,6 +481,34 @@ class CanhanPortal:
             return
         raise AuthFailure(AuthOutcome.CAPTCHA_INVALID if "mã kiểm tra" in last_message
                           else AuthOutcome.SCHEMA_UNKNOWN)
+
+    def _download_post(self, html: str, form_id: str, referer: str, data: Mapping[str, Any],
+                       *, attempts: int = 3):
+        """Tải tệp, thử lại khi cổng trả trang SystemError tạm thời."""
+        last = None
+        for attempt in range(1, attempts + 1):
+            last = self._post_form(html, form_id, referer, data)
+            if not _transient_error(last):
+                return last
+            if attempt < attempts:
+                self.logger.warning(
+                    "Cổng báo SystemError khi tải tệp; thử lại lần %s/%s", attempt + 1, attempts)
+                time.sleep(1.5 * attempt)
+        return last
+
+    def _confirm_concurrent_login(self, page):
+        """Bấm ``Đồng ý`` khi cổng cảnh báo tài khoản đang đăng nhập ở phiên khác."""
+        text = getattr(page, "text", "") or ""
+        if _CONDUCT_FORM not in text or _CONCURRENT_LOGIN_MARKER not in text.casefold():
+            return page
+        self.logger.info(
+            "Cổng báo tài khoản đang đăng nhập ở phiên khác; xác nhận tiếp tục phiên này"
+        )
+        return self._post_form(
+            text, _CONDUCT_FORM, getattr(page, "url", CANHAN_REQUEST),
+            {"_loginedConduct": "forceLastLogin", "dse_nextEventName": "ok"},
+            navigation=True,
+        )
 
     def _login_succeeded(self, response) -> bool:
         if getattr(response, "status_code", 0) != 200:
@@ -545,6 +646,19 @@ class CanhanPortal:
                 profile=self.profile))
         return None
 
+    def _query_with_transient_retry(self, request, *, attempts: int = 3):
+        """Tra cứu lại khi cổng trả trang SystemError tạm thời (HTTP 200)."""
+        response = request()
+        for attempt in range(1, attempts):
+            if not _transient_error(response):
+                return response
+            self.logger.warning(
+                "Cổng cá nhân tạm bận khi tra cứu; thử lại %s/%s", attempt + 1, attempts
+            )
+            time.sleep(1.5 * attempt)
+            response = request()
+        return response
+
     # --- Tờ khai ---
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         self.login()
@@ -553,12 +667,14 @@ class CanhanPortal:
                 _DECLARATION_OPERATION, _SEARCH_FORM, "tờ khai")
             self._search_page_html = opened.text
             self._search_page_url = getattr(opened, "url", CANHAN_REQUEST)
-        response = self._query_declarations(period, page)
+        response = self._query_with_transient_retry(
+            lambda: self._query_declarations(period, page))
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
         empty = any(marker in response.text for marker in ("Chưa có tờ khai", "Không có dữ liệu"))
+        empty_page = is_empty_declaration_page(response.text)
         form_id = _form_id_for_operation(response.text, _DECLARATION_OPERATION, self._search_form_id)
-        if not form_id or ("Mã giao dịch" not in response.text and not empty):
+        if not form_id or ("Mã giao dịch" not in response.text and not empty and not empty_page):
             if self.session_state is not None:
                 raise LegacyEtaxError(
                     "Cổng cá nhân trả HTTP 200 nhưng thiếu bảng/form tờ khai. "
@@ -570,10 +686,18 @@ class CanhanPortal:
         self._search_page_html = response.text
         self._search_page_url = getattr(response, "url", CANHAN_REQUEST)
         records = parse_declarations(response.text)
-        return PageResult(records=records, total_pages=_page_count(response.text),
+        if not records and empty_page:
+            return PageResult(records=[], total_pages=None, http_status=response.status_code,
+                              diagnostics=ParseDiagnostics(
+                                  status="EMPTY_CONFIRMED", reasons=["PORTAL_EMPTY_RESULT"]))
+        return PageResult(records=records, total_pages=_total_pages(response.text),
                           http_status=response.status_code)
 
     def _query_declarations(self, period: SearchPeriod, page: int):
+        if page > 1:
+            target = _page_url(self._search_page_html, page)
+            if target:
+                return self.http.get(target, headers=build_page_headers(profile=self.profile))
         if page <= 1:
             return self._post_form(
                 self._search_page_html, self._search_form_id, self._search_page_url,
@@ -610,7 +734,7 @@ class CanhanPortal:
     def download(self, record: CaseRecord, detail_url: str, csrf: str):
         if not self._search_page_html:
             raise LegacyEtaxError("Chưa có trang kết quả tờ khai để tải theo")
-        response = self._post_form(
+        response = self._download_post(
             self._search_page_html, _DETAIL_FORM, self._search_page_url,
             {
                 "dse_operationName": _DECLARATION_OPERATION,
@@ -646,14 +770,16 @@ class CanhanPortal:
                 _NOTICE_OPERATION, _SEARCH_FORM, "thông báo")
             self._notice_page_html = opened.text
             self._notice_page_url = getattr(opened, "url", CANHAN_REQUEST)
-        response = self._query_notices(period, page)
+        response = self._query_with_transient_retry(
+            lambda: self._query_notices(period, page))
         if response.status_code != 200:
             return TbPageResult(http_status=response.status_code)
         empty = any(marker in response.text for marker in
                     ("Không tìm thấy thông báo", "không có thông báo", "Chưa có thông báo",
                      "Không có dữ liệu"))
+        empty_page = is_empty_notice_page(response.text)
         form_id = _form_id_for_operation(response.text, _NOTICE_OPERATION, self._notice_form_id)
-        if not form_id or ("Số thông báo" not in response.text and not empty):
+        if not form_id or ("Số thông báo" not in response.text and not empty and not empty_page):
             if self.session_state is not None:
                 raise_terminal(response, "ETAX_LEGACY", phase="page", authenticated=True)
                 raise LegacyEtaxError(
@@ -665,11 +791,21 @@ class CanhanPortal:
         self._notice_form_id = form_id
         self._notice_page_html = response.text
         self._notice_page_url = getattr(response, "url", CANHAN_REQUEST)
-        return TbPageResult(records=parse_notices(response.text),
-                            total_pages=_page_count(response.text),
+        records = parse_notices(response.text)
+        if not records and empty_page:
+            return TbPageResult(records=[], total_pages=None,
+                                http_status=response.status_code,
+                                diagnostics=ParseDiagnostics(
+                                    status="EMPTY_CONFIRMED", reasons=["PORTAL_EMPTY_RESULT"]))
+        return TbPageResult(records=records,
+                            total_pages=_total_pages(response.text),
                             http_status=response.status_code)
 
     def _query_notices(self, period: SearchPeriod, page: int):
+        if page > 1:
+            target = _page_url(self._notice_page_html, page)
+            if target:
+                return self.http.get(target, headers=build_page_headers(profile=self.profile))
         if page <= 1:
             return self._post_form(
                 self._notice_page_html, self._notice_form_id, self._notice_page_url,
@@ -698,7 +834,7 @@ class CanhanPortal:
         self.last_download_error = ""
         if not self._notice_page_html:
             raise LegacyEtaxError("Chưa có trang kết quả thông báo để tải theo")
-        response = self._post_form(
+        response = self._download_post(
             self._notice_page_html, _DETAIL_FORM, self._notice_page_url,
             {
                 "dse_operationName": _NOTICE_OPERATION,
@@ -712,6 +848,12 @@ class CanhanPortal:
                 f"Cổng trả HTTP {response.status_code} khi tải thông báo; "
                 "kiểm tra kết nối hoặc phiên đăng nhập.")
             return None
+        if _transient_error(response):
+            self.last_download_error = (
+                "Cổng thuế tạm bận (SystemError) khi tải tệp sau 3 lần thử. "
+                "Tệp chưa được lưu; hãy thử lại sau.")
+            self.logger.error("Thông báo cá nhân %s: cổng tạm bận", record.message_id)
+            return None
         content_type = response.headers.get("content-type", "").lower()
         is_pdf = response.content.startswith(b"%PDF-")
         is_xml = validate_xml(response.content, "notice").ok
@@ -724,5 +866,5 @@ class CanhanPortal:
         return response.content
 
 
-__all__ = ["CANHAN_BASE", "CANHAN_REQUEST", "CanhanPortal", "parse_declarations",
-           "parse_notices"]
+__all__ = ["CANHAN_BASE", "CANHAN_REQUEST", "CanhanPortal", "is_empty_declaration_page",
+           "is_empty_notice_page", "parse_declarations", "parse_notices"]

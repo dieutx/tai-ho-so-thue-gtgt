@@ -80,6 +80,29 @@ class AuthContractTests(unittest.TestCase):
             self.assertEqual(classify_response(FakeResponse(text), adapter), AuthOutcome.SCHEMA_UNKNOWN)
         self.assertEqual(classify_response(FakeResponse(json_payload={'status': 401}), 'DVC'), AuthOutcome.SCHEMA_UNKNOWN)
 
+    def test_live_dvc_wrong_credentials_are_classified_and_not_retried(self):
+        # Đã xác minh trên cổng: sai mật khẩu trả HTTP 200 kèm JSON này.
+        body = {'status': '401', 'desc': 'Thông tin tài khoản hoặc mật khẩu không đúng, vui lòng kiểm tra lại!'}
+        self.assertEqual(classify_response(FakeResponse(json_payload=body), 'DVC'),
+                         AuthOutcome.INVALID_CREDENTIALS)
+        self.assertEqual(classify_response(FakeResponse(json_payload={'status': '401'}), 'DVC'),
+                         AuthOutcome.INVALID_CREDENTIALS)
+        # Số nguyên không phải định dạng cổng dùng; giữ nguyên hành vi cũ.
+        self.assertEqual(classify_response(FakeResponse(json_payload={'status': 401}), 'DVC'),
+                         AuthOutcome.SCHEMA_UNKNOWN)
+        settings = Settings.from_env(environ={}, env_file=None, username='synthetic',
+                                     password='fixture', login_attempts=5)
+        http, solver = Mock(hooks=RunHooks()), Mock()
+        solver.solve.return_value = 'abc12'
+        http.get.return_value = FakeResponse('<meta name="csrf-token" content="token">')
+        http.post.return_value = FakeResponse(json_payload=body)
+        with patch('gdt_tax.auth.fetch_captcha', return_value=b'synthetic'):
+            with self.assertRaises(AuthFailure) as caught:
+                auth.login(http, solver, settings)
+        self.assertEqual(caught.exception.outcome, AuthOutcome.INVALID_CREDENTIALS)
+        http.post.assert_called_once()
+        solver.rejected.assert_not_called()
+
     def test_dvc_terminal_outcomes_do_not_retry_or_reject_solver(self):
         settings = Settings.from_env(environ={}, env_file=None, username='synthetic', password='fixture', login_attempts=6)
         for outcome in (AuthOutcome.INVALID_CREDENTIALS, AuthOutcome.MAINTENANCE, AuthOutcome.SCHEMA_UNKNOWN):

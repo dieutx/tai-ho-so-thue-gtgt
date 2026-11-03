@@ -70,6 +70,15 @@ def _form_data(form) -> tuple[str, dict[str, str]]:
         name = field.get("name")
         if name:
             data[str(name)] = str(field.get("value") or "")
+    # The legacy screens submit <select> values too (for example ``loaiTB``
+    # on the notice search form). Dropping them leaves the server with no
+    # filter and it re-renders the empty search page instead of results.
+    for select in form.find_all("select"):
+        name = select.get("name")
+        if not name:
+            continue
+        chosen = select.find("option", selected=True) or select.find("option")
+        data[str(name)] = str(chosen.get("value") or "") if chosen else ""
     return urljoin(f"{LEGACY_ETAX_BASE}/", action), data
 
 
@@ -92,6 +101,14 @@ def _operation_url(html: str, operation: str) -> str:
         if f"dse_operationName={operation}" in value and "dse_sessionId=" in value:
             return urljoin(f"{LEGACY_ETAX_BASE}/", value)
     return ""
+
+
+def _is_declaration_search_page(html: str) -> bool:
+    """Trang ``viewTBao`` trả lại màn hình tra cứu tờ khai (hồ sơ không có TB)."""
+    soup = BeautifulSoup(html, "html.parser")
+    if soup.select_one("table#tbl_tracuu, table#data_content_onday") is not None:
+        return False
+    return "tra cứu tờ khai" in " ".join(soup.stripped_strings).casefold()
 
 
 def _page_detail(response) -> str:
@@ -590,6 +607,11 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
         listing = parse_legacy_notice_list(response.text)
         if not form_id:
             return NoticeList()
+        if listing.status == 'SCHEMA_UNKNOWN' and _is_declaration_search_page(response.text):
+            # Cổng không có thông báo cho hồ sơ này và trả lại chính trang tra
+            # cứu tờ khai. Đó là "không có tệp đính kèm", không phải lỗi cấu
+            # trúc; đánh dấu lỗi sẽ làm hỏng cả lượt tải dù ZIP đã thành công.
+            return NoticeList([], 'EMPTY_CONFIRMED')
         self._notice_form_id = form_id
         self._notice_page_html = response.text
         self._notice_page_url = response.url

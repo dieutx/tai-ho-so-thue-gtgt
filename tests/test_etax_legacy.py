@@ -315,6 +315,21 @@ class LegacyPortalTests(unittest.TestCase):
         self.assertEqual(posts[0]["messageId"], "11200000034293775")
         self.assertEqual(posts[0]["dse_processorState"], "dsTBaoViewPage")
 
+    def test_view_tbao_tra_lai_trang_tra_cuu_la_khong_co_dinh_kem(self):
+        portal = self.make_portal({
+            "notice_html": (
+                "<html><title>Tra cứu tờ khai</title>"
+                "<form id='tkhaiForm' action='/etaxnnt/Request'>"
+                "<input name='dse_operationName' value='traCuuToKhaiProc'>"
+                "</form><div>Tra cứu tờ khai</div></html>"
+            )
+        })
+        record = portal.search(self.period(), page=1).records[0]
+        portal.fetch_detail_csrf(record)
+        listing = portal.fetch_notice_list()
+        self.assertEqual(listing.notices, [])
+        self.assertEqual(listing.status, "EMPTY_CONFIRMED")
+
     def test_notice_discovery_failure_clears_previous_form(self):
         portal = self.make_portal()
         record = portal.search(self.period(), page=1).records[0]
@@ -548,6 +563,19 @@ class PipelineLegacyRoutingTests(unittest.TestCase):
         self.assertFalse(summary.attachments_complete)
         self.assertEqual(summary.attachments_failed, 2)
         self.assertEqual(len(list(self.directory.glob('*.zip'))), 2)
+
+    def test_trang_tra_cuu_khi_khong_co_thong_bao_khong_phai_loi(self):
+        summary, _http, _state = self.run_pipeline({
+            'notice_html': (
+                "<html><title>Tra cứu tờ khai</title>"
+                "<form id='tkhaiForm' action='/etaxnnt/Request'>"
+                "<input name='dse_operationName' value='traCuuToKhaiProc'>"
+                "</form><div>Tra cứu tờ khai</div></html>"
+            ),
+        })
+        self.assertEqual(summary.downloaded, 2)
+        self.assertTrue(summary.attachments_complete)
+        self.assertEqual(summary.attachments_failed, 0)
 
     def test_partial_notice_table_keeps_valid_items_and_incomplete_status(self):
         html = fixture('etax_legacy_notices.html').replace("downloadFile('11200000034284609')", "changedDownload('11200000034284609')")

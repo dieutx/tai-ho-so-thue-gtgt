@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import base64
+import io
 import tempfile
 import unittest
+import zipfile
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -129,6 +131,42 @@ class NoticeDecodeTests(unittest.TestCase):
         self.assertIsNone(decode_notice_response(FakeResponse("loi", status_code=500)))
         self.assertIsNone(decode_notice_response(FakeResponse(json_payload={"content": ""})))
         self.assertIsNone(decode_notice_response(FakeResponse(json_payload={"content": "@@@"})))
+
+
+class DvcJsonZipDownloadTests(unittest.TestCase):
+    def _portal(self, payload):
+        def handler(method, path, kwargs):
+            if route_of(path) == DVC_DOWNLOAD:
+                return FakeResponse(json_payload=payload)
+            return None
+        portal = DvcPortal(FakeHttp(handler), StubCaptcha(),
+                           SimpleNamespace(header_profile='minimal'))
+        # Bỏ qua bước dò validateIdTkhai để chỉ kiểm tra phần giải mã.
+        portal._ajax_validation = True
+        return portal
+
+    def test_json_wrapped_zip_is_decoded_into_artifact(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr('synthetic.xml', '<HSoThueDTu><TKhai/></HSoThueDTu>')
+        payload = {'fileName': 'files_synthetic.zip', 'fileType': 'application/zip',
+                   'content': base64.b64encode(buffer.getvalue()).decode('ascii')}
+        record = CaseRecord(ma_ho_so='11320260000000001', nguon='DVC')
+        artifact = self._portal(payload).download(record, 'https://dichvucong.gdt.gov.vn/tthc/tchs/files/detail/x', 'csrf')
+        self.assertEqual(artifact.media_kind, 'zip')
+        self.assertEqual(artifact.document_kind, 'DECLARATION')
+        self.assertEqual(artifact.source, record.key)
+        with zipfile.ZipFile(io.BytesIO(artifact.data)) as archive:
+            self.assertEqual(archive.namelist(), ['synthetic.xml'])
+
+    def test_json_without_content_or_non_zip_stays_a_plain_response(self):
+        record = CaseRecord(ma_ho_so='11320260000000002', nguon='DVC')
+        for payload in ({'fileName': 'x.zip'}, {'content': 'not-base64!'},
+                        {'content': base64.b64encode(b'<html>failed</html>').decode()}):
+            with self.subTest(payload=payload):
+                result = self._portal(payload).download(
+                    record, 'https://dichvucong.gdt.gov.vn/tthc/tchs/files/detail/x', 'csrf')
+                self.assertEqual(result.status_code, 200)
 
 
 class NoticeStoreTests(unittest.TestCase):
@@ -320,7 +358,10 @@ class DvcDeclarationDownloadTests(unittest.TestCase):
         portal = DvcPortal(http, StubCaptcha(), SimpleNamespace(header_profile="minimal"))
         record = CaseRecord("G12.18-261005-00126831", "DVC")
         response = portal.download(record, "https://example.test/tthc/tchs/files/detail/X", "csrf")
-        self.assertEqual(response.status_code, 200)
+        # Cổng trả ZIP bọc trong JSON base64: adapter phải giải mã thành artifact.
+        self.assertEqual(response.media_kind, "zip")
+        self.assertTrue(response.data.startswith(b"PK"))
+        self.assertEqual(response.source, record.key)
         post = next(call for call in http.calls if call.method == "POST")
         self.assertTrue(post.kwargs["operation"].retry_safe)
         self.assertEqual(post.kwargs["operation"].minimum_attempts, 6)

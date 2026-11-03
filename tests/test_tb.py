@@ -221,6 +221,31 @@ class TbPortalTests(unittest.TestCase):
         self.assertEqual(query["tuNgayNop"], "01/08/2026")
         self.assertEqual(query["denNgayNop"], "31/08/2026")
 
+    def test_trang_khong_co_ket_qua_la_empty_confirmed(self):
+        empty_page = (
+            TB_START_HTML.replace(
+                "</form>",
+                "<select name='loaiTB'><option value=''>--</option></select></form>",
+            )
+            + "<div>Không tìm thấy kết quả tra cứu.</div>"
+        )
+        portal = self.make_portal({"query_html": empty_page})
+        result = portal.search_tb(self.period(), 1)
+        self.assertEqual(result.records, [])
+        self.assertEqual(result.total_pages, 1)
+        self.assertEqual(result.diagnostics.status, "EMPTY_CONFIRMED")
+        self.assertTrue(result.diagnostics.complete)
+
+    def test_gui_gia_tri_select_loai_tb(self):
+        page = TB_START_HTML.replace(
+            "</form>",
+            "<select name='loaiTB'><option value=''>--</option>"
+            "<option value='911' selected>Thông báo</option></select></form>",
+        )
+        portal = self.make_portal({"start_html": page})
+        portal.search_tb(self.period(), 1)
+        self.assertEqual(self.state["queries"][0]["loaiTB"], "911")
+
     def test_phan_trang_bang_get(self):
         portal = self.make_portal()
         portal.search_tb(self.period(), 1)

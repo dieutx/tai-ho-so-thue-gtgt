@@ -38,6 +38,8 @@ Ví dụ:
   python -m gdt_tax --case-id 11320250292469209
   python -m gdt_tax --solver manual            # tự nhập CAPTCHA từng lần
   python -m gdt_tax --dry-run                  # chỉ tra cứu, không tải
+  python -m gdt_tax --account-type CN --from-date 01/01/2026 --to-date 31/01/2026
+                                               # tài khoản cá nhân (canhan.gdt.gov.vn)
 
 Khi cổng đổi giao diện, chạy kèm các tham số chẩn đoán:
   python -m gdt_tax -v --log-file logs/run.log --dump-http http-dump
@@ -63,6 +65,14 @@ def parse_solver_options(items: list[str] | None) -> dict:
         except json.JSONDecodeError:
             options[key] = raw
     return options
+
+
+def personal_captcha_options(solver: str, options) -> dict:
+    """CAPTCHA cổng cá nhân dài 4 hoặc 5 ký tự; doanh nghiệp vẫn là 5."""
+    values = dict(options or {})
+    if solver == "ddddocr" and "length" not in values:
+        values["length"] = [4, 5]
+    return values
 
 
 def parse_headers(items: list[str] | None) -> dict[str, str]:
@@ -108,6 +118,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Tham số cho solver, lặp lại được nhiều lần",
     )
     parser.add_argument("--env-file", default=DEFAULT_ENV_FILE, help="File cấu hình dạng .env")
+    parser.add_argument(
+        "--account-type",
+        choices=("DN", "CN"),
+        help=("Loại tài khoản: DN = doanh nghiệp (mặc định), "
+              "CN = cá nhân trên canhan.gdt.gov.vn"),
+    )
     parser.add_argument("--dry-run", action="store_true", help="Chỉ tra cứu, không tải ZIP")
     parser.add_argument(
         "--list-solvers", action="store_true", help="Liệt kê solver CAPTCHA rồi thoát"
@@ -225,7 +241,11 @@ def _main(argv: list[str] | None = None) -> int:
             header_profile=args.header_profile,
             proxy_url=args.proxy,
             legacy_etax=True if args.legacy_etax else None,
-            dvc_enabled=args.dvc_enabled,
+            dvc_enabled=False if args.account_type == "CN" else args.dvc_enabled,
+            account_type=args.account_type,
+            # Cá nhân chỉ có một nguồn canhan.gdt.gov.vn; cutoff xa để mọi
+            # đoạn ngày đều đi vào nguồn ETAX_LEGACY thay vì bị bỏ qua vì DVC tắt.
+            etax_cutoff="01/01/2100" if args.account_type == "CN" else None,
         )
     except (ConfigError, ValueError) as error:
         print(f"LỖI CẤU HÌNH: {error}", file=sys.stderr)
@@ -259,7 +279,9 @@ def _main(argv: list[str] | None = None) -> int:
         return EXIT_INCOMPLETE
     try:
         register_plugins(settings.captcha_plugins)
-        captcha = create_solver(settings.captcha_solver, **settings.captcha_options)
+        captcha_options = (personal_captcha_options(settings.captcha_solver, settings.captcha_options)
+                           if settings.account_type == "CN" else settings.captcha_options)
+        captcha = create_solver(settings.captcha_solver, **captcha_options)
     except CaptchaError as error:
         logger.error("%s", error)
         return EXIT_CONFIG_ERROR
@@ -299,4 +321,5 @@ def _main(argv: list[str] | None = None) -> int:
     return EXIT_OK if summary.complete else EXIT_INCOMPLETE
 
 
-__all__ = ["build_parser", "main", "parse_headers", "parse_solver_options"]
+__all__ = ["build_parser", "main", "parse_headers", "parse_solver_options",
+           "personal_captcha_options"]

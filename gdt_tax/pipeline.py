@@ -243,6 +243,9 @@ class Pipeline:
                     "Dữ liệu trả về không phải ZIP hoàn chỉnh/hợp lệ. "
                     "Tệp chưa được lưu; có thể phiên đã hết hạn."
                 )
+            # Không để hồ sơ thiếu tệp mà không có lý do trong nhật ký.
+            self.logger.error("LỖI TẢI: %s — %s", record.ma_ho_so,
+                              self.record_errors[record.record_key])
             return False
         succeeded.add(record.record_key)
         self._download_attachments(portal, record, detail_url=detail_url, csrf=csrf)
