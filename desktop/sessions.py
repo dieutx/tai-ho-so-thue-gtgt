@@ -8,9 +8,8 @@ from datetime import timedelta
 from threading import RLock
 from typing import Any
 
-from gdt_tax.auth import login as dvc_login
 from gdt_tax.auth_outcomes import AuthFailure, AuthOutcome, classify_response
-from gdt_tax.constants import LEGACY_ETAX_ORIGIN, SOURCE_DVC, SOURCE_ETAX_LEGACY
+from gdt_tax.constants import LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from gdt_tax.errors import LegacyPageError
 from gdt_tax.gnt.portal import GntPortal
 from gdt_tax.http import HttpClient
@@ -18,7 +17,7 @@ from gdt_tax.identity import RecordKey, account_fingerprint
 from gdt_tax.legacy_session import LegacySessionState, SessionExpired
 from gdt_tax.ownership import prepare_output
 from gdt_tax.portals import build_portals
-from gdt_tax.portals.dvc import DvcPortal
+from gdt_tax.portals.canhan import CanhanPortal
 from gdt_tax.portals.etax_legacy import EtaxLegacyPortal
 from gdt_tax.proxy import parse_proxy
 from gdt_tax.run_hooks import RunCancelled, RunHooks
@@ -196,49 +195,69 @@ class ETaxSessionManager:
 
     def _execute_personal(self, config: RunConfig, hooks: RunHooks, captcha, logger,
                           settings) -> JobResult:
-        """Luồng đã xác minh từ HAR tài khoản cá nhân: đăng nhập DVC + tờ khai."""
-        if config.mode in {"gnt", "notice"}:
+        """Luồng HAR ``thuedientu_canhan.har``: DSE canhan.gdt.gov.vn.
+
+        Cá nhân dùng phiên và endpoint riêng, không mượn cookie/endpoint DVC hay
+        etaxnnt doanh nghiệp. Giấy nộp tiền cá nhân chưa được tích hợp vì HAR
+        chỉ có form tra cứu ``TraCuuChungTuProc``, không có lệnh tải đã xác minh.
+        """
+        if config.mode == "gnt":
             return JobResult(
                 "ERROR",
-                "Tài khoản cá nhân: Giấy nộp tiền và Thông báo thuế dùng luồng "
-                "canhan.gdt.gov.vn riêng, chưa được tích hợp trong bản này. "
-                "Hồ sơ đã tải trước đó vẫn được giữ nguyên.",
+                "Tài khoản cá nhân: HAR canhan.gdt.gov.vn mới xác minh form tra cứu "
+                "chứng từ, chưa xác minh lệnh tải Giấy nộp tiền. Bản này không "
+                "dùng endpoint doanh nghiệp để thay thế. Hồ sơ đã tải vẫn được giữ.",
                 config.output, errors=1, error_code='UNSUPPORTED_ACCOUNT_FLOW')
-        if config.mode not in {"login", "tax"}:
+        if config.mode not in {"login", "tax", "notice"}:
             return JobResult("ERROR", "Tài khoản cá nhân chưa hỗ trợ chế độ này.",
                              config.output, errors=1, error_code='UNSUPPORTED_ACCOUNT_FLOW')
-        http = self._dvc_client(config, hooks, logger)
+
+        http = self._client(config, hooks, logger)
+        portal = CanhanPortal(http, captcha, settings, logger, session_state=self.session)
+
+        def login() -> None:
+            self.account.state = 'AUTHENTICATING'
+            hooks.emit(session='AUTHENTICATING')
+            http.authenticating = True
+            try:
+                portal.login()
+            finally:
+                http.authenticating = False
+            self.account.state = 'CONNECTED'
+            hooks.emit(session='CONNECTED')
+
         if config.mode == "login":
             try:
-                dvc_login(http, captcha, settings, logger)
+                login()
             except SessionExpired:
                 self.invalidate()
-                return JobResult("ERROR", "Phiên DVC đã hết hạn; hãy đăng nhập lại.",
+                return JobResult("ERROR", "Phiên Thuế điện tử cá nhân đã hết hạn; hãy đăng nhập lại.",
                                  config.output, errors=1, error_code='AUTH_EXPIRED_SESSION')
             except AuthFailure as error:
                 self.invalidate()
                 return JobResult("ERROR", str(error), config.output, errors=1, error_code=error.code)
-            self.dvc_authenticated = True
-            self.account.state = 'CONNECTED'
-            return JobResult("SUCCESS", "DVC cá nhân: Đã kết nối", config.output)
-
-        def personal_portals(*_args):
-            return {SOURCE_DVC: DvcPortal(http, captcha, settings, logger)}
+            return JobResult("SUCCESS", "Thuế điện tử cá nhân: Đã kết nối", config.output)
 
         try:
+            if not self.session.authenticated:
+                login()
+
+            def personal_portals(*_args):
+                if config.mode == 'notice':
+                    return portal
+                return {SOURCE_ETAX_LEGACY: portal}
+
             result = run_online(config, hooks, captcha, logger, http=http,
                                 portal_factory=personal_portals, close_resources=False,
-                                propagate_auth=True,
-                                authenticate=not self.dvc_authenticated)
+                                propagate_auth=True, authenticate=False)
         except SessionExpired:
             self.invalidate()
-            return JobResult("ERROR", "Phiên đăng nhập DVC đã hết hạn; hãy đăng nhập lại.",
+            return JobResult("ERROR", "Phiên Thuế điện tử cá nhân đã hết hạn; hãy đăng nhập lại.",
                              config.output, errors=1, error_code='AUTH_EXPIRED_SESSION')
         except AuthFailure as error:
             self.invalidate()
             return JobResult("ERROR", str(error), config.output, errors=1, error_code=error.code)
         if result.state in {"SUCCESS", "PARTIAL"}:
-            self.dvc_authenticated = True
             self.account.state = 'CONNECTED'
         elif str(getattr(result, 'error_code', '')).startswith('AUTH_'):
             self.invalidate()

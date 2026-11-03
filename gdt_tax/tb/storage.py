@@ -39,11 +39,12 @@ from ..integrity import (
     safe_destination,
     source_reference,
     validate_pdf,
+    validate_xml,
     write_evidence,
 )
 from .models import ThongBao
 from .naming import tb_pdf_filename
-from .portal import is_tb_pdf
+from .portal import is_tb_document
 
 LOGGER_NAME = "gdt_tax.tb.storage"
 
@@ -75,12 +76,14 @@ class TbStore:
 
     def find_existing(self, record: ThongBao) -> Path | None:
         """Trả về file PDF đã có nếu hợp lệ (dùng để resume)."""
-        for path in candidate_paths(self.path_for(record), record.tep_pdf):
+        paths = candidate_paths(self.path_for(record), record.tep_pdf)
+        paths.extend(candidate_paths(self.path_for(record).with_suffix(".xml"), record.tep_pdf))
+        for path in dict.fromkeys(paths):
             if not path.is_file():
                 continue
             try:
                 content = read_bounded(path, MAX_MEMBER_BYTES)
-                if not is_tb_pdf(content) or not matches_evidence(path, content, source_reference(record, "pdf")):
+                if not is_tb_document(content) or not matches_evidence(path, content, source_reference(record, "pdf")):
                     continue
             except OSError:
                 continue
@@ -90,14 +93,19 @@ class TbStore:
         return None
 
     def save(self, record: ThongBao, data: bytes) -> Path | None:
-        """Ghi file PDF sau khi kiểm tra nội dung."""
-        if not is_tb_pdf(data):
-            self.logger.error("Phản hồi không phải PDF hợp lệ: %s", record.message_id)
+        """Ghi file PDF hoặc XML thông báo sau khi kiểm tra nội dung."""
+        pdf_result = validate_pdf(data)
+        xml_result = None if pdf_result.ok else validate_xml(data, "notice")
+        if not pdf_result.ok and not (xml_result and xml_result.ok):
+            self.logger.error("Phản hồi không phải PDF/XML thông báo hợp lệ: %s",
+                              record.message_id)
             return None
         self.directory.mkdir(parents=True, exist_ok=True)
-        path = safe_destination(self.path_for(record), data, source_reference(record, "pdf"))
+        preferred = self.path_for(record) if pdf_result.ok else self.path_for(record).with_suffix(".xml")
+        path = safe_destination(preferred, data, source_reference(record, "pdf"))
         _atomic_write(path, data)
-        write_evidence(path, validate_pdf(data), source_reference(record, "pdf"))
+        write_evidence(path, pdf_result if pdf_result.ok else xml_result,
+                       source_reference(record, "pdf"))
         record.tep_pdf = path.name
         self.logger.info("Đã lưu %s (%s bytes)", path.name, f"{len(data):,}")
         return path

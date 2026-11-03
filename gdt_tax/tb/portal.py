@@ -16,7 +16,7 @@ from ..auth_outcomes import raise_terminal
 from ..dates import format_date
 from ..errors import LegacyEtaxError
 from ..headers import build_page_headers
-from ..integrity import validate_pdf
+from ..integrity import validate_pdf, validate_xml
 from ..legacy_navigation import LegacyBusinessPortal, form_fields
 from ..models import SearchPeriod
 from ..table_contracts import ParseDiagnostics
@@ -44,6 +44,11 @@ _SESSION_KEYS = (
 def is_tb_pdf(data: bytes) -> bool:
     """Dữ liệu có phải PDF (không phải HTML lỗi/hết phiên)."""
     return validate_pdf(data).ok
+
+
+def is_tb_document(data: bytes) -> bool:
+    """Thông báo có thể là PDF hoặc XML ``TBaoThueDTu`` tuỳ tài khoản."""
+    return validate_pdf(data).ok or validate_xml(data, "notice").ok
 
 
 class TbPortal(LegacyBusinessPortal):
@@ -163,4 +168,4 @@ class TbPortal(LegacyBusinessPortal):
         return response.content
 
 
-__all__ = ["TbPortal", "is_tb_pdf"]
+__all__ = ["TbPortal", "is_tb_document", "is_tb_pdf"]

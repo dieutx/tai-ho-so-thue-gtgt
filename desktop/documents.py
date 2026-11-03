@@ -29,7 +29,7 @@ from gdt_tax.naming import zip_filename
 from gdt_tax.run_hooks import RunHooks
 from gdt_tax.tb.models import ThongBao
 from gdt_tax.tb.naming import tb_pdf_filename
-from gdt_tax.tb.portal import is_tb_pdf
+from gdt_tax.tb.portal import is_tb_document
 
 from .domain import (
     INTEGRITY_INVALID,
@@ -43,7 +43,7 @@ from .notices import notice_state, notice_summary, read_notices
 KINDS = {
     'tax': (CaseRecord, 'ma_ho_so', 'tep_zip', 'ngay_nop', zip_filename, valid_declaration_zip),
     'gnt': (GiayNopTien, 'ctu_id', 'tep_xml', 'ngay_lap', gnt_xml_filename, is_gnt_xml),
-    'notice': (ThongBao, 'message_id', 'tep_pdf', 'ngay_gui', tb_pdf_filename, is_tb_pdf),
+    'notice': (ThongBao, 'message_id', 'tep_pdf', 'ngay_gui', tb_pdf_filename, is_tb_document),
 }
 FILE_LABELS = {'not_downloaded': 'Chưa tải', 'queued': 'Đang chờ', 'downloading': 'Đang tải',
                'downloaded': 'Đã tải', 'failed': 'Tải lỗi', 'skipped': 'Bỏ qua'}
