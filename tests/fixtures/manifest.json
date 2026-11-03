@@ -103,7 +103,7 @@
       "content_kind": "xml",
       "expected_rows": null,
       "expected_outcome": "GOLDEN_OR_BINARY",
-      "canonical_sha256": "8875950ca263c9248801d84508b1d914d6266f8fb19d8de590121f0a0fe65dac",
+      "canonical_sha256": "8be7f6ef7482ea23982623dc1ba94d462b1e88cae852b9ec56370ce1076d2bf0",
       "sanitization": "Historical repository fixture; original capture and anonymization unverified. Do not distribute as sanitized live evidence."
     },
     {
@@ -116,7 +116,7 @@
       "content_kind": "html",
       "expected_rows": 2,
       "expected_outcome": "PARSED",
-      "canonical_sha256": "225504c729b099840ed4435dc72c225587985baaf39282ae7040b7355c81f354",
+      "canonical_sha256": "0a9709d9e82dc767d276a099f749a4eb18a26b79f80d13a941b0d548ad78772a",
       "sanitization": "Historical repository fixture; original capture and anonymization unverified. Do not distribute as sanitized live evidence."
     },
     {
@@ -129,7 +129,7 @@
       "content_kind": "html",
       "expected_rows": 1,
       "expected_outcome": "PARSED",
-      "canonical_sha256": "b8bbde6bcca1d53cf388df6a09812d158ddba3a9513d750568402196d490de12",
+      "canonical_sha256": "cf653d14d10db975e59226287e96c42507b2aceb7a347b1ebb7cb56d764c2673",
       "sanitization": "Historical repository fixture; original capture and anonymization unverified. Do not distribute as sanitized live evidence."
     },
     {
@@ -168,7 +168,7 @@
       "content_kind": "json",
       "expected_rows": null,
       "expected_outcome": "GOLDEN_OR_BINARY",
-      "canonical_sha256": "7dfc9cc94a25cbde5488bd0cd91114491842cd47c724d18075d2cc37eb203291",
+      "canonical_sha256": "ca16e6e0400692644e9eec01835ca7d7f48bcf62f79f15562b6d02492292da09",
       "sanitization": "Historical repository fixture; original capture and anonymization unverified. Do not distribute as sanitized live evidence."
     },
     {

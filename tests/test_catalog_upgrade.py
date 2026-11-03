@@ -45,7 +45,7 @@ class CatalogUpgradeTests(unittest.TestCase):
             rows = upgraded.get_documents('tax', '01/10/2026', '31/10/2026')
         self.assertEqual([row['ma_ho_so'] for row in rows], ['1'])
         self.assertEqual(rows[0]['_file_status'], 'downloaded')
-        self.assertEqual(Path(rows[0]['_file_path']), archive)
+        self.assertEqual(Path(rows[0]['_file_path']).resolve(), archive.resolve())
         self.assertTrue(archive.is_file())
         database = sqlite3.connect(self.root / 'catalog.sqlite3')
         try:

@@ -30,15 +30,18 @@ FORMATS = {
 
 
 def _copy_artifact(source: Path, output: Path, path: Path) -> None:
-    if not path.resolve().is_relative_to(source):
+    source = source.resolve()
+    output = output.resolve()
+    path = path.resolve()
+    if not path.is_relative_to(source):
         raise ValueError('Tệp nguồn nằm ngoài thư mục đã chọn')
     target = (output / path.relative_to(source)).resolve()
-    if not target.is_relative_to(output.resolve()):
+    if not target.is_relative_to(output):
         raise ValueError('Tên tệp không an toàn trong danh mục')
     pending = []
     for original, destination in ((path, target), (path.with_name(path.name + '.integrity.json'),
                                                    target.with_name(target.name + '.integrity.json'))):
-        if destination.is_symlink() or not destination.resolve().is_relative_to(output.resolve()):
+        if destination.is_symlink() or not destination.resolve().is_relative_to(output):
             raise ValueError('Tệp hoặc evidence đích không an toàn')
         if not original.is_file():
             continue
