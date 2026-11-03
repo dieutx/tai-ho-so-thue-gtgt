@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.1.2] — 2026-11-03
+
+- Tab Tờ khai: cột Thao tác đổi thành **Xem file** và mở XML của hồ sơ bằng ứng
+  dụng mặc định của Windows. ZIP gốc được giữ nguyên; XML tách ra nằm cạnh ZIP và
+  gắn với hash nội dung ZIP nên lần sau mở lại không giải nén lại.
+- Không dùng `extractall`: chặn member tuyệt đối/`..`/ổ đĩa/UNC/symlink, giới hạn
+  số member, dung lượng và tỉ lệ nén; ZIP có nhiều XML cùng loại được báo mơ hồ và
+  mở thư mục thay vì tự chọn sai tệp.
+
 ## [2.1.1] — 2026-11-03
 
 - Giảm một request `validateIdTkhai` cho mỗi tờ khai: chỉ dò khả năng tải AJAX
