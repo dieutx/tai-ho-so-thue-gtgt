@@ -100,7 +100,10 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
     patterns = {
         AuthOutcome.INVALID_CREDENTIALS: ('tên đăng nhập hoặc mật khẩu của bạn không chính xác',
             'tên đăng nhập hoặc mật khẩu không chính xác', 'tên đăng nhập hoặc mật khẩu không đúng',
-            'sai tên đăng nhập hoặc mật khẩu', 'invalid credentials'),
+            'sai tên đăng nhập hoặc mật khẩu',
+            # Cổng DVC trả đúng câu này cho sai mật khẩu.
+            'thông tin tài khoản hoặc mật khẩu không đúng',
+            'tài khoản hoặc mật khẩu không đúng', 'invalid credentials'),
         AuthOutcome.CAPTCHA_INVALID: ('captcha không đúng', 'captcha không chính xác', 'mã xác nhận không đúng',
             'mã xác thực không đúng', 'mã xác nhận không chính xác', 'mã xác thực không chính xác',
             'sai mã captcha', 'invalid captcha'),
@@ -122,8 +125,14 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
     if authenticated and (response.status_code == 401 or login_form or at_login):
         return AuthOutcome.EXPIRED_SESSION
     if phase == 'login_submit' and 200 <= response.status_code < 300:
-        if adapter == 'DVC' and isinstance(payload, dict) and str(payload.get('status')) == '200':
-            return AuthOutcome.SUCCESS
+        if adapter == 'DVC' and isinstance(payload, dict) and isinstance(payload.get('status'), str):
+            if payload['status'] == '200':
+                return AuthOutcome.SUCCESS
+            # Đã xác minh: sai mật khẩu trên DVC trả HTTP 200 kèm JSON
+            # ``{"status":"401", ...}``. Đây là lỗi đăng nhập, không phải
+            # phản hồi lạ, nên dừng ngay thay vì thử CAPTCHA thêm lần nữa.
+            if payload['status'] == '401':
+                return AuthOutcome.INVALID_CREDENTIALS
         # Legacy's reviewed navigation marker is in JavaScript; it is never
         # considered an error message or a signal that the session expired.
         home_operation = re.search(r'''[?&]dse_operationName=corporateHomeProc(?:[&'"\s<>]|$)''', unescape(text))
