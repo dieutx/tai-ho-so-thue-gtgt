@@ -4,6 +4,9 @@
 
 ## [2.1.1] — 2026-11-03
 
+- Cập nhật app không bắt tải lại: kho nằm ngoài EXE và database nâng cấp tại chỗ
+  (backup + integrity check trước khi ghi), nên hồ sơ và tệp đã tải vẫn dùng được
+  sau khi thay bản.
 - Tab Tờ khai: cột Thao tác đổi thành **Xem file** và mở XML của hồ sơ bằng ứng
   dụng mặc định của Windows. ZIP gốc được giữ nguyên; XML tách ra nằm cạnh ZIP và
   gắn với hash nội dung ZIP nên lần sau mở lại không giải nén lại.

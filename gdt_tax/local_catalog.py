@@ -24,6 +24,11 @@ CATALOGS = {"tax": "danh_sach_ho_so.json", "gnt": "danh_sach_giay_nop_tien.json"
             "notice": "danh_sach_thong_bao.json"}
 SCHEMA_VERSION = 1
 
+#: Bước nâng cấp schema chạy tại chỗ, theo thứ tự tăng dần: ``(version, SQL)``.
+#: Mỗi bước có backup và integrity check trước khi ghi, để bản cập nhật app đọc
+#: tiếp database cũ (hồ sơ và tệp đã tải) thay vì bắt người dùng tải lại.
+MIGRATIONS: tuple[tuple[int, str], ...] = ()
+
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -107,6 +112,8 @@ class LocalCatalog:
                 """)
             if version == 0 and self.integrity_check() != "ok":
                 raise ValueError("Database không toàn vẹn; giữ nguyên để phục hồi từ backup")
+        if 0 < version < SCHEMA_VERSION:
+            self.migrate(version)
 
     @contextmanager
     def connection(self):
@@ -119,6 +126,23 @@ class LocalCatalog:
                 yield db
         finally:
             db.close()
+
+    def migrate(self, version: int = 0) -> int:
+        """Nâng cấp database tại chỗ; hồ sơ và đường dẫn tệp đã tải giữ nguyên."""
+        for target, script in MIGRATIONS:
+            if target <= version:
+                continue
+            if self.path.exists() and self.path.stat().st_size:
+                self.backup()
+            with self.connection() as db:
+                db.executescript(script)
+                db.execute(f"PRAGMA user_version={int(target)}")
+                db.execute("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(?,?)",
+                           (target, now()))
+            if self.integrity_check() != "ok":
+                raise ValueError("Database không toàn vẹn sau nâng cấp; giữ nguyên để phục hồi từ backup")
+            version = target
+        return version
 
     def backup(self) -> Path:
         target = self.path.with_name("catalog.backup-" + uuid4().hex + ".sqlite3")
