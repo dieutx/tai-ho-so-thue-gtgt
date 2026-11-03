@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [2.1.2] — 2026-11-03
+
+- Cá nhân: ưu tiên DVC từ mốc chuyển nguồn; kỳ trước dùng canhan.gdt.gov.vn.
+  Không ép mọi kỳ sang cổng cũ. Đăng nhập DVC dùng đối tượng CN, CAPTCHA 5 ký tự,
+  giữ phiên giữa tra cứu/tải và chỉ xác thực lại một lần khi hết phiên.
+- Nhận diện đúng thông báo DVC “Thông tin tài khoản hoặc mật khẩu không đúng”;
+  dừng thử lại và báo lỗi tài khoản thay vì lỗi phản hồi chưa xác định.
+- CLI nhận `--account-type CN`; tờ khai và thông báo dùng adapter cá nhân,
+  giấy nộp tiền cá nhân báo chưa hỗ trợ trước khi gửi request doanh nghiệp.
+- Chẩn đoán EXE nhận loại tài khoản và proxy; nhãn kết nối hiển thị đúng cổng.
+- Kiểm tra cập nhật và liên kết tải chuyển từ GitLab sang GitHub Releases;
+  bỏ qua bản nháp/thử nghiệm, không tạo link EXE giả khi chưa có asset.
+
 ## [2.1.1] — 2026-11-03
 
 - Cập nhật app không bắt tải lại: kho nằm ngoài EXE và database nâng cấp tại chỗ

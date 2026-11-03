@@ -6,11 +6,16 @@ khi cổng thêm luồng mới chỉ cần bổ sung ở đây.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ..constants import SOURCE_DVC, SOURCE_ETAX, SOURCE_ETAX_LEGACY
 from .base import Portal
 from .dvc import DvcPortal
 from .etax import EtaxPortal
 from .etax_legacy import EtaxLegacyFallback, EtaxLegacyPortal
+
+if TYPE_CHECKING:
+    from .canhan import CanhanPortal
 
 PORTAL_CLASSES = {
     SOURCE_ETAX_LEGACY: EtaxLegacyPortal,
@@ -19,11 +24,15 @@ PORTAL_CLASSES = {
 }
 
 
-def build_portals(http, captcha, settings, csrf: str = "", logger=None) -> dict[str, Portal]:
+def build_portals(http, captcha, settings, csrf: str = "", logger=None) -> dict[str, Portal | CanhanPortal]:
     """Chỉ tạo nguồn đang bật; đăng nhập legacy được trì hoãn tới lần tra cứu."""
-    portals: dict[str, Portal] = {}
+    portals: dict[str, Portal | CanhanPortal] = {}
     for source, portal_class in PORTAL_CLASSES.items():
         if not settings.source_enabled(source):
+            continue
+        if source == SOURCE_ETAX_LEGACY and settings.account_type == 'CN':
+            from .canhan import CanhanPortal
+            portals[source] = CanhanPortal(http, captcha, settings, logger)
             continue
         if portal_class is EtaxPortal:
             portals[source] = portal_class(http, captcha, settings, csrf=csrf, logger=logger)

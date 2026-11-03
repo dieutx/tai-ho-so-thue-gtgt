@@ -9,8 +9,8 @@ import requests
 
 from . import __version__
 
-RELEASES_URL = "https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/releases"
-RELEASES_API = "https://gitlab.com/api/v4/projects/dieutx%2Ftai-ho-so-thue-gtgt/releases"
+RELEASES_URL = "https://github.com/dieutx/tai-ho-so-thue-gtgt/releases"
+RELEASES_API = "https://api.github.com/repos/dieutx/tai-ho-so-thue-gtgt/releases"
 
 
 @dataclass(frozen=True)
@@ -23,12 +23,10 @@ class ReleaseInfo:
 
 def latest_release(get=requests.get) -> ReleaseInfo | None:
     """Return the highest public release, or None when the public API is unavailable."""
-    from packaging.version import InvalidVersion, Version
-
     response = get(
         RELEASES_API,
         timeout=8,
-        headers={"Accept": "application/json", "User-Agent": f"TaiHoSoThue/{__version__}"},
+        headers={"Accept": "application/vnd.github+json", "User-Agent": f"TaiHoSoThue/{__version__}"},
     )
     if getattr(response, "status_code", 0) != 200:
         return None
@@ -36,11 +34,17 @@ def latest_release(get=requests.get) -> ReleaseInfo | None:
         releases = response.json()
     except (ValueError, TypeError):
         return None
+    return _select_release(releases)
+
+
+def _select_release(releases) -> ReleaseInfo | None:
+    from packaging.version import InvalidVersion, Version
+
     if not isinstance(releases, list):
         return None
     best: tuple[Version, ReleaseInfo] | None = None
     for item in releases:
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or item.get('draft') or item.get('prerelease'):
             continue
         tag = str(item.get("tag_name") or "").strip()
         version = tag.removeprefix("desktop-v").removeprefix("v")
@@ -48,19 +52,21 @@ def latest_release(get=requests.get) -> ReleaseInfo | None:
             parsed = Version(version)
         except InvalidVersion:
             continue
-        links = item.get("assets", {}).get("links", [])
+        if parsed.is_prerelease or parsed.is_devrelease:
+            continue
+        links = item.get("assets", [])
         download = ""
         if isinstance(links, list):
             for link in links:
                 if (isinstance(link, dict) and link.get("name") == "TaiHoSoThue-Windows.exe"
-                        and link.get("direct_asset_url")):
-                    download = str(link["direct_asset_url"])
+                        and link.get("browser_download_url")):
+                    download = str(link["browser_download_url"])
                     break
-        page = str((item.get("_links") or {}).get("self") or "") or (
-            f"{RELEASES_URL}/{quote(tag, safe='')}"
+        page = str(item.get("html_url") or "") or (
+            f"{RELEASES_URL}/tag/{quote(tag, safe='')}"
         )
         if not download:
-            download = f"{RELEASES_URL}/{quote(tag, safe='')}/downloads/TaiHoSoThue-Windows.exe"
+            download = page
         info = ReleaseInfo(str(parsed), tag, page, download)
         if best is None or parsed > best[0]:
             best = (parsed, info)
@@ -85,23 +91,23 @@ def release_message(get=requests.get) -> str:
     try:
         response = get(RELEASES_API, timeout=12, headers={"Accept": "application/json"})
         if response.status_code in {401, 403, 404}:
-            return 'Trang phát hành đang riêng tư hoặc chưa có bản công khai. <a href="' + RELEASES_URL + '">Mở GitLab để xem bản tải</a>.'
+            return 'Trang phát hành đang riêng tư hoặc chưa có bản công khai. <a href="' + RELEASES_URL + '">Mở GitHub để xem bản tải</a>.'
         response.raise_for_status()
         releases = response.json()
         if not isinstance(releases, list) or not releases:
-            return "Chưa có phiên bản phát hành công khai trên GitLab."
-        latest = releases[0]
-        if not isinstance(latest, dict):
-            return "Thông tin phát hành chưa đúng định dạng. Mở GitLab để xem chi tiết."
-        tag = str(latest.get("tag_name", ""))[:80]
+            return "Chưa có phiên bản phát hành công khai trên GitHub."
+        latest = _select_release(releases)
+        if latest is None:
+            return "Chưa có phiên bản ổn định hợp lệ. Mở GitHub để xem chi tiết."
+        tag = latest.tag[:80]
         from packaging.version import InvalidVersion, Version
         try:
             newer = Version(tag.removeprefix("desktop-v").removeprefix("v")) > Version(__version__)
         except InvalidVersion:
-            return "Có thông tin phát hành nhưng chưa xác định được thứ tự phiên bản. Mở GitLab để xem chi tiết."
+            return "Có thông tin phát hành nhưng chưa xác định được thứ tự phiên bản. Mở GitHub để xem chi tiết."
         if newer:
-            url = RELEASES_URL + "/" + quote(tag, safe="")
+            url = html.escape(latest.page_url, quote=True)
             return f'Có bản mới: <b>{html.escape(tag)}</b>. <a href="{url}">Xem thay đổi và tải bản phát hành</a>.'
         return "Bản đang dùng đã bằng hoặc mới hơn bản phát hành công khai."
     except (requests.RequestException, ValueError, TypeError):
-        return "Chưa kiểm tra được bản mới. Kiểm tra mạng hoặc mở trang phát hành trên GitLab."
+        return "Chưa kiểm tra được bản mới. Kiểm tra mạng hoặc mở trang phát hành trên GitHub."

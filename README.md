@@ -3,7 +3,7 @@
 Tra cứu và tải **tờ khai, giấy nộp tiền, thông báo thuế**; đọc XML/ZIP và xuất Excel.
 Bản Windows x64 chạy bằng một file EXE, có CAPTCHA tự động, không cần cài Python hoặc Excel.
 
-**[⬇ Tải bản Windows mới nhất](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/releases/permalink/latest/downloads/TaiHoSoThue-Windows.exe)** · [Xem các bản phát hành](https://gitlab.com/dieutx/tai-ho-so-thue-gtgt/-/releases)
+**[⬇ Tải bản Windows mới nhất](https://github.com/dieutx/tai-ho-so-thue-gtgt/releases/latest/download/TaiHoSoThue-Windows.exe)** · [Xem các bản phát hành](https://github.com/dieutx/tai-ho-so-thue-gtgt/releases)
 
 **[🐍 Chạy bằng Python như trước — cài đặt, cấu hình .env và các lệnh CLI](docs/CLI_GUIDE.md)**
 

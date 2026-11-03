@@ -99,6 +99,7 @@ def classify_response(response, adapter: str, *, phase='login_submit', authentic
     visible = ' '.join((soup.get_text(' ', strip=True) + ' ' + json_message).casefold().split())
     patterns = {
         AuthOutcome.INVALID_CREDENTIALS: ('tên đăng nhập hoặc mật khẩu của bạn không chính xác',
+            'thông tin tài khoản hoặc mật khẩu không đúng',
             'tên đăng nhập hoặc mật khẩu không chính xác', 'tên đăng nhập hoặc mật khẩu không đúng',
             'sai tên đăng nhập hoặc mật khẩu', 'invalid credentials'),
         AuthOutcome.CAPTCHA_INVALID: ('captcha không đúng', 'captcha không chính xác', 'mã xác nhận không đúng',

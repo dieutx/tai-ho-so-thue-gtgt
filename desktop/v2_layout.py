@@ -93,7 +93,7 @@ def build_workspace(window):
     self.update_text.setWordWrap(True)
     self.update_text.setAccessibleName('Có bản cập nhật mới')
     update_row.addWidget(self.update_text, 1)
-    self.update_download = button('Tải ngay', self.download_update, 'Tải bản mới từ GitLab')
+    self.update_download = button('Tải ngay', self.download_update, 'Tải bản mới từ GitHub')
     self.update_download.setObjectName('primary')
     update_row.addWidget(self.update_download)
     self.update_later = button('Để sau', self.dismiss_update, 'Ẩn thông báo bản mới')

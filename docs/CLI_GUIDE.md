@@ -114,6 +114,7 @@ Cấu hình tối thiểu:
 ```dotenv
 GDT_USERNAME=ma_so_thue-QL
 GDT_PASSWORD=mat_khau_thue_dien_tu
+GDT_ACCOUNT_TYPE=DN
 GDT_FROM_DATE=01/06/2025
 GDT_TO_DATE=30/06/2025
 GDT_DOWNLOAD_DIR=download
@@ -122,6 +123,11 @@ GDT_LEGACY_ETAX=true
 GDT_DVC_ENABLED=false
 GDT_ETAX_CUTOFF=01/07/2025
 ```
+
+Với cá nhân, đặt `GDT_ACCOUNT_TYPE=CN` hoặc dùng `--account-type CN`.
+Tờ khai từ cutoff dùng DVC khi bật `--enable-dvc`; trước cutoff dùng cổng cá nhân
+`canhan.gdt.gov.vn`. Thông báo cá nhân dùng cổng cũ; GNT cá nhân chưa hỗ trợ.
+Xem [luồng cá nhân và kiểm chứng](PERSONAL_ACCOUNTS.md).
 
 Tham số dòng lệnh ưu tiên hơn biến môi trường; biến môi trường ưu tiên hơn
 `.env`. File `.env` đã nằm trong `.gitignore`.

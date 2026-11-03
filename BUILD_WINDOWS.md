@@ -125,7 +125,7 @@ cần máy/phiên tương ứng; không suy ra đã PASS từ máy build.
   ghi trong REVIEW vẫn áp dụng. Kết quả tải thật được ghi trong báo cáo nghiệm thu.
 - SQLite giữ toàn bộ lịch sử theo tài khoản/nghiệp vụ; bảng UI đọc lại đúng kỳ đang chọn. Xem [kho local và rollback](docs/LOCAL_DATABASE_GUIDE.md).
 - Nhấn `v2.0.0` để xem thay đổi và kiểm tra bản mới. Chỉ khi bấm nút kiểm tra,
-  app mới đọc GitLab public releases; không gửi tài khoản thuế, không tự cài.
+  app đọc GitHub public releases; không gửi tài khoản thuế, không tự cài.
   Repo riêng tư/chưa có release sẽ được thông báo rõ, không báo giả có cập nhật.
 - Menu `Tệp & nhật ký` có tải nhiều nhóm tuần tự và mở/chuyển dữ liệu cũ.
   Tệp hợp lệ được dùng lại; màu sắc và nhãn chữ thể hiện thao tác/trạng thái.
@@ -133,7 +133,15 @@ cần máy/phiên tương ứng; không suy ra đã PASS từ máy build.
 Kết quả thực chạy và SHA-256 của bản bàn giao ghi ở `docs/DESKTOP_ACCEPTANCE.md`;
 số đo dung lượng ở `docs/BUILD_SIZE_REPORT.md`.
 
-## Phát hành GitLab
+## Phát hành GitHub
+
+Repository hiện tại là `https://github.com/dieutx/tai-ho-so-thue-gtgt`.
+Build và smoke bằng lệnh phía trên tạo EXE, `SHA256SUMS.txt` và
+`release-manifest.json` trong `dist`. Workflow Windows trên GitHub hỗ trợ build
+artifact; phát hành công khai là một thao tác riêng. Bộ kiểm tra cập nhật đọc
+GitHub Releases, bỏ qua draft/prerelease và mở trang release nếu chưa có EXE.
+
+## Quy trình GitLab cũ (chỉ tham khảo)
 
 Sau khi build và kiểm chứng, commit/push mã nguồn và tag `desktop-vX.Y.Z`.
 Token API được lưu riêng trong Windows Credential Manager với tên

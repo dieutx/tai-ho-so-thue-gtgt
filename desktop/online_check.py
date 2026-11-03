@@ -30,11 +30,13 @@ def read_request(path: Path) -> dict:
     request = json.loads(path.read_text(encoding='utf-8'))
     required = {'schema_version', 'env_file', 'username', 'output', 'report', 'periods', 'download'}
     if (not isinstance(request, dict) or not required.issubset(request)
-            or set(request) - required - {'mode', 'dvc'}
+            or set(request) - required - {'mode', 'dvc', 'account_type'}
             or request['schema_version'] != 1):
         raise ValueError('LIVE_REQUEST_SCHEMA_INVALID')
     if request.get('mode', 'tax') not in ('tax', 'gnt', 'notice'):
         raise ValueError('LIVE_MODE_INVALID')
+    if request.get('account_type', 'DN') not in ('DN', 'CN'):
+        raise ValueError('LIVE_ACCOUNT_TYPE_INVALID')
     if (not isinstance(request.get('dvc', False), bool)
             or request.get('dvc', False) and request.get('mode', 'tax') != 'tax'):
         raise ValueError('LIVE_DVC_SCOPE_INVALID')
@@ -88,7 +90,8 @@ def online_check(path: Path) -> int:
     budget = check_budget()
     config = RunConfig('login', Path(request['output']), username=request['username'],
         password=credentials['GDT_PASSWORD'], preferences=preferences, budget=budget,
-        dvc=request.get('dvc', False))
+        account_type=request.get('account_type', 'DN'),
+        proxy=credentials.get('GDT_PROXY_URL', ''), dvc=request.get('dvc', False))
     credentials.clear()
     config.validate()
     application = QApplication.instance() or QApplication([])

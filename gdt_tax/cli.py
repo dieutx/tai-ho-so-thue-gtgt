@@ -93,6 +93,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--from-date", metavar="dd/mm/yyyy", help="Ngày bắt đầu tra cứu")
     parser.add_argument("--to-date", metavar="dd/mm/yyyy", help="Ngày kết thúc tra cứu")
     parser.add_argument("--case-id", help="Chỉ tải một mã hồ sơ cụ thể")
+    parser.add_argument('--account-type', choices=('DN', 'CN'),
+                        help='DN: doanh nghiệp; CN: cá nhân (CAPTCHA 5 ký tự)')
     parser.add_argument("--output-dir", help="Thư mục lưu ZIP và metadata")
     parser.add_argument(
         "--solver",
@@ -211,6 +213,7 @@ def _main(argv: list[str] | None = None) -> int:
             from_date=args.from_date,
             to_date=args.to_date,
             case_id=args.case_id,
+            account_type=args.account_type,
             download_dir=args.output_dir,
             captcha_solver=args.solver,
             captcha_options=parse_solver_options(args.solver_option) or None,

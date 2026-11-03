@@ -94,6 +94,23 @@ class AuthContractTests(unittest.TestCase):
             http.post.assert_called_once()
             solver.rejected.assert_not_called()
 
+    def test_dvc_live_credential_message_is_terminal_and_keeps_five_character_captcha(self):
+        settings = Settings.from_env(environ={}, env_file=None, username='synthetic',
+            password='fixture', account_type='CN', login_attempts=6)
+        http, solver = Mock(hooks=RunHooks()), Mock()
+        solver.solve.return_value = 'ab123'
+        http.get.return_value = FakeResponse('<meta name="csrf-token" content="synthetic">')
+        http.post.return_value = FakeResponse(json_payload={'status': '401',
+            'desc': 'Thông tin tài khoản hoặc mật khẩu không đúng, vui lòng kiểm tra lại!'})
+        with patch('gdt_tax.auth.fetch_captcha', return_value=b'synthetic'):
+            with self.assertRaises(AuthFailure) as caught:
+                auth.login(http, solver, settings)
+        self.assertEqual(caught.exception.outcome, AuthOutcome.INVALID_CREDENTIALS)
+        http.post.assert_called_once()
+        self.assertEqual(http.post.call_args.kwargs['data']['doiTuong'], 'CN')
+        self.assertEqual(http.post.call_args.kwargs['data']['captcha'], 'ab123')
+        solver.rejected.assert_not_called()
+
     def test_dvc_captcha_retry_uses_rotated_tokens_and_stops_at_budget(self):
         settings = Settings.from_env(environ={}, env_file=None, username='synthetic', password='fixture', login_attempts=2)
         http, solver = Mock(hooks=RunHooks()), Mock()

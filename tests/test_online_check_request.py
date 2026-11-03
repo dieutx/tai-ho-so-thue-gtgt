@@ -33,6 +33,14 @@ class OnlineCheckRequestTests(unittest.TestCase):
         self.assertFalse(Path(self.request['output']).exists())
         self.assertFalse(Path(self.request['report']).exists())
 
+    def test_personal_account_type_is_explicit_and_validated(self):
+        self.request['account_type'] = 'CN'
+        self.assertEqual(self.read()['account_type'], 'CN')
+        for value in ('personal', None, [], 1):
+            self.request['account_type'] = value
+            with self.assertRaisesRegex(ValueError, 'ACCOUNT_TYPE'):
+                self.read()
+
     def test_live_preferences_pass_the_production_settings_contract(self):
         config = RunConfig('login', self.root, username='synthetic', password='synthetic-secret',
                            preferences=check_preferences())

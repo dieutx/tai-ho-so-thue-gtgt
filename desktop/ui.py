@@ -329,7 +329,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         QTimer.singleShot(0, self.fit_screen)
         if (QApplication.platformName() != "offscreen"
                 and os.environ.get("TAIHOSOTHUE_DISABLE_UPDATE_CHECK") != "1"):
-            # Kiểm tra công khai trên GitLab sau khi cửa sổ đã mở; không chặn UI.
+            # Kiểm tra công khai trên GitHub sau khi cửa sổ đã mở; không chặn UI.
             QTimer.singleShot(1200, self.auto_check_updates)
         if self.startup_error:
             QTimer.singleShot(0, lambda: self.error(self.startup_error))
@@ -338,7 +338,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         build_workspace(self)
 
     def auto_check_updates(self) -> None:
-        """Startup-only public GitLab check; never blocks or touches tax sessions."""
+        """Startup-only public GitHub check; never blocks or touches tax sessions."""
         if self._update_checker is not None:
             return
         checker = NewerReleaseChecker(self)
@@ -408,7 +408,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
                                         " • Source: " + str(release.get('source_sha', 'chưa ghi nhận'))[:12]))
             except (OSError, ValueError):
                 pass
-        status = QLabel("App tự kiểm tra bản mới khi mở. Chỉ gửi yêu cầu công khai tới GitLab; không gửi thông tin tài khoản thuế.")
+        status = QLabel("App tự kiểm tra bản mới khi mở. Chỉ gửi yêu cầu công khai tới GitHub; không gửi thông tin tài khoản thuế.")
         status.setWordWrap(True)
         status.setOpenExternalLinks(True)
         layout.addWidget(status)
@@ -438,8 +438,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
     def warning_update(self, *_args) -> None:
         if not hasattr(self, "from_date"):
             return
-        warning = (self.mode == "tax" and self.controller.sessions.account_type != "CN"
-                   and not self.dvc
+        warning = (self.mode == "tax" and not self.dvc
                    and self.to_date.date() >= QDate.fromString(self.preferences.cutoff, "dd/MM/yyyy"))
         self.warning.setText(f"Từ {self.preferences.cutoff}: chưa tra cứu DVC — kết quả có thể chưa đầy đủ" if warning else "")
         self.warning.setVisible(warning)
@@ -453,17 +452,22 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             return
         account = self.controller.sessions.account
         personal = account.account_type == "CN"
+        personal_source = ("DVC và Thuế cá nhân" if self.controller.sessions.dvc_authenticated
+                           and self.controller.sessions.session.authenticated else
+                           "DVC cá nhân" if self.controller.sessions.dvc_authenticated or self.dvc
+                           and not self.controller.sessions.session.authenticated else "Thuế cá nhân")
         prefix = "Cá nhân" if personal else "MST"
         self.account_label.setText(self.fontMetrics().elidedText(prefix + ": " + (account.username or "—"),
                                   Qt.TextElideMode.ElideMiddle, self.account_label.maximumWidth()))
         self.account_label.setToolTip(account.username)
         labels = {"DISCONNECTED": "Chưa đăng nhập", "AUTHENTICATING": "Đang đăng nhập",
-                  "CONNECTED": "DVC cá nhân: Đã kết nối" if personal else "ETAX: Đã kết nối",
+                  "CONNECTED": personal_source + ": Đã kết nối" if personal else "ETAX: Đã kết nối",
                   "EXPIRED": "Cần đăng nhập lại"}
         self.source_badge.setText(labels[account.state])
         self.source_badge.setStyleSheet("color:" + ("#15803D" if account.state == "CONNECTED" else "#92400E") + ";")
         if personal:
-            self.source_badge.setToolTip("Tài khoản cá nhân: phiên DVC riêng; không dùng phiên ETAX doanh nghiệp")
+            self.source_badge.setToolTip("DVC từ " + self.preferences.cutoff
+                + "; canhan.gdt.gov.vn cho kỳ trước và thông báo thuế; mỗi cổng có phiên riêng")
         else:
             self.source_badge.setToolTip("DVC: Thử nghiệm, phiên riêng" if self.dvc else "DVC: Chưa bật; ETAX legacy trước cutoff")
         self.account_button.setText("Đổi tài khoản" if account.username else "Đăng nhập")

@@ -67,6 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--from-date", metavar="dd/mm/yyyy", help="Ngày lập GNT bắt đầu")
     parser.add_argument("--to-date", metavar="dd/mm/yyyy", help="Ngày lập GNT kết thúc")
     parser.add_argument("--output-dir", help="Thư mục lưu XML và danh mục GNT")
+    parser.add_argument('--account-type', choices=('DN', 'CN'), help='Loại tài khoản thuế')
     parser.add_argument(
         "--solver",
         help=f"Bộ nhận dạng CAPTCHA: {', '.join(available_solvers())}",
@@ -142,6 +143,7 @@ def _main(argv: list[str] | None = None) -> int:
     try:
         settings = Settings.from_env(
             env_file=args.env_file,
+            account_type=args.account_type,
             from_date=args.from_date,
             to_date=args.to_date,
             download_dir=args.output_dir,

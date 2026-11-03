@@ -223,19 +223,36 @@ class PersonalOriginTests(unittest.TestCase):
 
 
 class PersonalConfigurationTests(unittest.TestCase):
-    def test_personal_uses_canhan_for_all_dates(self):
+    def test_personal_routes_legacy_before_cutoff_and_dvc_after(self):
         from desktop.services import RunConfig
         from desktop.settings_store import Preferences
 
         config = RunConfig('tax', Path('/tmp/personal-account-test'), username='synthetic',
-                           password='fixture', account_type='CN', preferences=Preferences())
+                           password='fixture', account_type='CN', dvc=True,
+                           from_date='30/06/2025', to_date='02/07/2025', preferences=Preferences())
         settings = config.settings()
         self.assertEqual(settings.account_type, 'CN')
         self.assertTrue(settings.legacy_etax)
-        self.assertFalse(settings.dvc_enabled)
-        self.assertEqual(settings.etax_cutoff.year, 2100)
-        self.assertTrue(settings.periods())
-        self.assertTrue(all(period.source == 'ETAX_LEGACY' for period in settings.periods()))
+        self.assertTrue(settings.dvc_enabled)
+        self.assertEqual(settings.etax_cutoff.year, 2025)
+        self.assertEqual([period.source for period in settings.periods()], ['ETAX_LEGACY', 'DVC'])
+
+    def test_personal_cli_uses_the_personal_legacy_adapter(self):
+        from gdt_tax.cli import build_parser
+        from gdt_tax.portals import build_portals
+
+        self.assertEqual(build_parser().parse_args(['--account-type', 'CN']).account_type, 'CN')
+        portals = build_portals(Mock(), StubCaptcha(), personal_settings())
+        self.assertIsInstance(portals['ETAX_LEGACY'], CanhanPortal)
+
+    def test_personal_gnt_core_rejects_before_any_network(self):
+        from gdt_tax.errors import ConfigError
+        from gdt_tax.gnt.pipeline import GntPipeline
+
+        http = Mock()
+        with self.assertRaisesRegex(ConfigError, 'UNSUPPORTED_ACCOUNT_FLOW'):
+            GntPipeline(personal_settings(), http, StubCaptcha())
+        self.assertFalse(http.mock_calls)
 
     def test_personal_output_and_credentials_stay_separate(self):
         from desktop.account_store import target_name
@@ -249,6 +266,114 @@ class PersonalConfigurationTests(unittest.TestCase):
 
 
 class PersonalSessionTests(unittest.TestCase):
+    def test_personal_mixed_period_uses_both_origins_and_keeps_both_results(self):
+        from desktop.services import JobResult, RunConfig
+        from desktop.sessions import ETaxSessionManager
+        from gdt_tax.run_hooks import RunHooks
+
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ETaxSessionManager(dvc_factory=Mock(return_value=Mock()))
+            self.addCleanup(manager.close)
+            config = RunConfig('tax', Path(directory), username='synthetic', password='fixture',
+                               account_type='CN', dvc=True, from_date='30/06/2025', to_date='02/07/2025')
+            outcomes = [JobResult('SUCCESS', 'OK', config.output, rows=[{'nguon': 'ETAX_LEGACY'}]),
+                        JobResult('SUCCESS', 'OK', config.output, rows=[{'nguon': 'DVC'}])]
+            with patch('desktop.sessions.CanhanPortal') as legacy, \
+                    patch('desktop.sessions.dvc_login', return_value=True) as login, \
+                    patch('desktop.sessions.run_online', side_effect=outcomes) as run:
+                result = manager.execute(config, RunHooks(), StubCaptcha())
+            self.assertEqual(result.state, 'SUCCESS')
+            self.assertEqual([row['nguon'] for row in result.rows], ['ETAX_LEGACY', 'DVC'])
+            self.assertEqual([call.args[0].to_date for call in run.call_args_list],
+                             ['30/06/2025', '02/07/2025'])
+            self.assertIsNot(run.call_args_list[0].kwargs['http'], run.call_args_list[1].kwargs['http'])
+            legacy.return_value.login.assert_called_once()
+            login.assert_called_once()
+
+    def test_personal_dvc_login_and_query_reuse_session_without_legacy_login(self):
+        from dataclasses import replace
+
+        from desktop.services import JobResult, RunConfig
+        from desktop.sessions import ETaxSessionManager
+        from gdt_tax.run_hooks import RunHooks
+
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ETaxSessionManager(dvc_factory=Mock(return_value=Mock()))
+            self.addCleanup(manager.close)
+            config = RunConfig('login', Path(directory), username='synthetic',
+                               password='fixture', account_type='CN', dvc=True)
+            with patch('desktop.sessions.dvc_login', return_value=True) as login, \
+                    patch('desktop.sessions.CanhanPortal') as legacy, \
+                    patch('desktop.sessions.run_online',
+                          return_value=JobResult('SUCCESS', 'OK', config.output)) as run:
+                self.assertEqual(manager.execute(config, RunHooks(), StubCaptcha()).state, 'SUCCESS')
+                query = replace(config, mode='tax', from_date='01/10/2026', to_date='31/10/2026')
+                self.assertEqual(manager.execute(query, RunHooks(), StubCaptcha()).state, 'SUCCESS')
+            login.assert_called_once()
+            self.assertEqual(login.call_args.args[2].account_type, 'CN')
+            legacy.assert_not_called()
+            self.assertIs(run.call_args.kwargs['http'], manager.dvc_http)
+            self.assertFalse(run.call_args.kwargs['authenticate'])
+            self.assertTrue(manager.dvc_authenticated)
+
+    def test_personal_dvc_bad_credentials_stop_without_legacy_fallback(self):
+        from desktop.services import RunConfig
+        from desktop.sessions import ETaxSessionManager
+        from gdt_tax.auth_outcomes import AuthFailure, AuthOutcome
+        from gdt_tax.run_hooks import RunHooks
+
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ETaxSessionManager(dvc_factory=Mock(return_value=Mock()))
+            self.addCleanup(manager.close)
+            config = RunConfig('login', Path(directory), username='synthetic',
+                               password='fixture', account_type='CN', dvc=True)
+            with patch('desktop.sessions.dvc_login',
+                       side_effect=AuthFailure(AuthOutcome.INVALID_CREDENTIALS)) as login, \
+                    patch('desktop.sessions.CanhanPortal') as legacy:
+                result = manager.execute(config, RunHooks(), StubCaptcha())
+            self.assertEqual(result.error_code, 'AUTH_INVALID_CREDENTIALS')
+            login.assert_called_once()
+            legacy.assert_not_called()
+            self.assertFalse(manager.dvc_authenticated)
+            self.assertEqual(manager.account.state, 'EXPIRED')
+
+    def test_personal_dvc_expiry_retries_once_then_stops(self):
+        from desktop.services import RunConfig
+        from desktop.sessions import ETaxSessionManager
+        from gdt_tax.legacy_session import SessionExpired
+        from gdt_tax.run_hooks import RunHooks
+
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ETaxSessionManager(dvc_factory=Mock(return_value=Mock()))
+            self.addCleanup(manager.close)
+            config = RunConfig('tax', Path(directory), username='synthetic', password='fixture',
+                               account_type='CN', dvc=True, from_date='01/10/2026', to_date='31/10/2026')
+            with patch('desktop.sessions.dvc_login', return_value=True) as login, \
+                    patch('desktop.sessions.run_online', side_effect=SessionExpired()) as run:
+                result = manager.execute(config, RunHooks(), StubCaptcha())
+            self.assertEqual(result.error_code, 'AUTH_EXPIRED_SESSION')
+            self.assertEqual(login.call_count, 2)
+            self.assertEqual(run.call_count, 2)
+
+    def test_personal_disabled_dvc_does_not_authenticate_or_use_legacy(self):
+        from desktop.services import JobResult, RunConfig
+        from desktop.sessions import ETaxSessionManager
+        from gdt_tax.run_hooks import RunHooks
+
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ETaxSessionManager(dvc_factory=Mock(return_value=Mock()))
+            self.addCleanup(manager.close)
+            config = RunConfig('tax', Path(directory), username='synthetic', password='fixture',
+                               account_type='CN', dvc=False, from_date='01/10/2026', to_date='31/10/2026')
+            with patch('desktop.sessions.dvc_login') as login, \
+                    patch('desktop.sessions.CanhanPortal') as legacy, \
+                    patch('desktop.sessions.run_online',
+                          return_value=JobResult('PARTIAL', 'DVC disabled', config.output)):
+                result = manager.execute(config, RunHooks(), StubCaptcha())
+            self.assertEqual(result.state, 'PARTIAL')
+            login.assert_not_called()
+            legacy.assert_not_called()
+
     def test_personal_tax_uses_canhan_portal_and_skips_dvc(self):
         from desktop.services import JobResult, RunConfig
         from desktop.sessions import ETaxSessionManager

@@ -8,6 +8,7 @@ from datetime import timedelta
 from threading import RLock
 from typing import Any
 
+from gdt_tax.auth import login as dvc_login
 from gdt_tax.auth_outcomes import AuthFailure, AuthOutcome, classify_response
 from gdt_tax.constants import LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from gdt_tax.errors import LegacyPageError
@@ -151,7 +152,7 @@ class ETaxSessionManager:
         settings = config.settings()
         fingerprint = (self.account.version, config.proxy, tuple(sorted(config.extra_headers.items())),
                        settings.request_timeout, settings.http_retries, settings.header_profile)
-        if self.http is not None and fingerprint != self._fingerprint:
+        if (self.http is not None or self.dvc_http is not None) and fingerprint != self._fingerprint:
             self.invalidate()
         if self.http is None:
             self.http = self.client_factory(session_state=self.session, timeout=settings.request_timeout,
@@ -183,6 +184,11 @@ class ETaxSessionManager:
     def _dvc_client(self, config: RunConfig, hooks: RunHooks, logger) -> Any:
         """Một phiên DVC dùng chung cho tài khoản cá nhân; không dùng cookie ETAX."""
         settings = config.settings()
+        fingerprint = (self.account.version, config.proxy, tuple(sorted(config.extra_headers.items())),
+                       settings.request_timeout, settings.http_retries, settings.header_profile)
+        if (self.http is not None or self.dvc_http is not None) and fingerprint != self._fingerprint:
+            self.invalidate()
+        self._fingerprint = fingerprint
         if self.dvc_http is None:
             self.dvc_http = self.dvc_factory(
                 timeout=settings.request_timeout, retries=settings.http_retries,
@@ -192,6 +198,35 @@ class ETaxSessionManager:
             self.dvc_http.hooks = hooks
             self.dvc_http.logger = logger
         return self.dvc_http
+
+    def _execute_personal_dvc(self, config: RunConfig, hooks: RunHooks, captcha, logger) -> JobResult:
+        """DVC uses CN credentials and its own reusable cookie jar."""
+        for attempt in range(2):
+            try:
+                http = self._dvc_client(config, hooks, logger)
+                if config.dvc and not self.dvc_authenticated:
+                    self.account.state = 'AUTHENTICATING'
+                    hooks.emit(session='AUTHENTICATING')
+                    if not dvc_login(http, captcha, config.settings(), logger):
+                        raise AuthFailure(AuthOutcome.SCHEMA_UNKNOWN)
+                    self.dvc_authenticated = True
+                    self.account.state = 'CONNECTED'
+                    hooks.emit(session='CONNECTED')
+                if config.mode == 'login':
+                    return JobResult('SUCCESS', 'DVC cá nhân: Đã kết nối', config.output)
+                return run_online(config, hooks, captcha, logger, http=http,
+                                  close_resources=False, propagate_auth=True, authenticate=False)
+            except SessionExpired:
+                self.invalidate()
+                hooks.emit(session='EXPIRED')
+                if attempt == 1:
+                    return JobResult('ERROR', 'Phiên DVC tiếp tục hết hạn; hãy đăng nhập lại.',
+                                     config.output, errors=1, error_code='AUTH_EXPIRED_SESSION')
+            except AuthFailure as error:
+                self.invalidate()
+                hooks.emit(session='EXPIRED')
+                return JobResult('ERROR', str(error), config.output, errors=1, error_code=error.code)
+        raise AssertionError('Unreachable')
 
     def _execute_personal(self, config: RunConfig, hooks: RunHooks, captcha, logger,
                           settings) -> JobResult:
@@ -211,6 +246,10 @@ class ETaxSessionManager:
         if config.mode not in {"login", "tax", "notice"}:
             return JobResult("ERROR", "Tài khoản cá nhân chưa hỗ trợ chế độ này.",
                              config.output, errors=1, error_code='UNSUPPORTED_ACCOUNT_FLOW')
+
+        if (config.mode == 'login' and config.dvc or config.mode == 'tax'
+                and any(period.source != SOURCE_ETAX_LEGACY for period in settings.periods())):
+            return self._execute_personal_dvc(config, hooks, captcha, logger)
 
         http = self._client(config, hooks, logger)
         portal = CanhanPortal(http, captcha, settings, logger, session_state=self.session)
@@ -274,10 +313,10 @@ class ETaxSessionManager:
             settings = config.settings()
             if config.mode != "login":
                 prepare_output(settings)
-            if config.account_type == "CN":
-                return self._execute_personal(config, hooks, captcha, logger, settings)
             if config.mode == "tax" and config.dvc and settings.from_date < settings.etax_cutoff <= settings.to_date:
                 return self._mixed_tax(config, hooks, captcha, logger)
+            if config.account_type == "CN":
+                return self._execute_personal(config, hooks, captcha, logger, settings)
             needs_legacy = config.mode in {"login", "gnt", "notice"} or any(
                 p.source == SOURCE_ETAX_LEGACY and settings.source_enabled(p.source) for p in settings.periods())
             for attempt in range(2):

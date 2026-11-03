@@ -11,6 +11,7 @@ import random
 import time
 from collections.abc import Callable
 from functools import partial
+from typing import TYPE_CHECKING
 
 from ..catalog import CatalogCheckpoint, flush_on_error
 from ..contracts import QueryOutcome
@@ -28,6 +29,9 @@ from .storage import TbStore, write_tb_metadata
 LOGGER_NAME = "gdt_tax.tb.pipeline"
 SEARCH_RETRY_PAUSE = 4.0
 
+if TYPE_CHECKING:
+    from ..portals.canhan import CanhanPortal
+
 
 class TbPipeline:
     """Tra cứu và tải thông báo của cơ quan thuế theo từng đoạn ngày."""
@@ -39,7 +43,7 @@ class TbPipeline:
         captcha,
         *,
         store: TbStore | None = None,
-        portal_factory: Callable[[], TbPortal] | None = None,
+        portal_factory: Callable[[], TbPortal | CanhanPortal] | None = None,
         logger: logging.Logger | None = None,
         sleep: Callable[[float], None] = time.sleep,
         hooks: RunHooks | None = None,
@@ -104,9 +108,15 @@ class TbPipeline:
             self.settings.to_date.strftime("%d/%m/%Y"),
             len(periods),
         )
-        portal = self.portal_factory() if self.portal_factory else TbPortal(
-            self.http, self.captcha, self.settings, self.logger
-        )
+        from ..portals.canhan import CanhanPortal
+
+        portal: TbPortal | CanhanPortal
+        if self.portal_factory:
+            portal = self.portal_factory()
+        elif self.settings.account_type == 'CN':
+            portal = CanhanPortal(self.http, self.captcha, self.settings, self.logger)
+        else:
+            portal = TbPortal(self.http, self.captcha, self.settings, self.logger)
 
         records: dict[str, ThongBao] = self.records
         downloaded: set[str] = self.downloaded_ids
@@ -128,7 +138,7 @@ class TbPipeline:
 
     def _search_period(
         self,
-        portal: TbPortal,
+        portal: TbPortal | CanhanPortal,
         period,
         records: dict[str, ThongBao],
         downloaded: set[str],
@@ -155,10 +165,10 @@ class TbPipeline:
         delay = seconds * (1 + random.uniform(0, jitter)) if jitter > 0 and seconds > 0 else seconds
         self.hooks.pause(delay, self.sleep)
 
-    def _search_page(self, portal: TbPortal, period, page: int) -> QueryOutcome[ThongBao]:
+    def _search_page(self, portal: TbPortal | CanhanPortal, period, page: int) -> QueryOutcome[ThongBao]:
         return search_page(self, lambda: portal.search_tb(period, page), 'TB', page)
 
-    def _download(self, portal: TbPortal, record: ThongBao, downloaded: set[str]) -> None:
+    def _download(self, portal: TbPortal | CanhanPortal, record: ThongBao, downloaded: set[str]) -> None:
         if self.settings.dry_run:
             self.logger.info("Dry-run: bỏ qua tải thông báo %s", record.so_thong_bao or record.message_id)
             return

@@ -1,11 +1,19 @@
-# Tài khoản cá nhân — luồng Thuế điện tử cá nhân (đã xác minh từ HAR)
+# Tài khoản cá nhân — ưu tiên Dịch vụ công
 
-Tài khoản cá nhân dùng **`canhan.gdt.gov.vn/ICanhan`** (DSE), tách hẳn khỏi
-`dichvucong.gdt.gov.vn` và `thuedientu.gdt.gov.vn/etaxnnt` của doanh nghiệp.
-Tài liệu này chỉ ghi endpoint/tham số đã thấy trong HAR; không có cookie, token,
-mật khẩu, MST hay nội dung hồ sơ thật trong mã nguồn.
+Từ bản 2.1.2, tờ khai cá nhân dùng **Dịch vụ công từ mốc chuyển nguồn**
+(mặc định 01/07/2025). Kỳ trước dùng **`canhan.gdt.gov.vn/ICanhan`** (DSE).
+Không dùng luồng `thuedientu.gdt.gov.vn/etaxnnt` của doanh nghiệp cho cá nhân.
+Cookie DVC và cổng cũ được giữ riêng; cùng một lần tra cứu có thể đọc cả hai nguồn.
 
-## Luồng đã tích hợp
+DVC gửi `doiTuong=CN` tới `/tthc/loginLDAP`; CAPTCHA là 5 ký tự. Desktop thử OCR
+tối đa 5 lần rồi chuyển sang nhập tay. Lỗi tài khoản/mật khẩu dừng ngay, không
+tự đổi sang cổng cũ hoặc thử thêm mật khẩu. Tài khoản dùng được ở cổng cũ chưa
+chắc đăng nhập được DVC; hãy đối chiếu tài khoản trên đúng cổng.
+
+Tắt DVC trong Cài đặt sẽ báo phần kỳ mới chưa đầy đủ. Việc tắt DVC không đổi
+mốc ngày và không chuyển hồ sơ kỳ mới sang nguồn cũ.
+
+## Luồng cổng cá nhân cũ đã tích hợp
 
 | Bước | Request đã xác minh | Ghi chú |
 |---|---|---|
@@ -33,7 +41,15 @@ XML được lưu trực tiếp dưới đuôi `.xml`; thông báo PDF vẫn lư
 
 ## Kiểm chứng live
 
-Ngày 03/11/2026, chạy trực tiếp `CanhanPortal` qua proxy Việt Nam bằng tài khoản
+Ngày 03/11/2026, luồng DVC qua `ETaxSessionManager` và pipeline desktop:
+
+- Đăng nhập CN thành công với OCR tự động 5 ký tự.
+- Tra cứu 01–31/10/2026: **8 hồ sơ DVC**, không lỗi.
+- Tải có chọn lọc 1 hồ sơ: thành công; chạy lại dùng được tệp đã có.
+- Tài khoản thử trước đó bị DVC từ chối; đã bổ sung nhận diện thông báo thật
+  “Thông tin tài khoản hoặc mật khẩu không đúng” thành `AUTH_INVALID_CREDENTIALS`.
+
+Kiểm chứng cổng cũ từ lượt phát triển trước, chạy trực tiếp `CanhanPortal` qua proxy Việt Nam bằng tài khoản
 cá nhân thật (không dùng endpoint doanh nghiệp):
 
 - Đăng nhập hai bước thành công; phiên có `dse_sessionId` và `dse_pageId`.
@@ -50,8 +66,18 @@ vào mã nguồn, tài liệu hay log bàn giao.
 
 ## Cách dùng
 
-1. Chọn **Cá nhân** ở góc trên bên phải.
-2. Bấm **Đăng nhập**, nhập MST/tên đăng nhập cá nhân và mật khẩu.
+1. Chọn **Cá nhân** ở góc trên bên phải; giữ DVC bật trong Cài đặt.
+2. Bấm **Đăng nhập**, nhập MST/CCCD/tên đăng nhập cá nhân và mật khẩu DVC.
 3. Chọn kỳ, bấm **Tra cứu** hoặc **Tra cứu và tải**.
-4. Tab **Thông báo thuế** dùng cùng phiên cá nhân; tab **Giấy nộp tiền** hiện
-   thông báo chưa hỗ trợ như bảng trên.
+4. Tab **Thông báo thuế** dùng cổng cá nhân cũ; tab **Giấy nộp tiền** hiện
+   thông báo chưa hỗ trợ như bảng trên. Tài khoản cổng cũ cần đăng nhập được ở cổng đó.
+
+CLI dùng cùng định tuyến tờ khai:
+
+```powershell
+python -m gdt_tax --account-type CN --enable-dvc --from-date 01/10/2026 --to-date 31/10/2026 --dry-run
+python -m gdt_tax.tb --account-type CN --from-date 01/06/2025 --to-date 30/06/2025 --dry-run
+```
+
+Credential đọc từ môi trường hoặc `.env` riêng trên máy. Chẩn đoán EXE
+`--online-check` nhận thêm `account_type: "CN"`; file yêu cầu không chứa mật khẩu.

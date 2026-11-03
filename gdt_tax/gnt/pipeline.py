@@ -15,7 +15,7 @@ from functools import partial
 
 from ..catalog import CatalogCheckpoint, flush_on_error
 from ..contracts import QueryOutcome
-from ..errors import NetworkError
+from ..errors import ConfigError, NetworkError
 from ..http import HttpClient
 from ..identity import account_fingerprint, scope_targets
 from ..orchestration import consume_record, pages, search_page
@@ -47,6 +47,8 @@ class GntPipeline:
         persist_metadata: bool = True,
         target_ids: set[str] | None = None,
     ) -> None:
+        if settings.account_type == 'CN':
+            raise ConfigError('UNSUPPORTED_ACCOUNT_FLOW: Chưa hỗ trợ tải giấy nộp tiền cá nhân.')
         self.settings = settings
         self.portal_profile = profile_for(settings, "GNT")
         self.http = http

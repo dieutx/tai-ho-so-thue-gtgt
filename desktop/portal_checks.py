@@ -1,4 +1,5 @@
 """Synthetic portal regressions executed by both source and frozen smoke."""
+from pathlib import Path
 from types import SimpleNamespace
 
 from gdt_tax.auth_outcomes import AuthOutcome, classify_response
@@ -11,6 +12,17 @@ from gdt_tax.tb.parsing import tb_page_count
 
 
 def portal_regression_check() -> bool:
+    from desktop.services import RunConfig
+    from gdt_tax.portals import build_portals
+    from gdt_tax.portals.canhan import CanhanPortal
+
+    config = RunConfig('tax', Path('.'), username='synthetic', password='fixture', account_type='CN',
+                       dvc=True, from_date='30/06/2025', to_date='01/07/2025')
+    settings = config.settings()
+    if [period.source for period in settings.periods()] != ['ETAX_LEGACY', 'DVC']:
+        raise AssertionError('Personal DVC cutoff routing regression failed')
+    if not isinstance(build_portals(None, None, settings)['ETAX_LEGACY'], CanhanPortal):
+        raise AssertionError('Personal legacy adapter regression failed')
     html = '<div style="display:none"><span style="color:red">invalid credentials</span></div><p>invalid captcha</p>'
     response = SimpleNamespace(content=html.encode(), text=html, status_code=200, headers={})
     if classify_response(response, 'ETAX_LEGACY') != AuthOutcome.CAPTCHA_INVALID:
@@ -19,6 +31,10 @@ def portal_regression_check() -> bool:
     response = SimpleNamespace(content=b'{}', text='{}', status_code=200, headers={}, json=lambda: payload)
     if classify_response(response, 'DVC') != AuthOutcome.CAPTCHA_INVALID:
         raise AssertionError('DVC desc CAPTCHA response regression failed')
+    payload = {'status': '401', 'desc': 'Thông tin tài khoản hoặc mật khẩu không đúng, vui lòng kiểm tra lại!'}
+    response = SimpleNamespace(content=b'{}', text='{}', status_code=200, headers={}, json=lambda: payload)
+    if classify_response(response, 'DVC') != AuthOutcome.INVALID_CREDENTIALS:
+        raise AssertionError('DVC credential response regression failed')
     labels = list(SCHEMAS['GNT'].labels)
     labels[12:14] = [label for label, _ in SCHEMAS['GNT'].extra_labels]
     cells = ['1', 'synthetic-ref', '', '', '<a href="javascript:chiTietCT(900000001)">synthetic-gnt</a>',
