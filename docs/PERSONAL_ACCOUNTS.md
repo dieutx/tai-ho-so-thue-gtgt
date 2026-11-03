@@ -31,6 +31,23 @@ XML được lưu trực tiếp dưới đuôi `.xml`; thông báo PDF vẫn lư
 | Đổi loại tài khoản | Xoá phiên/cookie và mật khẩu đang giữ, không xoá tệp đã tải. |
 | Kho dữ liệu | Cá nhân nằm tại `<Nơi lưu>/ca-nhan/<tài khoản>/...`; kho doanh nghiệp giữ nguyên. |
 
+## Kiểm chứng live
+
+Ngày 03/11/2026, chạy trực tiếp `CanhanPortal` qua proxy Việt Nam bằng tài khoản
+cá nhân thật (không dùng endpoint doanh nghiệp):
+
+- Đăng nhập hai bước thành công; phiên có `dse_sessionId` và `dse_pageId`.
+- Tra cứu tờ khai: HTTP 200, **10 hồ sơ**; tải thử hồ sơ đầu tiên được ZIP
+  **2.342 bytes**, `validate_tax_zip` hợp lệ.
+- Tra cứu thông báo: HTTP 200, **10 thông báo**; tải thử thông báo đầu tiên được
+  XML **7.801 bytes**, `validate_xml(..., "notice")` hợp lệ.
+- CAPTCHA của cổng cá nhân là ảnh 5 ký tự; bộ đọc tự động `ddddocr` đọc sai
+  trong lần chạy này, nên lần kiểm chứng dùng nhập tay. Desktop vẫn có bước nhập
+  tay dự phòng sau khi tự động thất bại.
+
+Không có mật khẩu, cookie, token, MST đầy đủ hoặc nội dung hồ sơ nào được ghi
+vào mã nguồn, tài liệu hay log bàn giao.
+
 ## Cách dùng
 
 1. Chọn **Cá nhân** ở góc trên bên phải.

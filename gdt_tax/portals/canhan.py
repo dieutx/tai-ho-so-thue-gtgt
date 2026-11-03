@@ -80,9 +80,17 @@ def _form_fields(html: str, form_id: str) -> tuple[str, dict[str, str]]:
 
 def _form_id_for_operation(html: str, operation: str, expected: str = "") -> str:
     soup = BeautifulSoup(html, "html.parser")
-    if expected and (soup.find("form", id=expected) is not None
-                     or soup.find("form", attrs={"name": expected}) is not None):
-        return expected
+    if expected:
+        form = (soup.find("form", id=expected)
+                or soup.find("form", attrs={"name": expected}))
+        if form is not None:
+            values = {str(field.get("name")): str(field.get("value") or "")
+                      for field in form.find_all("input") if field.get("name")}
+            # Trang cá nhân có nhiều form cùng trang; chỉ nhận form đúng
+            # operation, tránh gửi ``goProcForm`` sang bước đăng nhập và nhận
+            # trang SystemError.
+            if not operation or values.get("dse_operationName") == operation:
+                return expected
     for form in soup.find_all("form"):
         fields = {str(field.get("name")): str(field.get("value") or "")
                   for field in form.find_all("input") if field.get("name")}
@@ -295,7 +303,6 @@ class CanhanPortal:
             return
 
         page = self._start_session()
-        page = self._post_operation(page, "retailIndexProc", "start")
         page = self._reach_login_options(page)
         self._submit_login(page)
         self._logged_in = True
@@ -307,25 +314,27 @@ class CanhanPortal:
         self.logger.info("ĐĂNG NHẬP THUẾ ĐIỆN TỬ CÁ NHÂN THÀNH CÔNG")
 
     def _start_session(self):
+        # Vào đúng cửa ngõ như trình duyệt: /ICanhan/ tự chuyển tới
+        # retailJumpProc/EstablishSession, rồi ``mainForm`` mở retailIndexProc.
+        # Gọi thẳng EstablishSession với operation khác sẽ nhận SystemError.
         response = self.http.get(
-            f"{CANHAN_BASE}/EstablishSession",
-            params={"fromOpName": "retailIndexProc", "fromStateName": "initial",
-                    "fromEventName": "start", "toOpName": "retailIndexProc"},
+            f"{CANHAN_BASE}/",
             headers=build_page_headers(profile=self.profile, site="none"),
         )
         raise_terminal(response, "ETAX_LEGACY")
-        for _ in range(3):
+        for _ in range(4):
             self.dse_session_id = (_query_parameter(getattr(response, "url", ""), "dse_sessionId")
                                    or self.dse_session_id)
             target = _transition_url(response.text)
             if target:
                 response = self.http.get(target, headers=build_page_headers(profile=self.profile))
                 continue
-            form_id = _form_id_for_operation(response.text, "retailIndexProc", "goProcForm")
-            if form_id:
-                self.dse_session_id = (self.dse_session_id
-                                       or self._field_from_html(response.text, "dse_sessionId"))
-                return response
+            main_form = _form_node(response.text, "mainForm")
+            if main_form is not None:
+                action, fields = _form_fields(response.text, "mainForm")
+                response = self.http.post(
+                    action, data=fields, headers=build_page_headers(profile=self.profile))
+                continue
             break
         if not self.dse_session_id:
             self.dse_session_id = self._field_from_html(response.text, "dse_sessionId")
@@ -346,19 +355,16 @@ class CanhanPortal:
         )
 
     def _reach_login_options(self, page):
-        target = _operation_url(page.text, "retailUserLoginProc")
-        if target:
-            page = self.http.get(target, headers=build_page_headers(profile=self.profile))
-        else:
-            page = self._post_operation(page, "retailUserLoginProc", "start")
-        if _form_node(page.text, _LOGIN_FORM) is not None:
-            return page
-        form_id = _form_id_for_operation(page.text, "retailUserLoginProc", "goProcForm") or "goProcForm"
-        if _form_node(page.text, form_id) is not None:
-            page = self._post_form(
-                page.text, form_id, getattr(page, "url", CANHAN_REQUEST),
-                {"dse_operationName": "retailUserLoginProc", "dse_nextEventName": "ok"},
-            )
+        if _form_node(page.text, _LOGIN_FORM) is None:
+            form_id = _form_id_for_operation(page.text, "retailUserLoginProc")
+            if not form_id:
+                page = self._post_operation(page, "retailUserLoginProc", "start")
+                form_id = _form_id_for_operation(page.text, "retailUserLoginProc")
+            if form_id:
+                page = self._post_form(
+                    page.text, form_id, getattr(page, "url", CANHAN_REQUEST),
+                    {"dse_operationName": "retailUserLoginProc", "dse_nextEventName": "ok"},
+                )
         return page
 
     def _submit_login(self, page) -> None:
