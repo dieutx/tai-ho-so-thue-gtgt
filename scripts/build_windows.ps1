@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Python, [string]$ToolsPython, [switch]$SkipInstall, [switch]$MeasureOnedir)
+param([string]$Python, [string]$ToolsPython, [switch]$SkipInstall, [switch]$MeasureOnedir, [switch]$SkipSmoke)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path $PSScriptRoot -Parent
@@ -67,9 +67,13 @@ try {
         & $Python scripts/size_inventory.py $exe --folder (Join-Path $measureRoot 'onedir/TaiHoSoThue-Windows') --output (Join-Path $measureRoot 'inventory.json')
         if ($LASTEXITCODE -ne 0) { throw 'Size inventory failed' }
     }
-    & (Join-Path $PSScriptRoot 'smoke_test_windows.ps1') -Exe $exe -Python $Python
-    if ($LASTEXITCODE -ne 0) { throw 'Frozen smoke test failed' }
-    & $Python scripts/build_provenance.py
-    if ($LASTEXITCODE -ne 0) { throw 'Build provenance verification failed' }
+    if (-not $SkipSmoke) {
+        & (Join-Path $PSScriptRoot 'smoke_test_windows.ps1') -Exe $exe -Python $Python
+        if ($LASTEXITCODE -ne 0) { throw 'Frozen smoke test failed' }
+        & $Python scripts/build_provenance.py
+        if ($LASTEXITCODE -ne 0) { throw 'Build provenance verification failed' }
+    } else {
+        Write-Output 'TEST BUILD: skipped release smoke/provenance gate (not a release artifact)'
+    }
     Get-FileHash -LiteralPath $exe -Algorithm SHA256
 } finally { Pop-Location }

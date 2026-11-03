@@ -1,6 +1,11 @@
 name: Windows desktop
 on:
   workflow_dispatch:
+    inputs:
+      test_only:
+        description: 'Build artifact test, skip release smoke gate'
+        type: boolean
+        default: false
   push:
     tags: ['desktop-v*']
 jobs:
@@ -13,9 +18,24 @@ jobs:
           python-version: '3.11'
           architecture: x64
       - name: Build and verify one-file EXE
+        if: ${{ !inputs.test_only }}
         shell: pwsh
         run: ./scripts/build_windows.ps1
-      - uses: actions/upload-artifact@v4
+      - name: Build test EXE (no release smoke gate)
+        if: ${{ inputs.test_only }}
+        shell: pwsh
+        run: ./scripts/build_windows.ps1 -SkipSmoke
+      - name: Upload test artifact
+        if: ${{ inputs.test_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: TaiHoSoThue-Windows-test
+          path: dist/TaiHoSoThue-Windows.exe
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload release artifact
+        if: ${{ !inputs.test_only }}
+        uses: actions/upload-artifact@v4
         with:
           name: TaiHoSoThue-Windows-x64
           path: dist/TaiHoSoThue-Windows.exe
