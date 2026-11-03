@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [2.1.4] — 2026-11-03
+
+- Hợp nhất các sửa lỗi DVC trên GitHub với bản sửa kho cá nhân 2.1.3;
+  giữ giải mã ZIP JSON/base64, nhận lỗi mật khẩu HTTP 200/status 401,
+  phân trang cá nhân và các định dạng thông báo TBTNhan/THONGBAO/XLSX.
+- Thống nhất CLI và desktop: tờ khai cá nhân đi theo cutoff, tôn trọng
+  `--enable-dvc`/cấu hình môi trường; thông báo độc lập dùng cổng cá nhân cũ.
+- Desktop kiểm tra và dùng lại đúng ZIP chứa thông báo trong danh sách hồ sơ,
+  dùng chung quy tắc loại tài liệu với bộ lưu tệp.
+- Nút Dừng hủy được khoảng chờ thử lại SystemError/HTTP 200 Too Many Requests.
+- Kiểm tra XLSX thêm CRC, giới hạn số tệp/tỉ lệ nén và XML cấu trúc workbook;
+  không ghi nhận tệp hỏng chỉ vì có tên thành phần Excel.
+- Kho local báo rõ kết quả một phần khi một nhóm lỗi; lỗi đọc thuộc tính tệp
+  không làm mất cả danh mục.
+- Metadata build lấy phiên bản/SHA hiện tại, không commit tệp sinh tự động;
+  buộc onefile, kiểm tra tag và lưu đủ EXE/checksum/manifest trong CI artifact.
+
 ## [2.1.3] — 2026-11-03
 
 - Sửa bảng cá nhân trống sau khi tải: đọc đúng kho `ca-nhan` ở cả lúc đăng nhập,

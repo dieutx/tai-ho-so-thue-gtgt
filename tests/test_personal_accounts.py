@@ -173,6 +173,25 @@ PAGER_HTML = """
 
 
 class PersonalTransientErrorTests(unittest.TestCase):
+    def test_transient_query_wait_can_be_cancelled(self):
+        from threading import Event
+
+        from gdt_tax.run_hooks import RunCancelled, RunHooks
+
+        cancelled = Event()
+        http = FakeHttp(lambda *_: None)
+        http.hooks = RunHooks(cancelled)
+        portal = CanhanPortal(http, StubCaptcha(), personal_settings())
+
+        def request():
+            cancelled.set()
+            return FakeResponse('SystemError', headers={'content-type': 'text/html'})
+
+        query = Mock(side_effect=request)
+        with self.assertRaises(RunCancelled):
+            portal._query_with_transient_retry(query)
+        query.assert_called_once()
+
     def test_notice_download_retries_system_error_200(self):
         settings = personal_settings()
         portal = CanhanPortal(FakeHttp(lambda *_: None), StubCaptcha(), settings)
@@ -358,7 +377,7 @@ class PersonalConcurrentLoginTests(unittest.TestCase):
 
 
 class PersonalCliTests(unittest.TestCase):
-    def test_cli_selects_canhan_portal_and_keeps_all_dates_on_legacy(self):
+    def test_cli_selects_canhan_portal_before_cutoff(self):
         from gdt_tax.cli import build_parser
         from gdt_tax.portals import build_portals
 
@@ -366,11 +385,35 @@ class PersonalCliTests(unittest.TestCase):
                                           '--from-date', '01/01/2022',
                                           '--to-date', '31/12/2022'])
         self.assertEqual(args.account_type, 'CN')
-        settings = personal_settings(from_date='01/01/2022', to_date='31/12/2022',
-                                     etax_cutoff='01/01/2100')
+        settings = personal_settings(from_date='01/01/2022', to_date='31/12/2022')
         portals = build_portals(object(), StubCaptcha(), settings)
         self.assertEqual(list(portals), ['ETAX_LEGACY'])
         self.assertIsInstance(portals['ETAX_LEGACY'], CanhanPortal)
+
+    def test_cli_honors_personal_dvc_flag_and_environment_account_type(self):
+        from gdt_tax.cli import main
+        from gdt_tax.errors import CaptchaError
+
+        original = Settings.from_env
+        for arguments in (['--account-type', 'CN', '--enable-dvc'], []):
+            configured = []
+
+            def capture(configured=configured, **kwargs):
+                settings = original(**kwargs)
+                configured.append(settings)
+                return settings
+
+            environ = {'GDT_USERNAME': 'synthetic', 'GDT_PASSWORD': 'fixture',
+                       'GDT_ACCOUNT_TYPE': 'CN', 'GDT_DVC_ENABLED': 'true'}
+            with patch.dict(os.environ, environ, clear=True), \
+                    patch('gdt_tax.cli.Settings.from_env', side_effect=capture), \
+                    patch('gdt_tax.cli.create_solver', side_effect=CaptchaError('stop before HTTP')):
+                self.assertEqual(main(['--env-file', 'missing.env', '--from-date', '30/06/2025',
+                                       '--to-date', '02/07/2025', *arguments]), 2)
+            self.assertEqual(configured[0].account_type, 'CN')
+            self.assertEqual([period.source for period in configured[0].periods()],
+                             ['ETAX_LEGACY', 'DVC'])
+            self.assertTrue(configured[0].dvc_enabled)
 
     def test_personal_ddddocr_accepts_four_or_five_characters(self):
         from gdt_tax.cli import personal_captcha_options

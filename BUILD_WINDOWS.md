@@ -29,6 +29,14 @@ ruff, mypy cho core, tạo metadata phiên bản, build spec, audit rồi smoke-
 Mỗi lệnh lỗi đều dừng build. Không xóa dữ liệu người dùng hoặc toàn bộ dist.
 `dist` dành riêng cho executable phát hành; bằng chứng test ở `.cache`.
 
+Phiên bản desktop lấy duy nhất từ `desktop/__init__.py`. Build tạo lại
+`desktop/resources/release.json` và `packaging/version.txt` từ phiên bản và
+commit hiện tại; hai tệp sinh tự động không được commit. Nhờ vậy metadata
+không lưu SHA của bản build cũ và build không làm bẩn working tree.
+Script buộc bản phát hành là onefile kể cả khi môi trường đang đặt
+`TAIHOSOTHUE_ONEDIR`; workflow kiểm tra tag khớp phiên bản trước khi build.
+Artifact release gồm EXE, `SHA256SUMS.txt` và `release-manifest.json`.
+
 Audit bắt buộc model OCR mặc định đúng hash, DLL ONNX và module bảng ký tự.
 Smoke đối chiếu source/EXE trên cùng ảnh: kết quả OCR, model, bảng ký tự và CPU
 provider phải khớp. Cũng kiểm tra giới hạn 5 lượt tự động rồi một lượt nhập tay;
@@ -127,8 +135,8 @@ cần máy/phiên tương ứng; không suy ra đã PASS từ máy build.
 - Chỉ dùng output riêng từng tài khoản. Giới hạn định danh/gộp metadata của core
   ghi trong REVIEW vẫn áp dụng. Kết quả tải thật được ghi trong báo cáo nghiệm thu.
 - SQLite giữ toàn bộ lịch sử theo tài khoản/nghiệp vụ; bảng UI đọc lại đúng kỳ đang chọn. Xem [kho local và rollback](docs/LOCAL_DATABASE_GUIDE.md).
-- Nhấn `v2.0.0` để xem thay đổi và kiểm tra bản mới. Chỉ khi bấm nút kiểm tra,
-  app đọc GitHub public releases; không gửi tài khoản thuế, không tự cài.
+- Nhấn số phiên bản để xem thay đổi và kiểm tra bản mới. App tự kiểm tra
+  GitHub public releases lúc mở và hỗ trợ kiểm tra thủ công; không gửi tài khoản thuế, không tự cài.
   Repo riêng tư/chưa có release sẽ được thông báo rõ, không báo giả có cập nhật.
 - Menu `Tệp & nhật ký` có tải nhiều nhóm tuần tự và mở/chuyển dữ liệu cũ.
   Tệp hợp lệ được dùng lại; màu sắc và nhãn chữ thể hiện thao tác/trạng thái.

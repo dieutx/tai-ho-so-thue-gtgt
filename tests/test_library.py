@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 from desktop.library import (
     check_files,
@@ -48,6 +49,22 @@ class CatalogTests(unittest.TestCase):
 
     def test_missing_catalog_is_empty_not_an_error(self):
         self.assertEqual(read_catalog("tax", self.base / "khong-co"), [])
+
+    def test_library_keeps_partial_catalog_failure_visible(self):
+        child = JobResult('PARTIAL', 'catalog error', self.base, rows=[tax_row('A')])
+        config = RunConfig('library', self.base, username='synthetic')
+        with patch('desktop.library.catalog_view', return_value=child):
+            result = load_library(config, RunHooks())
+        self.assertEqual(result.state, 'PARTIAL')
+        self.assertEqual(result.errors, 3)
+        self.assertIn('3 nhóm lỗi', result.message)
+
+    def test_unreadable_file_does_not_hide_the_catalog(self):
+        row = dict(tax_row('A', name='a.zip'), _file_status='downloaded',
+                   _file_hash='synthetic', _file_size=1, _file_mtime_ns=1)
+        with patch.object(Path, 'stat', side_effect=PermissionError('locked')):
+            result = check_files('tax', [row], self.base)
+        self.assertEqual(result[0]['_file_status'], 'not_downloaded')
 
     def test_personal_library_restores_both_owned_locations_without_company_rows(self):
         from desktop.library import catalog_view, library_folders

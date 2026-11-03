@@ -59,7 +59,7 @@ from .naming import zip_filename
 LOGGER_NAME = "gdt_tax.storage"
 
 
-def _required_kind(record: CaseRecord) -> str:
+def required_document_kind(record: CaseRecord) -> str:
     """ZIP của hồ sơ thông báo (04/SS-HĐĐT...) chứa XML ``TBao``, không phải tờ khai."""
     if getattr(record, "loai_tai_lieu", "") == "NOTICE":
         return "notice"
@@ -165,7 +165,7 @@ class ZipStore:
                 if candidate.stat().st_size > MAX_ARCHIVE_BYTES:
                     continue
                 content = read_bounded(candidate, MAX_ARCHIVE_BYTES)
-                if not validate_tax_zip(content, required_kind=_required_kind(record)).ok or not matches_evidence(candidate, content, source_reference(record, "zip")):
+                if not validate_tax_zip(content, required_kind=required_document_kind(record)).ok or not matches_evidence(candidate, content, source_reference(record, "zip")):
                     continue
                 record.tep_zip = candidate.name
                 self.logger.info("Bỏ qua ZIP đã có: %s", candidate.name)
@@ -177,7 +177,7 @@ class ZipStore:
     def save(self, record: CaseRecord, data: bytes) -> Path | None:
         """Ghi ZIP xuống đĩa sau khi kiểm tra tính toàn vẹn."""
         self.last_error = ""
-        required_kind = _required_kind(record)
+        required_kind = required_document_kind(record)
         result = validate_tax_zip(data, required_kind=required_kind)
         if not result.ok:
             self.last_error = result.code

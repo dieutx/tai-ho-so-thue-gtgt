@@ -23,6 +23,7 @@ from ..dvc_notices import decode_notice_response, parse_notice_list
 from ..errors import AttachmentDownloadError
 from ..http_policy import DOWNLOAD_OPERATION, OperationPolicy
 from ..models import CaseRecord, PageResult, SearchPeriod
+from ..run_hooks import RunHooks
 from .base import Portal
 
 
@@ -65,6 +66,10 @@ class DvcPortal(Portal):
     #: Kết quả dò khả năng AJAX chỉ cần biết một lần cho mỗi lượt chạy: cổng
     #: không đổi giữa hai hồ sơ, nên hồ sơ sau không phải gửi lại request dò.
     _ajax_validation: bool | None = None
+
+    def _pause(self, seconds: float) -> None:
+        hooks = getattr(self.http, "hooks", None)
+        (hooks if isinstance(hooks, RunHooks) else RunHooks()).pause(seconds, time.sleep)
 
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         response = self.http.get(
@@ -199,13 +204,13 @@ class DvcPortal(Portal):
                     notice.id, attempt,
                 )
                 if attempt < 3:
-                    time.sleep(min(2 * attempt, 6))
+                    self._pause(min(2 * attempt, 6))
                 continue
             # Nội dung hỏng/không đúng định dạng có thể do cổng trả tạm thời;
             # thử lại có giới hạn trước khi báo lỗi thật.
             self.logger.warning('Thông báo %s trả nội dung chưa đọc được (lần %s/3)', notice.id, attempt)
             if attempt < 3:
-                time.sleep(1.5)
+                self._pause(1.5)
         raise AttachmentDownloadError(
             'ATTACHMENT_INVALID_OR_RATE_LIMITED',
             'Cổng trả nội dung không đọc được hoặc giới hạn tải sau 3 lần thử; tệp hồ sơ chính được giữ nguyên.',

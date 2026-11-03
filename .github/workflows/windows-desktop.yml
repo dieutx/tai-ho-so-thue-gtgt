@@ -11,12 +11,22 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           architecture: x64
+      - name: Verify release tag matches desktop version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = python -c "from desktop import __version__; print(__version__)"
+          if ($LASTEXITCODE -ne 0 -or $env:GITHUB_REF_NAME -ne "desktop-v$version") {
+            throw 'Release tag and desktop version differ'
+          }
       - name: Build and verify one-file EXE
         if: ${{ !inputs.test_only }}
         shell: pwsh
@@ -38,5 +48,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TaiHoSoThue-Windows-x64
-          path: dist/TaiHoSoThue-Windows.exe
+          path: |
+            dist/TaiHoSoThue-Windows.exe
+            dist/SHA256SUMS.txt
+            dist/release-manifest.json
           if-no-files-found: error

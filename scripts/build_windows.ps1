@@ -57,8 +57,12 @@ try {
             if ($LASTEXITCODE -ne 0) { throw 'Measurement onedir build failed' }
         } finally { $env:TAIHOSOTHUE_ONEDIR = $previousBundleMode }
     }
-    & $Python -m PyInstaller --noconfirm --clean --distpath dist --workpath .cache/release-build/onefile packaging/TaiHoSoThue.spec
-    if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
+    $previousBundleMode = $env:TAIHOSOTHUE_ONEDIR
+    try {
+        $env:TAIHOSOTHUE_ONEDIR = $null
+        & $Python -m PyInstaller --noconfirm --clean --distpath dist --workpath .cache/release-build/onefile packaging/TaiHoSoThue.spec
+        if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
+    } finally { $env:TAIHOSOTHUE_ONEDIR = $previousBundleMode }
     $exe = Join-Path $root 'dist/TaiHoSoThue-Windows.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw 'EXE was not produced' }
     & $Python scripts/audit_bundle.py

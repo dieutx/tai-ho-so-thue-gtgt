@@ -16,6 +16,10 @@ venv/
 .ruff_cache/
 .pytest_cache/
 
+# Generated for each EXE build; version authority is desktop/__init__.py.
+desktop/resources/release.json
+packaging/version.txt
+
 # --- Bí mật và dữ liệu chạy ---
 .env
 .env.*

@@ -38,8 +38,8 @@ Ví dụ:
   python -m gdt_tax --case-id 11320250292469209
   python -m gdt_tax --solver manual            # tự nhập CAPTCHA từng lần
   python -m gdt_tax --dry-run                  # chỉ tra cứu, không tải
-  python -m gdt_tax --account-type CN --from-date 01/01/2026 --to-date 31/01/2026
-                                               # tài khoản cá nhân (canhan.gdt.gov.vn)
+  python -m gdt_tax --account-type CN --enable-dvc --from-date 01/01/2026 --to-date 31/01/2026
+                                               # tài khoản cá nhân trên DVC
 
 Khi cổng đổi giao diện, chạy kèm các tham số chẩn đoán:
   python -m gdt_tax -v --log-file logs/run.log --dump-http http-dump
@@ -103,8 +103,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--from-date", metavar="dd/mm/yyyy", help="Ngày bắt đầu tra cứu")
     parser.add_argument("--to-date", metavar="dd/mm/yyyy", help="Ngày kết thúc tra cứu")
     parser.add_argument("--case-id", help="Chỉ tải một mã hồ sơ cụ thể")
-    parser.add_argument('--account-type', choices=('DN', 'CN'),
-                        help='DN: doanh nghiệp; CN: cá nhân (CAPTCHA 5 ký tự)')
     parser.add_argument("--output-dir", help="Thư mục lưu ZIP và metadata")
     parser.add_argument(
         "--solver",
@@ -122,7 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--account-type",
         choices=("DN", "CN"),
         help=("Loại tài khoản: DN = doanh nghiệp (mặc định), "
-              "CN = cá nhân trên canhan.gdt.gov.vn"),
+              "CN = cá nhân (cổng cũ trước cutoff, DVC từ cutoff)"),
     )
     parser.add_argument("--dry-run", action="store_true", help="Chỉ tra cứu, không tải ZIP")
     parser.add_argument(
@@ -241,11 +239,7 @@ def _main(argv: list[str] | None = None) -> int:
             header_profile=args.header_profile,
             proxy_url=args.proxy,
             legacy_etax=True if args.legacy_etax else None,
-            dvc_enabled=False if args.account_type == "CN" else args.dvc_enabled,
-            account_type=args.account_type,
-            # Cá nhân chỉ có một nguồn canhan.gdt.gov.vn; cutoff xa để mọi
-            # đoạn ngày đều đi vào nguồn ETAX_LEGACY thay vì bị bỏ qua vì DVC tắt.
-            etax_cutoff="01/01/2100" if args.account_type == "CN" else None,
+            dvc_enabled=args.dvc_enabled,
         )
     except (ConfigError, ValueError) as error:
         print(f"LỖI CẤU HÌNH: {error}", file=sys.stderr)

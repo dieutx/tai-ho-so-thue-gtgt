@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import stat
 from datetime import date, datetime
 from pathlib import Path
 
@@ -132,16 +133,18 @@ def check_files(mode: str, rows: list[dict], folder: str | Path) -> list[dict]:
         if path is not None and not path.is_relative_to(root.resolve()):
             path = None
         size = 0
+        file_stat = None
         if path is not None:
             try:
-                size = path.stat().st_size if path.is_file() else 0
+                file_stat = path.stat()
+                size = file_stat.st_size if stat.S_ISREG(file_stat.st_mode) else 0
             except OSError:
                 size = 0
         expected = item.get('_file_size')
         valid = (item.get('_file_status') == 'downloaded' and bool(item.get('_file_hash'))
                  and expected == size and item.get('_integrity_status') != INTEGRITY_INVALID)
         if valid and item.get('_file_mtime_ns') is not None:
-            valid = path is not None and path.stat().st_mtime_ns == item['_file_mtime_ns']
+            valid = file_stat is not None and file_stat.st_mtime_ns == item['_file_mtime_ns']
         if path is not None and size > 0 and valid:
             item.update(_file_status="downloaded", _file_state=FILE_LABELS["downloaded"],
                         _file_path=str(path.resolve()), _file_size=size, _file_reason="",
@@ -228,10 +231,11 @@ def load_library(config, hooks: RunHooks) -> JobResult:
                                       config.to_date or None, migrate=True, hooks=hooks,
                                       account_type=getattr(config, 'account_type', 'DN'))
         total += len(children[mode].rows)
-    failures = sum(1 for child in children.values() if child.state == "ERROR")
+    failures = sum(1 for child in children.values() if child.state in {"ERROR", "PARTIAL"})
     message = (f"Đã nạp {total} hồ sơ từ máy — không gọi mạng" if not failures
                else f"Đã nạp {total} hồ sơ từ máy; {failures} nhóm lỗi danh mục")
-    result = JobResult("LOADED", message, base, children=children)
+    result = JobResult("PARTIAL" if failures else "LOADED", message, base,
+                       children=children, errors=failures)
     result.account_key = account_key
     result.date_range = (config.from_date, config.to_date)
     result.operation = "library"

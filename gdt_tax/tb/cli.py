@@ -69,7 +69,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--from-date", metavar="dd/mm/yyyy", help="Từ ngày nộp")
     parser.add_argument("--to-date", metavar="dd/mm/yyyy", help="Đến ngày nộp")
     parser.add_argument("--output-dir", help="Thư mục lưu XML/PDF và danh mục thông báo")
-    parser.add_argument('--account-type', choices=('DN', 'CN'), help='Loại tài khoản thuế')
     parser.add_argument(
         "--solver",
         help=f"Bộ nhận dạng CAPTCHA: {', '.join(available_solvers())}",
@@ -162,9 +161,6 @@ def _main(argv: list[str] | None = None) -> int:
             http_dump_private=args.dump_http_private,
             header_profile=args.header_profile,
             proxy_url=args.proxy,
-            account_type=args.account_type,
-            dvc_enabled=False if args.account_type == "CN" else None,
-            etax_cutoff="01/01/2100" if args.account_type == "CN" else None,
         )
     except (ConfigError, ValueError) as error:
         print(f"LỖI CẤU HÌNH: {error}", file=sys.stderr)

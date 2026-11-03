@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import tempfile
 import unittest
+import zipfile
 from contextlib import contextmanager
 from dataclasses import replace
 from io import BytesIO
@@ -98,6 +99,49 @@ class DownloadIntegrityTests(unittest.TestCase):
         self.assertIsNotNone(notice)
         self.assertEqual(notice.file_type, 'xml')
         self.assertEqual(notice.data, data)
+
+    def test_desktop_reuses_notice_zips_from_the_declaration_list(self):
+        from desktop.file_store import DesktopZipStore
+        from gdt_tax.identity import account_fingerprint
+
+        with fixture_directory() as tmp:
+            root = Path(tmp)
+            for number, metadata in enumerate(({'loai_tai_lieu': 'NOTICE'},
+                                               {'to_khai': '04/SS-HĐĐT - Thông báo'})):
+                record = CaseRecord(str(number), 'DVC',
+                                    account_key=account_fingerprint('synthetic'), **metadata)
+                saved = ZipStore(root).save(record, sample_zip(NOTICE))
+                self.assertIsNotNone(saved)
+                rows = verify_rows('tax', [record.to_dict()], root)
+                self.assertEqual(rows[0]['_file_status'], 'downloaded')
+                self.assertEqual(DesktopZipStore(root, known_rows=rows).find_existing(record), saved)
+            declaration = CaseRecord('ordinary', 'DVC')
+            self.assertIsNone(ZipStore(root).save(declaration, sample_zip(NOTICE)))
+
+    def test_xlsx_rejects_corrupt_crc_fake_workbook_and_resource_overflow(self):
+        from openpyxl import Workbook
+
+        stream = BytesIO()
+        Workbook().save(stream)
+        valid = stream.getvalue()
+        with zipfile.ZipFile(BytesIO(valid)) as archive:
+            entries = [(info.filename, archive.read(info)) for info in archive.infolist()]
+
+        def repack(items):
+            result = BytesIO()
+            with zipfile.ZipFile(result, 'w', compression=zipfile.ZIP_STORED) as archive:
+                for name, content in items:
+                    archive.writestr(name, content)
+            return result.getvalue()
+
+        raw = repack(entries)
+        corrupt = raw.replace(b'<workbook ', b'<workboox ', 1)
+        self.assertFalse(validate_xlsx(corrupt).ok)
+        fake = repack([(name, b'<html/>' if name == 'xl/workbook.xml' else content)
+                       for name, content in entries])
+        self.assertFalse(validate_xlsx(fake).ok)
+        with patch('gdt_tax.storage.MAX_MEMBERS', 1):
+            self.assertFalse(validate_xlsx(valid).ok)
 
     def test_dtd_deep_tree_and_invalid_syntax_share_rejections(self):
         for data in (b'<!DOCTYPE CHUNGTU [<!ENTITY x "bad">]><CHUNGTU>&x;</CHUNGTU>',

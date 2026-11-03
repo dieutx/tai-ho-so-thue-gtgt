@@ -193,6 +193,19 @@ class NoticeStoreTests(unittest.TestCase):
 
 
 class NoticePortalTests(unittest.TestCase):
+    def test_http_200_rate_limit_wait_can_be_cancelled(self):
+        from unittest.mock import patch
+
+        from gdt_tax.run_hooks import RunCancelled
+        from tests.test_http import FakeSession
+
+        session = FakeSession([FakeResponse('Too Many Requests')])
+        http = HttpClient(session=session, retries=1)
+        portal = DvcPortal(http, StubCaptcha(), SimpleNamespace(header_profile='minimal'))
+        with patch.object(http.hooks, 'pause', side_effect=RunCancelled()), self.assertRaises(RunCancelled):
+            portal.download_notice(parse_notices(DETAIL_HTML)[0], 'https://example.test/detail', 'csrf')
+        self.assertEqual(len(session.calls), 1)
+
     def test_rate_limited_read_only_notice_retries_five_times_then_succeeds(self):
         from unittest.mock import patch
 

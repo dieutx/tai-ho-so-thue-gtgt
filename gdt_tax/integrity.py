@@ -19,7 +19,7 @@ from pypdf.errors import PyPdfError
 from .archive_limits import MAX_ARCHIVE_BYTES, MAX_MEMBER_BYTES
 from .xml_policy import MAX_XML_BYTES, XmlReadError, parse_xml
 
-VALIDATOR_VERSION = "download-integrity-v3"
+VALIDATOR_VERSION = "download-integrity-v4"
 DECLARATION_NS = "http://kekhaithue.gdt.gov.vn/TKhaiThue"
 NOTICE_NS = "http://kekhaithue.gdt.gov.vn/TBaoThue"
 
@@ -89,8 +89,9 @@ def validate_xlsx(data: bytes) -> IntegrityResult:
     Cổng DVC có thông báo đính kèm là bảng Excel, không phải XML/PDF. Chỉ đọc
     cấu trúc ZIP và danh sách thành phần; không mở/không thực thi nội dung.
     """
-    if not data.startswith(b"PK"):
-        return _result(data, "xlsx", "XLSX_NOT_ZIP")
+    from .storage import valid_zip
+    if not valid_zip(data):
+        return _result(data, "xlsx", "XLSX_INTEGRITY_INVALID")
     try:
         with zipfile.ZipFile(BytesIO(data)) as archive:
             names = set(archive.namelist())
@@ -105,6 +106,16 @@ def validate_xlsx(data: bytes) -> IntegrityResult:
                 total += info.file_size
                 if info.file_size > MAX_MEMBER_BYTES or total > MAX_ARCHIVE_BYTES:
                     return _result(data, "xlsx", "XLSX_MEMBER_TOO_LARGE")
+            if len(names) != len(archive.infolist()):
+                return _result(data, "xlsx", "XLSX_DUPLICATE_MEMBER")
+            for member, expected in (
+                ("[Content_Types].xml", "{http://schemas.openxmlformats.org/package/2006/content-types}Types"),
+                ("xl/workbook.xml", "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}workbook"),
+            ):
+                if parse_xml(archive.read(member)).tag != expected:
+                    return _result(data, "xlsx", "XLSX_STRUCTURE_INVALID")
+    except XmlReadError:
+        return _result(data, "xlsx", "XLSX_STRUCTURE_INVALID")
     except (zipfile.BadZipFile, RuntimeError, OSError, EOFError):
         return _result(data, "xlsx", "XLSX_READ_ERROR")
     return _result(data, "xlsx")

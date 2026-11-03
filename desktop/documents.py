@@ -23,10 +23,12 @@ from gdt_tax.integrity import (
     read_bounded,
     source_reference,
     valid_declaration_zip,
+    validate_tax_zip,
 )
 from gdt_tax.models import CaseRecord
 from gdt_tax.naming import zip_filename
 from gdt_tax.run_hooks import RunHooks
+from gdt_tax.storage import required_document_kind
 from gdt_tax.tb.models import ThongBao
 from gdt_tax.tb.naming import tb_pdf_filename
 from gdt_tax.tb.portal import is_tb_document
@@ -177,7 +179,9 @@ def verify_rows(mode: str, rows: list[dict], output: Path, hooks: RunHooks | Non
                     continue
                 content = read_bounded(path, 256 * 1024 * 1024)
                 kind = {"tax": "zip", "gnt": "gnt", "notice": "pdf"}[mode]
-                if not valid(content) or not matches_evidence(path, content, source_reference(record, kind)):
+                valid_content = (validate_tax_zip(content, required_kind=required_document_kind(record)).ok
+                                 if mode == 'tax' else valid(content))
+                if not valid_content or not matches_evidence(path, content, source_reference(record, kind)):
                     row['_file_reason'] = 'Tệp hiện có không hoàn chỉnh hoặc sai định dạng; có thể tải lại'
                     row['_integrity_status'] = INTEGRITY_INVALID
                     row['_integrity_label'] = INTEGRITY_LABELS[INTEGRITY_INVALID]

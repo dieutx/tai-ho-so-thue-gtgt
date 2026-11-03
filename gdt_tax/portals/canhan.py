@@ -39,6 +39,7 @@ from ..integrity import validate_xml
 from ..legacy_session import LegacySessionState
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..naming import safe_filename_part
+from ..run_hooks import RunHooks
 from ..table_contracts import ParseDiagnostics
 from ..tb.models import TbPageResult, ThongBao
 
@@ -493,8 +494,12 @@ class CanhanPortal:
             if attempt < attempts:
                 self.logger.warning(
                     "Cổng báo SystemError khi tải tệp; thử lại lần %s/%s", attempt + 1, attempts)
-                time.sleep(1.5 * attempt)
+                self._pause(1.5 * attempt)
         return last
+
+    def _pause(self, seconds: float) -> None:
+        hooks = getattr(self.http, "hooks", None)
+        (hooks if isinstance(hooks, RunHooks) else RunHooks()).pause(seconds, time.sleep)
 
     def _confirm_concurrent_login(self, page):
         """Bấm ``Đồng ý`` khi cổng cảnh báo tài khoản đang đăng nhập ở phiên khác."""
@@ -655,7 +660,7 @@ class CanhanPortal:
             self.logger.warning(
                 "Cổng cá nhân tạm bận khi tra cứu; thử lại %s/%s", attempt + 1, attempts
             )
-            time.sleep(1.5 * attempt)
+            self._pause(1.5 * attempt)
             response = request()
         return response
 
