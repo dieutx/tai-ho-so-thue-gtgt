@@ -96,7 +96,11 @@ class TbStore:
         """Ghi file PDF hoặc XML thông báo sau khi kiểm tra nội dung."""
         pdf_result = validate_pdf(data)
         xml_result = None if pdf_result.ok else validate_xml(data, "notice")
-        if not pdf_result.ok and not (xml_result and xml_result.ok):
+        if pdf_result.ok:
+            result = pdf_result
+        elif xml_result is not None and xml_result.ok:
+            result = xml_result
+        else:
             self.logger.error("Phản hồi không phải PDF/XML thông báo hợp lệ: %s",
                               record.message_id)
             return None
@@ -104,8 +108,7 @@ class TbStore:
         preferred = self.path_for(record) if pdf_result.ok else self.path_for(record).with_suffix(".xml")
         path = safe_destination(preferred, data, source_reference(record, "pdf"))
         _atomic_write(path, data)
-        write_evidence(path, pdf_result if pdf_result.ok else xml_result,
-                       source_reference(record, "pdf"))
+        write_evidence(path, result, source_reference(record, "pdf"))
         record.tep_pdf = path.name
         self.logger.info("Đã lưu %s (%s bytes)", path.name, f"{len(data):,}")
         return path
