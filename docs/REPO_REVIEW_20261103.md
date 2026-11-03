@@ -22,6 +22,7 @@ không đăng nhập tài khoản thuế thật trong lượt này, không chứ
 | Retry SystemError/HTTP 200 Too Many Requests dùng `time.sleep` trực tiếp | Chờ qua `RunHooks.pause`, nhận hủy và ngân sách chạy; test bảo đảm không gửi request tiếp sau khi hủy. |
 | XLSX chỉ kiểm tra tên member/size, chưa CRC và chưa xác minh XML workbook | Dùng kiểm tra ZIP giới hạn tài nguyên/CRC, từ chối member trùng, xác minh root/namespace XML cấu trúc. Test workbook thật, CRC hỏng, workbook giả, vượt số member. |
 | Một nhóm local lỗi nhưng tổng hợp báo LOADED | Trả PARTIAL và số nhóm lỗi, giữ các dòng đọc được. |
+| Ảnh UI ở 1024×560/150% có hướng dẫn trống đè lên tiêu đề bảng | Ẩn tiêu đề khi danh sách trống, hiện lại khi có hồ sơ; test vòng chuyển trống/có dòng. |
 | Đọc mtime ngoài khối xử lý lỗi I/O | Đọc stat một lần trong khối xử lý lỗi; tệp không đọc được chuyển sang chưa tải, không làm mất danh mục. |
 | Metadata đã commit ghi phiên bản/SHA của build cũ | Phiên bản duy nhất ở `desktop/__init__.py`; bỏ theo dõi hai tệp sinh tự động, build tạo metadata từ commit hiện tại. |
 | Biến môi trường onedir có thể đổi kiểu build phát hành; CI chỉ giữ EXE | Buộc onefile trong script, khôi phục biến môi trường sau build; CI kiểm tra tag khớp version và giữ EXE/checksum/manifest. |
@@ -34,7 +35,7 @@ cá nhân từ kho `ca-nhan`, không lẫn dữ liệu doanh nghiệp.
 
 ## Kiểm chứng
 
-- `scripts/run_test_gate.py --profile desktop`: 1.001 test, PASS, 6 skip
+- `scripts/run_test_gate.py --profile desktop`: 1.002 test, PASS, 6 skip
   (EasyOCR/PaddleOCR và lớp solver test nền; ddddocr/Qt bắt buộc đã chạy).
 - `ruff check .`: PASS.
 - `mypy gdt_tax tests/test_core_contracts.py`: PASS, 95 source files.

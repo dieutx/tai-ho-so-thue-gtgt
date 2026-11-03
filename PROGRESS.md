@@ -5,7 +5,7 @@
 Đã hợp nhất GitHub `main` `0c7ab32` với các sửa local 2.1.2/2.1.3, thống nhất
 CLI/desktop, kiểm tra loại ZIP thông báo, retry có thể hủy, kiểm tra XLSX và
 báo lỗi danh mục một phần. Metadata build được sinh từ phiên bản/SHA hiện tại;
-CI giữ đủ EXE/checksum/manifest. Gate source đạt 1.001 test (6 skip OCR tùy chọn),
+CI giữ đủ EXE/checksum/manifest. Gate source đạt 1.002 test (6 skip OCR tùy chọn),
 ruff/mypy và diff check. Phạm vi, các phát hiện và kiểm chứng phát hành:
 [báo cáo review 2.1.4](docs/REPO_REVIEW_20261103.md).
 

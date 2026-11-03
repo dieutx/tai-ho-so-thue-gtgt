@@ -1297,6 +1297,9 @@ class V2InteractionMixin:
     def update_empty(self, *_args):
         if not hasattr(self, 'empty'):
             return
+        # The empty message covers the whole table area; on short screens it
+        # would overlap the column titles. Restore titles as soon as rows show.
+        self.table.horizontalHeader().setVisible(self.proxy_model.rowCount() > 0)
         self.empty.setVisible(self.proxy_model.rowCount() == 0)
         if self.proxy_model.rowCount():
             return

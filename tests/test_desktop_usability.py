@@ -96,6 +96,17 @@ class DesktopUsabilityTests(unittest.TestCase):
         self.window.reset_filters_button.click()
         self.assertEqual(self.window.proxy_model.rowCount(), 2)
 
+    def test_empty_message_does_not_overlap_headers_on_short_screens(self):
+        self.window.resize(680, 370)
+        self.window.model.reset('tax', [])
+        self.window.update_empty()
+        self.assertTrue(self.window.table.horizontalHeader().isHidden())
+        self.assertFalse(self.window.empty.isHidden())
+        self.window.model.reset('tax', [{'ma_ho_so': 'synthetic', 'nguon': 'DVC'}])
+        self.window.update_empty()
+        self.assertFalse(self.window.table.horizontalHeader().isHidden())
+        self.assertTrue(self.window.empty.isHidden())
+
     def test_manual_source_edit_discards_previous_explicit_file_selection(self):
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest

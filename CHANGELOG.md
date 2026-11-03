@@ -16,6 +16,8 @@
   không ghi nhận tệp hỏng chỉ vì có tên thành phần Excel.
 - Kho local báo rõ kết quả một phần khi một nhóm lỗi; lỗi đọc thuộc tính tệp
   không làm mất cả danh mục.
+- Màn hình nhỏ: hướng dẫn danh sách trống không còn đè lên tiêu đề cột;
+  tiêu đề xuất hiện lại khi có hồ sơ.
 - Metadata build lấy phiên bản/SHA hiện tại, không commit tệp sinh tự động;
   buộc onefile, kiểm tra tag và lưu đủ EXE/checksum/manifest trong CI artifact.
 
