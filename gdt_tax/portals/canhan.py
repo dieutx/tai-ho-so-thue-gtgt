@@ -646,6 +646,19 @@ class CanhanPortal:
                 profile=self.profile))
         return None
 
+    def _query_with_transient_retry(self, request, *, attempts: int = 3):
+        """Tra cứu lại khi cổng trả trang SystemError tạm thời (HTTP 200)."""
+        response = request()
+        for attempt in range(1, attempts):
+            if not _transient_error(response):
+                return response
+            self.logger.warning(
+                "Cổng cá nhân tạm bận khi tra cứu; thử lại %s/%s", attempt + 1, attempts
+            )
+            time.sleep(1.5 * attempt)
+            response = request()
+        return response
+
     # --- Tờ khai ---
     def search(self, period: SearchPeriod, page: int) -> PageResult:
         self.login()
@@ -654,7 +667,8 @@ class CanhanPortal:
                 _DECLARATION_OPERATION, _SEARCH_FORM, "tờ khai")
             self._search_page_html = opened.text
             self._search_page_url = getattr(opened, "url", CANHAN_REQUEST)
-        response = self._query_declarations(period, page)
+        response = self._query_with_transient_retry(
+            lambda: self._query_declarations(period, page))
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
         empty = any(marker in response.text for marker in ("Chưa có tờ khai", "Không có dữ liệu"))
@@ -756,7 +770,8 @@ class CanhanPortal:
                 _NOTICE_OPERATION, _SEARCH_FORM, "thông báo")
             self._notice_page_html = opened.text
             self._notice_page_url = getattr(opened, "url", CANHAN_REQUEST)
-        response = self._query_notices(period, page)
+        response = self._query_with_transient_retry(
+            lambda: self._query_notices(period, page))
         if response.status_code != 200:
             return TbPageResult(http_status=response.status_code)
         empty = any(marker in response.text for marker in
