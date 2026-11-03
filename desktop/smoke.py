@@ -92,6 +92,57 @@ def saved_accounts_check() -> bool:
     return True
 
 
+def personal_catalog_check(output: Path) -> bool:
+    """Exercise the actual completion projection, not just the download worker."""
+    from PySide6.QtCore import QDate
+    from PySide6.QtWidgets import QApplication
+
+    from gdt_tax.identity import account_fingerprint
+    from gdt_tax.local_catalog import LocalCatalog
+    from gdt_tax.models import CaseRecord
+
+    from .services import JobResult
+    from .settings_store import SettingsStore
+    from .state import job_output
+    from .ui import MainWindow
+
+    application = QApplication.instance() or QApplication([])
+    username = 'synthetic-personal-view'
+    account = account_fingerprint(username)
+    base = output / 'personal-view'
+    personal = job_output(base, username, 'tax', 'CN')
+    company = job_output(base, username, 'tax')
+    LocalCatalog(personal, account).upsert_documents('tax', [
+        CaseRecord(f'personal-{i}', 'DVC', account_key=account, ngay_nop='05/10/2026').to_dict()
+        for i in range(24)])
+    LocalCatalog(company, account).upsert_documents('tax', [
+        CaseRecord('company-only', 'DVC', account_key=account, ngay_nop='05/10/2026').to_dict()])
+    window = MainWindow(SettingsStore(output / 'personal-view-settings.json'))
+    try:
+        window.output.setText(str(base))
+        window.controller.sessions.set_account_type('CN')
+        window.controller.sessions.set_account(username, 'synthetic')
+        window.applying_preset = True
+        window.from_date.setDate(QDate(2026, 10, 1))
+        window.to_date.setDate(QDate(2026, 10, 31))
+        window.applying_preset = False
+        window.active_config = window.make_config('tax', False)
+        window.on_completed(JobResult('PARTIAL', 'Synthetic partial download', personal,
+            account_key=account, operation='query_and_download', discovered=24, errors=7,
+            date_range=('01/10/2026', '31/10/2026')))
+        if (len(window.model.rows) != 24
+                or any(not row['ma_ho_so'].startswith('personal-') for row in window.model.rows)):
+            raise AssertionError('Personal completion did not display its saved catalog')
+        with patch.object(window, 'launch') as launch:
+            window.load_local_library()
+        if launch.call_args.args[0].account_type != 'CN':
+            raise AssertionError('Personal library lost account type')
+    finally:
+        window.close()
+        application.processEvents()
+    return True
+
+
 def self_test(source: Path, output: Path, report: Path) -> int:
     result = {"version": __version__, "frozen": bool(getattr(__import__("sys"), "frozen", False))}
     metadata = json.loads((Path(__file__).parent / 'resources/release.json').read_text(encoding='utf-8'))
@@ -148,6 +199,7 @@ def self_test(source: Path, output: Path, report: Path) -> int:
             result['schema_contract_version'] = TABLE_CONTRACT_VERSION
             if os.name == 'nt':
                 result['saved_accounts_native'] = saved_accounts_check()
+            result['personal_catalog_view'] = personal_catalog_check(output)
             challenge = ('<apm_do_not_touch></apm_do_not_touch><body>human visitor'
                          '<input name="answer" id="ans"><button id="jar">Submit</button></body>')
             try:

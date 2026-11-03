@@ -150,7 +150,11 @@ def check_files(mode: str, rows: list[dict], folder: str | Path) -> list[dict]:
         else:
             reason = ("Tệp đã bị xóa hoặc di chuyển; bấm Tải tệp để lấy lại" if name
                       else "Danh mục không ghi tên tệp; bấm Tải tệp để lấy lại")
-            item.update(_file_status="not_downloaded", _file_state=FILE_LABELS["not_downloaded"],
+            failed = item.get('_file_status') == 'failed'
+            status = 'failed' if failed else 'not_downloaded'
+            if failed:
+                reason = item.get('_error_message') or item.get('_file_reason') or reason
+            item.update(_file_status=status, _file_state=FILE_LABELS[status],
                         _file_path="", _file_size=0, _file_reason=reason,
                         _integrity_status=INTEGRITY_NOT_CHECKED,
                         _integrity_label=INTEGRITY_LABELS[INTEGRITY_NOT_CHECKED])
@@ -158,15 +162,16 @@ def check_files(mode: str, rows: list[dict], folder: str | Path) -> list[dict]:
     return checked
 
 
-def account_dir(base: str | Path, username: str) -> Path:
+def account_dir(base: str | Path, username: str, account_type: str = 'DN') -> Path:
     """Thư mục tài khoản đúng như ``state.job_output`` tạo ra, để đọc lại dữ liệu cũ."""
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", username)[:48].strip("_") or "tai-khoan"
-    return Path(base) / f"{safe}-{hashlib.sha256(username.encode()).hexdigest()[:8]}"
+    root = Path(base) / 'ca-nhan' if account_type == 'CN' else Path(base)
+    return root / f"{safe}-{hashlib.sha256(username.encode()).hexdigest()[:8]}"
 
 
-def library_folders(base: str | Path, username: str, mode: str) -> list[Path]:
+def library_folders(base: str | Path, username: str, mode: str, account_type: str = 'DN') -> list[Path]:
     """Các thư mục có thể chứa danh mục của tài khoản (kể cả ngách ``tai-moi``)."""
-    root = account_dir(base, username)
+    root = account_dir(base, username, account_type)
     folders = [root / FOLDERS[mode], root / "tai-moi" / FOLDERS[mode]]
     return [folder for index, folder in enumerate(folders) if folder not in folders[:index]]
 
@@ -179,7 +184,7 @@ def catalog_view(base, username, mode, start=None, end=None, *, unknown=False, i
     account_key = account_fingerprint(username)
     used = job_output(Path(base), username, mode, account_type)
     rows, keys, unknown_keys, review, problems = [], set(), set(), 0, []
-    for folder in library_folders(base, username, mode):
+    for folder in library_folders(base, username, mode, account_type):
         if not (folder / 'catalog.sqlite3').exists() and not (folder / CATALOGS[mode]).exists():
             continue
         try:

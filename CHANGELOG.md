@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [2.1.3] — 2026-11-03
+
+- Sửa bảng cá nhân trống sau khi tải: đọc đúng kho `ca-nhan` ở cả lúc đăng nhập,
+  đổi kỳ và hoàn tất tác vụ. Giữ tách biệt với doanh nghiệp có cùng tên đăng nhập.
+  Hồ sơ/tệp đã tải được đọc lại, không cần tải lại.
+- Giữ trạng thái lỗi tải khi đọc kho local để hồ sơ lỗi vẫn hiện đúng bộ lọc.
+- Thêm kiểm thử GUI với 24 hồ sơ cá nhân và kiểm chứng cùng luồng trong EXE.
+
 ## [2.1.2] — 2026-11-03
 
 - Cá nhân: ưu tiên DVC từ mốc chuyển nguồn; kỳ trước dùng canhan.gdt.gov.vn.

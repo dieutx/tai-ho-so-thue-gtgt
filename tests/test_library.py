@@ -49,6 +49,25 @@ class CatalogTests(unittest.TestCase):
     def test_missing_catalog_is_empty_not_an_error(self):
         self.assertEqual(read_catalog("tax", self.base / "khong-co"), [])
 
+    def test_personal_library_restores_both_owned_locations_without_company_rows(self):
+        from desktop.library import catalog_view, library_folders
+        from gdt_tax.local_catalog import LocalCatalog
+
+        username = 'synthetic-personal'
+        account = account_fingerprint(username)
+        company = job_output(self.base, username, 'tax')
+        personal = job_output(self.base, username, 'tax', 'CN')
+        fresh = personal.parent / 'tai-moi' / 'to-khai'
+        for folder, key in ((company, 'company'), (personal, 'personal'), (fresh, 'personal-upgrade')):
+            LocalCatalog(folder, account).upsert_documents('tax',
+                [CaseRecord(key, 'DVC', account_key=account, ngay_nop='05/10/2026').to_dict()])
+        self.assertEqual(library_folders(self.base, username, 'tax', 'CN'), [personal, fresh])
+        config = RunConfig('library', self.base, username=username, account_type='CN',
+                           from_date='01/10/2026', to_date='31/10/2026')
+        for result in (catalog_view(self.base, username, 'tax', config.from_date, config.to_date,
+                                    account_type='CN'), load_library(config, RunHooks()).children['tax']):
+            self.assertEqual({row['ma_ho_so'] for row in result.rows}, {'personal', 'personal-upgrade'})
+
     def test_corrupt_catalog_reports_readable_error(self):
         folder = self.base / "hong"
         folder.mkdir()
@@ -101,6 +120,12 @@ class CatalogTests(unittest.TestCase):
         (folder / "rong.zip").write_bytes(b"")
         rows = check_files("tax", [tax_row("A", name="rong.zip")], folder)
         self.assertEqual(rows[0]["_file_status"], "not_downloaded")
+
+    def test_catalog_refresh_keeps_download_failure_visible(self):
+        rows = check_files('tax', [dict(tax_row('failed'), _file_status='failed',
+                           _error_message='INVALID_XML')], self.base)
+        self.assertEqual(rows[0]['_file_status'], 'failed')
+        self.assertEqual(rows[0]['_file_reason'], 'INVALID_XML')
 
     def test_date_range_includes_both_bounds_and_keeps_unknown_dates(self):
         start, end = date(2026, 10, 1), date(2026, 10, 31)

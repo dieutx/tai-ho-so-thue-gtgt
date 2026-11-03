@@ -197,6 +197,43 @@ class LookupCompletionTests(unittest.TestCase):
         self.assertIn('01/10/2026', self.window.status.text())
         self.assertEqual((self.window.progress.maximum(), self.window.progress.value()), (1, 1))
 
+    def personal_catalog(self):
+        self.window.controller.sessions.set_account_type('CN')
+        self.window.controller.sessions.set_account(USERNAME, 'synthetic-password')
+        folder = job_output(self.root, USERNAME, 'tax', 'CN')
+        catalog = LocalCatalog(folder, ACCOUNT)
+        catalog.upsert_documents('tax', [self.row(f'personal-{i}', '05/10/2026') for i in range(24)])
+        return folder
+
+    def test_personal_completion_reads_all_24_saved_rows_without_network(self):
+        folder = self.personal_catalog()
+        self.window.active_config = self.window.make_config('tax', False)
+        with patch('requests.sessions.Session.request', side_effect=AssertionError('HTTP forbidden')):
+            self.window.on_completed(JobResult('PARTIAL', 'Seven files failed', folder,
+                account_key=ACCOUNT, date_range=('01/10/2026', '28/10/2026'),
+                operation='query_and_download', discovered=24, downloaded=17, errors=7))
+        self.assertEqual(len(self.window.model.rows), 24)
+        self.assertTrue(all(row['ma_ho_so'].startswith('personal-') for row in self.window.model.rows))
+        self.assertEqual(self.window.result.output, folder)
+        self.assertIn('Kho: 24', self.window.counts.text())
+        self.assertIn('Online: 24', self.window.status.text())
+
+    def test_personal_catalog_refresh_stays_in_personal_namespace(self):
+        self.personal_catalog()
+        with patch('requests.sessions.Session.request', side_effect=AssertionError('HTTP forbidden')):
+            self.window.apply_local_date_filter()
+            self.assertEqual(len(self.window.model.rows), 24)
+            self.period(9)
+            self.assertEqual(self.window.model.rows, [])
+            self.period(10)
+            self.assertEqual(len(self.window.model.rows), 24)
+
+    def test_personal_login_library_config_keeps_account_type(self):
+        self.personal_catalog()
+        with patch.object(self.window, 'launch') as launch:
+            self.assertTrue(self.window.load_local_library())
+        self.assertEqual(launch.call_args.args[0].account_type, 'CN')
+
     def test_failed_query_keeps_local_rows_and_clickable_error(self):
         self.complete('ERROR', errors=1, error_code='SYNTHETIC_SEARCH_FAILED')
         self.assertEqual(self.window.result.state, 'ERROR')

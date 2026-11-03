@@ -223,6 +223,7 @@ class V2InteractionMixin:
             return False
         config = RunConfig(
             'library', Path(base).expanduser(), username=account.username,
+            account_type=account.account_type,
             from_date=self.from_date.date().toString('dd/MM/yyyy'),
             to_date=self.to_date.date().toString('dd/MM/yyyy'),
             preferences=replace(self.preferences),
@@ -250,7 +251,7 @@ class V2InteractionMixin:
             selected = catalog_view(self.output.text(), account.username, self.mode,
                                     self.from_date.date().toString('dd/MM/yyyy'),
                                     self.to_date.date().toString('dd/MM/yyyy'),
-                                    include_unknown=True)
+                                    include_unknown=True, account_type=account.account_type)
         except Exception:
             self.status.setText('Không đọc được kho local; dữ liệu hiện tại được giữ. Kiểm tra nơi lưu và quyền sở hữu.')
             self.status.setToolTip(self.status.text())
