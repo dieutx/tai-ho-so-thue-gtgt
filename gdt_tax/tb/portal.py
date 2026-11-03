@@ -29,6 +29,9 @@ _EMPTY_MARKERS = (
     "không có thông báo",
     "Chưa có thông báo",
     "Không có dữ liệu",
+    # Trang tra cứu legacy trả đúng câu này khi khoảng ngày không có bản ghi.
+    # Đây là kết quả rỗng hợp lệ, không phải cổng đổi cấu trúc.
+    "Không tìm thấy kết quả tra cứu",
 )
 
 #: Khóa phiên cần giữ khi dựng URL phân trang.
@@ -111,6 +114,18 @@ class TbPortal(LegacyBusinessPortal):
             return TbPageResult(http_status=response.status_code)
         empty = any(marker in response.text for marker in _EMPTY_MARKERS)
         form_id = self._form_id_for_operation(response.text, self.capabilities.operation, self._search_form_id)
+        if empty and form_id:
+            # Cổng xác nhận không có bản ghi nhưng không dựng bảng kết quả.
+            # Giữ form hiện tại để lần tra cứu kỳ sau vẫn dùng đúng phiên.
+            self._search_form_id = form_id
+            self._search_page_html = response.text
+            self._search_page_url = response.url
+            return TbPageResult(
+                records=[],
+                total_pages=1,
+                http_status=response.status_code,
+                diagnostics=ParseDiagnostics(status="EMPTY_CONFIRMED", reasons=["EMPTY_SEARCH_RESULT"]),
+            )
         if not form_id or (self.capabilities.table_id not in response.text and not empty):
             self.logger.warning(
                 "SCHEMA_CHANGED: legacy thiếu bảng hoặc form thông báo (HTTP %s)",
