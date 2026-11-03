@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import base64
 import time
 
 from bs4 import BeautifulSoup
@@ -16,12 +17,44 @@ from ..constants import (
     ORIGIN,
     SOURCE_DVC,
 )
+from ..contracts import DownloadArtifact
 from ..dates import format_date
 from ..dvc_notices import decode_notice_response, parse_notice_list
 from ..errors import AttachmentDownloadError
 from ..http_policy import DOWNLOAD_OPERATION, OperationPolicy
 from ..models import CaseRecord, PageResult, SearchPeriod
 from .base import Portal
+
+
+def json_wrapped_zip(response, record: CaseRecord) -> DownloadArtifact | None:
+    """Cổng DVC có lúc trả ZIP bọc trong JSON base64 thay vì bytes ZIP.
+
+    Đã gặp với hồ sơ ``01/TS``: ``POST /tchs/downloadhoso`` trả HTTP 200,
+    ``content-type: application/json`` và body
+    ``{"fileName": "files_<mã>.zip", "fileType": "application/zip", "content": "<base64>"}``.
+    Không giải mã thì tệp bị coi là hỏng và hồ sơ mất tệp dù cổng có trả.
+    """
+    if getattr(response, "status_code", 0) != 200:
+        return None
+    try:
+        payload = response.json()
+    except (ValueError, AttributeError, TypeError):
+        # ZIP nhị phân không parse được thành JSON: giữ nguyên phản hồi gốc.
+        return None
+    if not isinstance(payload, dict):
+        return None
+    encoded = payload.get("content")
+    if not isinstance(encoded, str) or not encoded:
+        return None
+    if len(encoded) > (DOWNLOAD_OPERATION.max_bytes + 2) // 3 * 4:
+        return None
+    try:
+        data = base64.b64decode("".join(encoded.split()), validate=True)
+    except (ValueError, TypeError):
+        return None
+    if not data.startswith(b"PK"):
+        return None
+    return DownloadArtifact(data, "zip", "DECLARATION", record.key)
 
 
 class DvcPortal(Portal):
@@ -104,7 +137,8 @@ class DvcPortal(Portal):
                 ),
             )
             raise_terminal(response, 'DVC', authenticated=True)
-            return response
+            artifact = json_wrapped_zip(response, record)
+            return artifact if artifact is not None else response
 
         if self._ajax_validation is False:
             self.logger.warning("Kiểm tra AJAX không khả dụng; dùng form tải dự phòng.")
@@ -123,7 +157,8 @@ class DvcPortal(Portal):
             ),
         )
         raise_terminal(response, 'DVC', authenticated=True)
-        return response
+        artifact = json_wrapped_zip(response, record)
+        return artifact if artifact is not None else response
 
     def fetch_notice_list(self):
         return parse_notice_list(self.detail_html)
@@ -177,4 +212,4 @@ class DvcPortal(Portal):
         )
 
 
-__all__ = ["DvcPortal"]
+__all__ = ["DvcPortal", "json_wrapped_zip"]

@@ -53,7 +53,9 @@ def validate_xml(data: bytes, kind: str) -> IntegrityResult:
              # ``TBTNhan`` là phong bì thông báo của cổng DVC hiện tại
              # (``<TBTNhan><DLTBao ...>``), phổ biến với hồ sơ từ 2025.
              "gnt": {"CHUNGTU"},
-             "notice": {"TBao", "TBaoThue", "TBaoThueDTu", "TBTNhan"}}
+             # ``THONGBAO`` là phong bì thông báo khác của cổng (đã gặp trên
+             # DVC với tệp ``Thong bao_*.xml``); vẫn phải đúng loại thông báo.
+             "notice": {"TBao", "TBaoThue", "TBaoThueDTu", "TBTNhan", "THONGBAO"}}
     namespaces = {None, DECLARATION_NS, NOTICE_NS} if kind == 'notice' else {None, DECLARATION_NS}
     if name not in roots.get(kind, set()) or namespace not in namespaces:
         return _result(data, kind, "UNSUPPORTED_XML_KIND_OR_NAMESPACE", unsupported=True)

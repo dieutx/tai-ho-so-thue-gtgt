@@ -57,6 +57,9 @@ class DownloadIntegrityTests(unittest.TestCase):
                 b'<Ten>Thong bao synthetic</Ten></DLTBao></TBTNhan>')
         self.assertTrue(validate_xml(data, "notice").ok)
         self.assertFalse(validate_xml(data, "declaration").ok)
+        # Đã gặp trên DVC: thông báo tải về có gốc ``THONGBAO``.
+        self.assertTrue(validate_xml(b'<THONGBAO><MSo>01/TB-SS</MSo></THONGBAO>', "notice").ok)
+        self.assertFalse(validate_xml(b'<THONGBAO/>', "declaration").ok)
 
     def test_xlsx_notice_attachment_is_accepted_as_excel(self):
         from openpyxl import Workbook
