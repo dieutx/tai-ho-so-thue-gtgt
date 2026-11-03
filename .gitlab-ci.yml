@@ -5,6 +5,7 @@
 stages:
   - test
   - lint
+  - build
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -33,3 +34,27 @@ lint:
     - python -m pip install ruff mypy beautifulsoup4 lxml openpyxl requests
     - ruff check .
     - mypy gdt_tax
+
+# Bản EXE thử nghiệm cho tài khoản cá nhân/doanh nghiệp: chỉ là job artifact
+# (hết hạn sau 14 ngày), không tạo GitLab Release. Chỉ chạy trên nhánh phụ để
+# không biến mỗi lần push vào main thành một bản build phát hành.
+build-exe-test:
+  stage: build
+  tags: [saas-windows-medium-amd64]
+  rules:
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+  timeout: 60m
+  variables:
+    PYTHONUTF8: "1"
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  script:
+    - 'choco install python311 --yes --no-progress'
+    - 'C:\Python311\python.exe -m venv .venv-exe'
+    - '.\.venv-exe\Scripts\python.exe -m pip install --upgrade pip'
+    - '.\.venv-exe\Scripts\python.exe -m pip install -r requirements.txt pyinstaller'
+    - '.\.venv-exe\Scripts\python.exe -m PyInstaller --noconfirm --clean --onefile --console --name gdt-tax --paths . --hidden-import gdt_tax.captcha.ddddocr_solver --hidden-import gdt_tax.captcha.manual_solver --hidden-import gdt_tax.captcha.remote_solver --collect-all ddddocr --collect-all onnxruntime --add-data "gdt_tax/form_mappings;gdt_tax/form_mappings" packaging/launcher.py'
+  artifacts:
+    name: "gdt-tax-test-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - dist/gdt-tax.exe
+    expire_in: 14 days
