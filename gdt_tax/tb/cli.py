@@ -27,6 +27,7 @@ from ..cli import (
     log_secrets,
     parse_headers,
     parse_solver_options,
+    personal_captcha_options,
 )
 from ..config import DEFAULT_ENV_FILE, Settings
 from ..errors import CaptchaError, ConfigError, GdtError
@@ -44,6 +45,7 @@ Ví dụ:
   python -m gdt_tax.tb --from-date 01/08/2026 --to-date 31/08/2026 --output-dir download/tb-2026-08
   python -m gdt_tax.tb --dry-run                 # chỉ tra cứu, không tải PDF
   gdt-tb --from-date 01/01/2026 --to-date 31/03/2026
+  gdt-tb --account-type CN --from-date 01/01/2026 --to-date 31/03/2026
 
 Kết quả trong --output-dir:
   <số thông báo>__<messageId>.pdf
@@ -79,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Tham số cho solver, lặp lại được nhiều lần",
     )
     parser.add_argument("--env-file", default=DEFAULT_ENV_FILE, help="File cấu hình dạng .env")
+    parser.add_argument(
+        "--account-type",
+        choices=("DN", "CN"),
+        help=("Loại tài khoản: DN = doanh nghiệp (mặc định), "
+              "CN = cá nhân trên canhan.gdt.gov.vn"),
+    )
     parser.add_argument("--dry-run", action="store_true", help="Chỉ tra cứu, không tải PDF")
     parser.add_argument(
         "--list-solvers", action="store_true", help="Liệt kê solver CAPTCHA rồi thoát"
@@ -152,6 +160,9 @@ def _main(argv: list[str] | None = None) -> int:
             http_dump_private=args.dump_http_private,
             header_profile=args.header_profile,
             proxy_url=args.proxy,
+            account_type=args.account_type,
+            dvc_enabled=False if args.account_type == "CN" else None,
+            etax_cutoff="01/01/2100" if args.account_type == "CN" else None,
         )
     except (ConfigError, ValueError) as error:
         print(f"LỖI CẤU HÌNH: {error}", file=sys.stderr)
@@ -183,7 +194,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     try:
         register_plugins(settings.captcha_plugins)
-        captcha = create_solver(settings.captcha_solver, **settings.captcha_options)
+        captcha_options = (personal_captcha_options(settings.captcha_solver, settings.captcha_options)
+                           if settings.account_type == "CN" else settings.captcha_options)
+        captcha = create_solver(settings.captcha_solver, **captcha_options)
     except CaptchaError as error:
         logger.error("%s", error)
         return EXIT_CONFIG_ERROR

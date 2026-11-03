@@ -11,6 +11,7 @@ import random
 import time
 from collections.abc import Callable
 from functools import partial
+from typing import Any
 
 from ..catalog import CatalogCheckpoint, flush_on_error
 from ..contracts import QueryOutcome
@@ -104,9 +105,16 @@ class TbPipeline:
             self.settings.to_date.strftime("%d/%m/%Y"),
             len(periods),
         )
-        portal = self.portal_factory() if self.portal_factory else TbPortal(
-            self.http, self.captcha, self.settings, self.logger
-        )
+        portal: Any
+        if self.portal_factory:
+            portal = self.portal_factory()
+        elif getattr(self.settings, "account_type", "DN") == "CN":
+            # Cá nhân dùng operation ``retailSearchTaxNoticesProc`` và form
+            # riêng của canhan.gdt.gov.vn, không dùng bảng doanh nghiệp.
+            from ..portals.canhan import CanhanPortal
+            portal = CanhanPortal(self.http, self.captcha, self.settings, self.logger)
+        else:
+            portal = TbPortal(self.http, self.captcha, self.settings, self.logger)
 
         records: dict[str, ThongBao] = self.records
         downloaded: set[str] = self.downloaded_ids

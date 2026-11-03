@@ -13,6 +13,7 @@ mật khẩu, MST hay nội dung hồ sơ thật trong mã nguồn.
 | Trang đăng nhập | `POST /ICanhan/Request` với `retailIndexProc` / `retailUserLoginProc` | Form `goProcForm`, `dse_nextEventName=start` rồi `ok`. |
 | Bước 1 | Form `loginForm`: `_userName`, `capcha` | Mã kiểm tra lấy từ `GET /ICanhan/servlet/ImageServlet`. |
 | Bước 2 | Form `loginForm`: `_password` | Chỉ gửi sau khi bước 1 được chấp nhận. |
+| Đăng nhập đồng thời | `loginConductForm` + `_loginedConduct=forceLastLogin` | Cổng hỏi “Tài khoản này đang đăng nhập hệ thống”; phải bấm Đồng ý. Không gửi input `type=button` (trình duyệt không gửi khi submit bằng JS); gửi kèm nút làm cổng trả `SystemError`. |
 | Trang chủ | `retailHomePageProc` | Lưu `dse_sessionId`, `dse_pageId`, HTML trang chủ để mở nghiệp vụ. |
 | Tờ khai | `retailSearchVoucherProc`, form `frm` | `_ngaygui`, `_denngay`, `maGDichArr`, `cboTenTKhai`, `maHdong`; trang sau dùng `GET` + `pn`. |
 | Tải tờ khai | `retailSearchVoucherProc` + `dse_nextEventName=download`, form `frmtcuu` | `idTBao=<mã giao dịch>`, `fileFormat=9`, `chkTTS=1`; cổng trả XML `HSoThueDTu`. |
@@ -28,27 +29,47 @@ XML được lưu trực tiếp dưới đuôi `.xml`; thông báo PDF vẫn lư
 | Nhóm | Trạng thái |
 |---|---|
 | Giấy nộp tiền | HAR có form `TraCuuChungTuProc` nhưng **không có lệnh tải đã xác minh**. Ứng dụng báo `UNSUPPORTED_ACCOUNT_FLOW`, không mượn endpoint doanh nghiệp và không ghi nhận thành công giả. |
+| Phân trang | Pager thật ghi `Trang 1 /Tổng số N trang`; trang sau lấy đúng href trong `divPagination` (đủ `dse_pageId`, `dse_processorState`, `pn`). |
+| Cổng trả SystemError HTTP 200 | Tự thử lại 3 lần khi tải tệp; nếu vẫn lỗi thì báo “cổng tạm bận”, không lưu HTML thành PDF/XML và không đếm là đã tải. Một số thông báo KDT vẫn có thể lỗi lặp lại do phía cổng. |
+| CAPTCHA | `ddddocr` đọc đúng phần lớn ảnh 4–5 ký tự; ảnh mờ có thể bị nhận thiếu ký tự. Desktop có bước nhập tay dự phòng sau khi tự động thất bại. |
 | Đổi loại tài khoản | Xoá phiên/cookie và mật khẩu đang giữ, không xoá tệp đã tải. |
 | Kho dữ liệu | Cá nhân nằm tại `<Nơi lưu>/ca-nhan/<tài khoản>/...`; kho doanh nghiệp giữ nguyên. |
 
 ## Kiểm chứng live
 
-Ngày 03/11/2026, chạy trực tiếp `CanhanPortal` qua proxy Việt Nam bằng tài khoản
-cá nhân thật (không dùng endpoint doanh nghiệp):
+Ngày 03/11/2026, chạy CLI `--account-type CN` qua proxy Việt Nam bằng tài khoản
+cá nhân thật (không dùng endpoint doanh nghiệp), khoảng **01/01/2022 → 03/11/2026**:
 
-- Đăng nhập hai bước thành công; phiên có `dse_sessionId` và `dse_pageId`.
-- Tra cứu tờ khai: HTTP 200, **10 hồ sơ**; tải thử hồ sơ đầu tiên được ZIP
-  **2.342 bytes**, `validate_tax_zip` hợp lệ.
-- Tra cứu thông báo: HTTP 200, **10 thông báo**; tải thử thông báo đầu tiên được
-  XML **7.801 bytes**, `validate_xml(..., "notice")` hợp lệ.
-- CAPTCHA của cổng cá nhân là ảnh 5 ký tự; bộ đọc tự động `ddddocr` đọc sai
-  trong lần chạy này, nên lần kiểm chứng dùng nhập tay. Desktop vẫn có bước nhập
-  tay dự phòng sau khi tự động thất bại.
+- Đăng nhập hai bước thành công, kể cả bước xác nhận đăng nhập đồng thời; phiên
+  có `dse_sessionId` và `dse_pageId`.
+- Tờ khai: **4/4 hồ sơ đã tải**, exit 0; ZIP và metadata được kiểm tra toàn vẹn.
+- Thông báo: **5/5 tệp đã tải** trên 58 đoạn ngày, exit 0; XML `TBaoThueDTu` hợp lệ.
+- Kỳ không có hồ sơ: cổng trả trang tra cứu hợp lệ nhưng không có bảng kết quả;
+  CLI ghi nhận `EMPTY_CONFIRMED`, không báo lỗi cấu trúc và không đếm là đã tải.
+- CAPTCHA cổng cá nhân dài **4 hoặc 5 ký tự**; `ddddocr` được cấu hình nhận cả
+  hai độ dài (doanh nghiệp vẫn chỉ nhận 5).
+- Phân trang thông báo: tài khoản có 3 trang/30 bản ghi được đọc đúng số trang và
+  href từng trang, không còn lặp lại trang 1.
+- Ba tài khoản cá nhân đăng nhập được trong đợt chạy: tờ khai **4/4**, **1/1**,
+  **1/1**; thông báo **5/5**, **2/2**; các tài khoản còn lại bị cổng từ chối thông
+  tin đăng nhập nên được bỏ qua, không thử mật khẩu lặp lại.
 
 Không có mật khẩu, cookie, token, MST đầy đủ hoặc nội dung hồ sơ nào được ghi
 vào mã nguồn, tài liệu hay log bàn giao.
 
 ## Cách dùng
+
+CLI (cùng luồng `CanhanPortal`, không cần giao diện):
+
+```bash
+python -m gdt_tax --account-type CN --from-date 01/01/2022 --to-date 03/11/2026
+python -m gdt_tax.tb --account-type CN --from-date 01/01/2022 --to-date 03/11/2026
+```
+
+`--account-type CN` buộc dùng `canhan.gdt.gov.vn`, bỏ qua cutoff/DVC của doanh
+nghiệp và chia khoảng ngày thành từng đoạn 31 ngày.
+
+Desktop:
 
 1. Chọn **Cá nhân** ở góc trên bên phải.
 2. Bấm **Đăng nhập**, nhập MST/tên đăng nhập cá nhân và mật khẩu.

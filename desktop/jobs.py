@@ -86,10 +86,12 @@ class GuiCaptchaSolver(CaptchaSolver):
     name = "gui"
     AUTO_ATTEMPTS = 5
 
-    def __init__(self, hooks: RunHooks, request, use_ocr: bool = True) -> None:
+    def __init__(self, hooks: RunHooks, request, use_ocr: bool = True,
+                 length: int | tuple[int, ...] = 5) -> None:
         super().__init__()
         self.hooks, self.request = hooks, request
-        self.ocr = DdddOcrSolver() if use_ocr else None
+        # Cổng cá nhân phát CAPTCHA 4 hoặc 5 ký tự.
+        self.ocr = DdddOcrSolver(length=length) if use_ocr else None
         self.auto_failures = 0
         self.last_was_auto = False
         self.manual_fallback_pending = False
@@ -209,7 +211,9 @@ class Worker(QObject):
                 from .reports import export_document_report
                 result = export_document_report(self.config, hooks)
             else:
-                solver = GuiCaptchaSolver(hooks, self.captcha.emit, self.config.preferences.solver == "ddddocr")
+                solver = GuiCaptchaSolver(hooks, self.captcha.emit,
+                                          self.config.preferences.solver == "ddddocr",
+                                          (4, 5) if self.config.account_type == "CN" else 5)
                 try:
                     if self.config.mode == "batch":
                         result = JobResult("SUCCESS", "Đã hoàn tất các tác vụ", self.config.output)
