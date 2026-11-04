@@ -1,15 +1,44 @@
 """Optional cooperation points for embedded clients; CLI defaults stay unchanged."""
 from __future__ import annotations
 
+import math
+import os
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from threading import Event
 from typing import Any
 
-from .errors import NetworkError
+from .errors import ConfigError, NetworkError
 from .metrics import HttpMetrics
+
+#: Hạn mức mặc định của một lượt chạy (30 phút).
+DEFAULT_MAX_SECONDS = 1800.0
+
+#: Biến môi trường nới hạn mức cho lượt chạy dải ngày dài (ví dụ 2018 → nay).
+BUDGET_SECONDS_ENV = "GDT_RUN_BUDGET_SECONDS"
+
+
+def default_max_seconds(environ: Mapping[str, str] | None = None,
+                        default: float = DEFAULT_MAX_SECONDS) -> float:
+    """Hạn mức thời gian mặc định, có thể nới bằng ``GDT_RUN_BUDGET_SECONDS``.
+
+    Một dải ngày dài (2018 → nay) cần hơn 30 phút, trong khi hạn mức mặc định giữ
+    nguyên cho lượt chạy thường. Chỉ biến môi trường mới nới được; các nơi truyền
+    ``RunBudget(max_seconds=...)`` tường minh không bị ảnh hưởng.
+    """
+    values = os.environ if environ is None else environ
+    raw = str(values.get(BUDGET_SECONDS_ENV, "")).strip()
+    if not raw:
+        return default
+    try:
+        seconds = float(raw)
+    except ValueError as error:
+        raise ConfigError(f"{BUDGET_SECONDS_ENV} phải là số giây, nhận được {raw!r}") from error
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise ConfigError(f"{BUDGET_SECONDS_ENV} phải là số dương hữu hạn, nhận được {raw!r}")
+    return seconds
 
 
 class RunCancelled(Exception):
@@ -20,7 +49,7 @@ class RunCancelled(Exception):
 class RunBudget:
     """Shared limits include retries and redirects, using a monotonic clock."""
 
-    max_seconds: float = 1800
+    max_seconds: float = field(default_factory=default_max_seconds)
     max_requests: int = 10_000
     max_bytes: int = 1024 * 1024 * 1024
     max_pages: int = 10_000
@@ -38,7 +67,6 @@ class RunBudget:
     started: float = field(init=False)
 
     def __post_init__(self):
-        import math
         if not math.isfinite(self.max_seconds) or min(self.max_seconds, self.max_requests, self.max_bytes, self.max_pages, self.max_auth_attempts) <= 0:
             raise ValueError("Run budget must be positive and finite")
         self.started = self.clock()

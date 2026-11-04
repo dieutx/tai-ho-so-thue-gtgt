@@ -181,6 +181,19 @@ class ZipStoreTests(unittest.TestCase):
         self.assertTrue(path.is_file())
         self.assertEqual(record.tep_zip, path.name)
 
+    def test_luu_zip_tb01_ac_du_metadata_cu_ghi_notice(self):
+        # Thực tế 2018-2019: tiêu đề "TB01/AC-Thông báo phát hành hóa đơn" nhưng
+        # phản hồi là HSoThueDTu; catalog cũ có thể đã ghi NOTICE.
+        xml = (b'<HSoThueDTu xmlns="http://kekhaithue.gdt.gov.vn/TKhaiThue">'
+               b'<HSoKhaiThue><TTinTKhaiThue><TKhaiThue><maTKhai>106</maTKhai>'
+               b'</TKhaiThue></TTinTKhaiThue></HSoKhaiThue></HSoThueDTu>')
+        record = CaseRecord(ma_ho_so="10620190255819734", nguon="ETAX_LEGACY",
+                            to_khai="TB01/AC-Thông báo phát hành hóa đơn",
+                            loai_tai_lieu="NOTICE")
+        path = self.store.save(record, sample_zip(xml))
+        self.assertIsNotNone(path)
+        self.assertTrue(path.is_file())
+
     def test_zip_thong_bao_khong_duoc_luu_nhu_to_khai(self):
         self.assertIsNone(self.store.save(make_record(), sample_zip(NOTICE_XML)))
         self.assertEqual(self.store.last_error, "UNSUPPORTED_XML_KIND_OR_NAMESPACE")

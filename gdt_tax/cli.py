@@ -18,7 +18,7 @@ import sys
 from . import __version__
 from .captcha import available_solvers, create_solver, register_plugins
 from .config import DEFAULT_ENV_FILE, Settings
-from .errors import CaptchaError, ConfigError, GdtError
+from .errors import CaptchaError, ConfigError, GdtError, LegacyPermissionError
 from .headers import PROFILE_BROWSER, PROFILE_MINIMAL, PROFILES, header_names
 from .http import HttpClient
 from .logging_setup import close_logging, configure_logging, configure_streams
@@ -292,6 +292,9 @@ def _main(argv: list[str] | None = None) -> int:
     )
     try:
         summary = Pipeline(settings, http, captcha, logger=logger).run()
+    except LegacyPermissionError as error:
+        logger.warning("%s", error)
+        return EXIT_OK
     except (GdtError, OSError) as error:
         logger.error("%s", error)
         return EXIT_INCOMPLETE

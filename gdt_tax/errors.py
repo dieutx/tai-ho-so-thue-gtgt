@@ -77,3 +77,16 @@ class LegacyPageError(LegacyEtaxError):
 
     def __init__(self, message):
         super().__init__(self.code + ': ' + message)
+
+
+class LegacyPermissionError(LegacyPageError):
+    """Tài khoản chưa được phân quyền dùng chức năng legacy.
+
+    Cổng trả HTTP 200 kèm trang "Bạn chưa được phân quyền sử dụng chức năng này!".
+    Đây là quyền của tài khoản, không phải cấu trúc trang thay đổi, nên gọi lại
+    không sửa được và cũng không nên tính là lượt chạy lỗi.
+    """
+    code = 'AUTH_FUNCTION_NOT_PERMITTED'
+
+    def __init__(self, message):
+        LegacyEtaxError.__init__(self, self.code + ': ' + message)

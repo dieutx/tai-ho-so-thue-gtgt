@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 
 from gdt_tax.config import Settings
 from gdt_tax.constants import SOURCE_ETAX, SOURCE_ETAX_LEGACY
-from gdt_tax.errors import LegacyEtaxError
+from gdt_tax.errors import LegacyEtaxError, LegacyPermissionError
 from gdt_tax.models import CaseRecord, PageResult, SearchPeriod
 from gdt_tax.parsing import parse_records
 from gdt_tax.pipeline import Pipeline
@@ -112,7 +112,8 @@ def make_legacy_handler(state: dict):
                     )
                 if operation == "traCuuToKhaiProc" and event == "start":
                     return FakeResponse(
-                        SEARCH_START_HTML, url="https://thuedientu.gdt.gov.vn/etaxnnt/Request"
+                        state.get("search_start_html", SEARCH_START_HTML),
+                        url="https://thuedientu.gdt.gov.vn/etaxnnt/Request",
                     )
                 if event == "downTkhai":
                     return state.get(
@@ -233,6 +234,22 @@ class LegacyPortalTests(unittest.TestCase):
         self.assertEqual(len(queries), 1)
         self.assertEqual(queries[0]["qryFromDate"], "01/01/2020")
         self.assertEqual(queries[0]["qryToDate"], "31/01/2020")
+
+    def test_trang_chua_phan_quyen_bao_dung_ma_loi(self):
+        # Cổng trả HTTP 200 kèm trang từ chối quyền: phải báo đúng là thiếu quyền,
+        # không phải "cấu trúc trang chưa nhận diện" (gọi lại cũng không sửa được).
+        denied = (
+            "<html><body><div class='succeed_table_content'>"
+            "<strong>Lỗi truy cập</strong><br/>"
+            "<span>Bạn chưa được phân quyền sử dụng chức năng này!</span>"
+            "</div></body></html>"
+        )
+        portal = self.make_portal({"search_start_html": denied})
+        with self.assertRaises(LegacyPermissionError) as caught:
+            portal.search(self.period(), page=1)
+        self.assertEqual(caught.exception.code, "AUTH_FUNCTION_NOT_PERMITTED")
+        self.assertIn("chưa được phân quyền", str(caught.exception))
+        self.assertNotIn("SCHEMA_UNKNOWN", str(caught.exception))
 
     def test_search_lan_2_khong_dang_nhap_lai(self):
         portal = self.make_portal()

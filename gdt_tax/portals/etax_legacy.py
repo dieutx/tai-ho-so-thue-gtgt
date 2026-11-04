@@ -36,7 +36,7 @@ from ..auth_outcomes import AuthFailure, AuthOutcome, classify_response, raise_t
 from ..constants import LEGACY_ETAX_BASE, LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
 from ..contracts import DownloadArtifact, Solver, Transport
 from ..dvc_notices import DvcNotice, NoticeList, decode_notice_response
-from ..errors import LegacyEtaxError, LegacyPageError
+from ..errors import LegacyEtaxError, LegacyPageError, LegacyPermissionError
 from ..headers import build_image_headers, build_page_headers, build_xhr_headers
 from ..legacy_notices import parse_legacy_notice_list
 from ..legacy_session import LegacySessionState
@@ -109,6 +109,19 @@ def _is_declaration_search_page(html: str) -> bool:
     if soup.select_one("table#tbl_tracuu, table#data_content_onday") is not None:
         return False
     return "tra cứu tờ khai" in " ".join(soup.stripped_strings).casefold()
+
+
+_PERMISSION_DENIED_MARKERS = (
+    "chưa được phân quyền",
+    "chua duoc phan quyen",
+    "không được phân quyền",
+)
+
+
+def _permission_denied(html: str) -> bool:
+    """Cổng trả trang 200 "Bạn chưa được phân quyền sử dụng chức năng này!"."""
+    text = " ".join(BeautifulSoup(html or "", "html.parser").stripped_strings).casefold()
+    return any(marker in text for marker in _PERMISSION_DENIED_MARKERS)
 
 
 def _page_detail(response) -> str:
@@ -477,6 +490,13 @@ class LegacySessionNavigator:
                 )
             response = self._settle_operation_page(response, operation, expected_form)
             last = response
+            if response.status_code == 200 and _permission_denied(response.text):
+                # Quyền của tài khoản: tự dựng lại URL hay đổi phiên đều không giúp.
+                self.logger.warning("Tài khoản chưa được phân quyền dùng chức năng %s", label)
+                raise LegacyPermissionError(
+                    f"Tài khoản chưa được phân quyền sử dụng chức năng {label} "
+                    "trên trang Thuế điện tử; bỏ qua chức năng này."
+                )
             if response.status_code == 200:
                 form_id = self._form_id_for_operation(response.text, operation, expected_form)
                 if form_id:

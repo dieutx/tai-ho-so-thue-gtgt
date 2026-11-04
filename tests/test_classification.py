@@ -36,5 +36,14 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(conflict.nhom_to_khai, "UNKNOWN")
         self.assertIn("mâu thuẫn", conflict.ly_do_phan_loai)
 
+    def test_tb01_tb03_la_to_khai_du_ten_co_chu_thong_bao(self):
+        # Cổng trả HSoThueDTu (maTKhai 106/107) cho các mẫu này, không phải TBao.
+        for title in ("TB01/AC-Thông báo phát hành hóa đơn",
+                      "TB03/AC - Thông báo kết quả hủy hóa đơn"):
+            with self.subTest(title=title):
+                self.assertEqual(self.classify(title).loai_tai_lieu, "DECLARATION")
+        notice = self.classify("04/SS-HĐĐT - Thông báo hóa đơn điện tử đã lập sai")
+        self.assertEqual(notice.loai_tai_lieu, "NOTICE")
+
     def test_tu_khoa_phai_co_ranh_gioi(self):
         self.assertEqual(self.classify("randomGTGTsuffix").nhom_to_khai, "UNKNOWN")

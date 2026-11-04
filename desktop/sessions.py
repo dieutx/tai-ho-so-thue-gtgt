@@ -11,7 +11,7 @@ from typing import Any
 from gdt_tax.auth import login as dvc_login
 from gdt_tax.auth_outcomes import AuthFailure, AuthOutcome, classify_response
 from gdt_tax.constants import LEGACY_ETAX_ORIGIN, SOURCE_ETAX_LEGACY
-from gdt_tax.errors import LegacyPageError
+from gdt_tax.errors import LegacyPageError, LegacyPermissionError
 from gdt_tax.gnt.portal import GntPortal
 from gdt_tax.http import HttpClient
 from gdt_tax.identity import RecordKey, account_fingerprint
@@ -354,6 +354,8 @@ class ETaxSessionManager:
                         return JobResult("ERROR", "Phiên ETAX tiếp tục hết hạn; hãy đăng nhập lại", config.output,
                                          errors=1, error_code='AUTH_EXPIRED_SESSION')
                     logger.warning("Phiên ETAX hết hạn; xác thực lại một lần rồi tiếp tục, reuse file đã hoàn thành")
+                except LegacyPermissionError as error:
+                    return JobResult("ERROR", str(error), config.output, errors=1, error_code=error.code)
                 except LegacyPageError:
                     return JobResult("ERROR", 'AUTH_SCHEMA_UNKNOWN: Trang nghiệp vụ chưa được nhận diện; đã dừng xác thực lại.',
                                      config.output, errors=1, error_code='AUTH_SCHEMA_UNKNOWN')

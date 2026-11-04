@@ -1,6 +1,7 @@
 """Hand-authored offline HTTP contract fixtures; no real portal requests."""
 from __future__ import annotations
 
+import os
 import unittest
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
@@ -8,7 +9,7 @@ from unittest.mock import patch
 
 import requests
 
-from gdt_tax.errors import NetworkError
+from gdt_tax.errors import ConfigError, NetworkError
 from gdt_tax.http import HttpClient
 from gdt_tax.http_policy import OperationPolicy
 from gdt_tax.run_hooks import RunBudget, RunCancelled, RunHooks
@@ -172,6 +173,21 @@ class HttpPolicyTests(unittest.TestCase):
             budget.page()
         with self.assertRaisesRegex(NetworkError, "authentication"):
             budget.authenticate()
+
+    def test_default_budget_can_be_widened_by_env_only(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GDT_RUN_BUDGET_SECONDS", None)
+            self.assertEqual(RunBudget().max_seconds, 1800)
+        with patch.dict(os.environ, {"GDT_RUN_BUDGET_SECONDS": "14400"}):
+            self.assertEqual(RunBudget().max_seconds, 14400)
+            # Giá trị tường minh vẫn thắng biến môi trường.
+            self.assertEqual(RunBudget(max_seconds=5).max_seconds, 5)
+        with patch.dict(os.environ, {"GDT_RUN_BUDGET_SECONDS": "0"}):
+            with self.assertRaisesRegex(ConfigError, "GDT_RUN_BUDGET_SECONDS"):
+                RunBudget()
+        with patch.dict(os.environ, {"GDT_RUN_BUDGET_SECONDS": "nửa tiếng"}):
+            with self.assertRaisesRegex(ConfigError, "GDT_RUN_BUDGET_SECONDS"):
+                RunBudget()
 
     def test_deadline_clamps_socket_timeout_and_stops_before_next_request(self):
         now = [0.0]

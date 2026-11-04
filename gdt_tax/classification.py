@@ -11,7 +11,7 @@ import unicodedata
 
 from .models import CaseRecord
 
-CLASSIFICATION_VERSION = "metadata-keyword-v2"
+CLASSIFICATION_VERSION = "metadata-keyword-v3"
 TAX_GROUPS = ("GTGT", "TNCN", "TNDN", "OTHER", "UNKNOWN")
 _GROUP_TERMS = {
     "GTGT": ("gtgt", "gia tri gia tang"),
@@ -33,6 +33,16 @@ def is_rental_declaration(title: str) -> bool:
     return normalized.startswith('01 bds ') and 'to khai thue' in normalized
 
 
+def is_invoice_notice_declaration(title: str) -> bool:
+    """TB01/AC, TB03/AC say "thông báo" but the portal returns HSoThueDTu.
+
+    Their titles contain "thông báo" (phát hành/hủy hóa đơn), so a title-only
+    rule classifies them as notices. The downloaded file is a declaration
+    (``maTKhai`` 106/107), so the notice schema check would reject it.
+    """
+    return bool(re.match(r"tb\d+ ac\b", _normalize(title)))
+
+
 def classify_record(record: CaseRecord) -> CaseRecord:
     """Phân loại có lý do; tín hiệu mâu thuẫn được giữ UNKNOWN để kiểm tra."""
     title = _normalize(record.to_khai)
@@ -44,7 +54,7 @@ def classify_record(record: CaseRecord) -> CaseRecord:
     record.quy_tac_phan_loai = CLASSIFICATION_VERSION
     record.nhom_to_khai = "UNKNOWN"
     record.loai_tai_lieu = "UNKNOWN"
-    if is_rental_declaration(record.to_khai):
+    if is_rental_declaration(record.to_khai) or is_invoice_notice_declaration(record.to_khai):
         record.loai_tai_lieu = "DECLARATION"
     elif "thong bao" in title:
         record.loai_tai_lieu = "NOTICE"
@@ -64,4 +74,5 @@ def classify_record(record: CaseRecord) -> CaseRecord:
     return record
 
 
-__all__ = ["CLASSIFICATION_VERSION", "TAX_GROUPS", "classify_record", "is_rental_declaration"]
+__all__ = ["CLASSIFICATION_VERSION", "TAX_GROUPS", "classify_record",
+           "is_invoice_notice_declaration", "is_rental_declaration"]
