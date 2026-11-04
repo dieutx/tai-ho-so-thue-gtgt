@@ -61,7 +61,9 @@ class V2InteractionMixin:
         if kind == 'custom':
             return
         end = today
-        if kind == 'previous':
+        if kind == 'recent30':
+            start = today.addDays(-29)
+        elif kind == 'previous':
             prior = today.addMonths(-1)
             start = QDate(prior.year(), prior.month(), 1)
             end = start.addMonths(1).addDays(-1)
@@ -162,10 +164,11 @@ class V2InteractionMixin:
 
     def restore_dates(self, state):
         self.applying_preset = True
-        for widget, value in ((self.from_date, state.from_date), (self.to_date, state.to_date)):
+        today = QDate.currentDate()
+        for widget, value, default in ((self.from_date, state.from_date, today.addDays(-29)),
+                                       (self.to_date, state.to_date, today)):
             day = QDate.fromString(value, 'dd/MM/yyyy')
-            if day.isValid():
-                widget.setDate(day)
+            widget.setDate(day if day.isValid() else default)
         self.preset.blockSignals(True)
         self.preset.setCurrentIndex(max(0, self.preset.findData(state.preset)))
         self.preset.blockSignals(False)

@@ -4,6 +4,11 @@
 
 ## [2.1.4 — cập nhật lại asset] — 2026-11-04
 
+- Mỗi lần mở ứng dụng mặc định tra cứu **30 ngày gần nhất**, tính cả hôm nay;
+  có lựa chọn nhanh để quay lại khoảng này. Giữ kỳ đang chọn khi chuyển tab
+  hoặc hoàn tất tác vụ trong cùng phiên.
+- Chọn **Doanh nghiệp / Cá nhân** bằng hai nút phân đoạn luôn hiển thị;
+  khởi động ở Doanh nghiệp, đổi loại vẫn tách phiên đăng nhập và kho hồ sơ.
 - Tải chưa tải, thử lại và cập nhật hồ sơ đã chọn tra cứu trực tiếp từng mã;
   dùng trường riêng của DVC, Thuế điện tử doanh nghiệp và cá nhân. Không quay
   về quét các trang khác khi cổng không lọc đúng mã.

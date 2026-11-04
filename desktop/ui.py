@@ -286,6 +286,10 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         except (OSError, ValueError) as error:
             self.preferences = Preferences()
             self.startup_error = str(error)
+        # Each launch starts with business accounts and a fresh rolling period.
+        # Dates chosen within this session still survive tab/account switches.
+        self.preferences.account_type = "DN"
+        self.preferences.ui_state = {**self.preferences.ui_state, 'accounts': {}}
         self.proxy, self.extra_headers, self.dvc = "", {}, self.preferences.dvc_enabled
         self.result: JobResult | None = None
         self.active_config: RunConfig | None = None
@@ -538,6 +542,11 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             QPushButton:disabled {{color:{muted};background:{bg};}}
             QTabBar::tab {{padding:7px 12px;color:{muted};}}
             QTabBar::tab:selected {{background:{card};color:#{'93c5fd' if dark else '2563EB'};border-bottom:2px solid #2563EB;}}
+            QTabBar#accountType {{background:{border};border:1px solid {border};border-radius:7px;}}
+            QTabBar#accountType::tab {{padding:6px 10px;margin:2px;border:0;border-radius:5px;}}
+            QTabBar#accountType::tab:selected {{background:#2563EB;color:white;border:0;}}
+            QTabBar#accountType::tab:!selected:hover {{background:{card};}}
+            QTabBar#accountType::tab:focus {{border:1px solid #2563EB;}}
             QScrollArea {{border:0;}}
             QProgressBar {{background:{border};border:0;}} QProgressBar::chunk {{background:#2563EB;}}
         """)
@@ -577,7 +586,7 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         if isinstance(dates, dict):
             state.from_date = str(dates.get('from_date') or '')
             state.to_date = str(dates.get('to_date') or '')
-            state.preset = str(dates.get('preset') or 'previous')
+            state.preset = str(dates.get('preset') or 'recent30')
         raw = self.preferences.ui_state.get(mode) if isinstance(self.preferences.ui_state, dict) else None
         if not isinstance(raw, dict):
             return state

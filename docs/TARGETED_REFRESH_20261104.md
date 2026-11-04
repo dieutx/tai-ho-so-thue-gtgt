@@ -2,6 +2,13 @@
 
 ## Hành vi
 
+Mỗi lần mở ứng dụng dùng mặc định **Doanh nghiệp**, khoảng **30 ngày gần nhất**
+(hôm nay và 29 ngày trước), cho cả tờ khai, giấy nộp tiền và thông báo.
+Hai lựa chọn Doanh nghiệp/Cá nhân luôn hiện cạnh nhau, hỗ trợ chuột và bàn phím;
+đổi loại tài khoản vẫn đăng xuất và tách kho, bị chặn khi đang chạy tác vụ.
+Kỳ tự chọn được giữ trong cùng phiên; mở lại ứng dụng bắt đầu khoảng mới,
+các hồ sơ cũ vẫn xem được khi đổi kỳ. Có preset “30 ngày gần nhất”.
+
 `Tải chưa tải`, `Thử lại tệp lỗi`, `Tải các tệp đã chọn` và `Cập nhật đã chọn`
 dùng từng mã hồ sơ trong tài khoản/nguồn đã xác minh. Các trường gửi lên cổng:
 

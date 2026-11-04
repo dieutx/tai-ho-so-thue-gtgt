@@ -19,6 +19,7 @@ Bản Windows x64 chạy bằng một tệp EXE, không cần cài Python hoặc
 4. Chọn hồ sơ → **Tải các tệp đã chọn** hoặc **Tải chưa tải**. Bấm **Xem file** để mở tệp đã tải.
 
 **Tra cứu** chỉ lấy danh sách; **Tra cứu và tải** thực hiện cả hai bước.
+Mỗi lần mở app mặc định **Doanh nghiệp**, **30 ngày gần nhất** (tính cả hôm nay).
 CAPTCHA được đọc tự động tối đa 5 lần, sau đó chuyển sang nhập tay.
 
 Để xử lý tệp có sẵn, chọn **Phân tích XML** → chọn XML/ZIP → chọn nơi xuất → chạy phân tích.

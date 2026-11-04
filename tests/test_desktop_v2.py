@@ -498,7 +498,11 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.assertEqual(self.window.search.text(), 'fixture')
 
     def test_selected_completion_preserves_unselected_query_rows(self):
+        from PySide6.QtCore import QDate
+
         from gdt_tax.local_catalog import LocalCatalog
+        self.window.from_date.setDate(QDate(2026, 10, 1))
+        self.window.to_date.setDate(QDate(2026, 10, 31))
         rows = [dict(CaseRecord(str(i), SOURCE_ETAX_LEGACY, account_key=account_fingerprint('fixture-user'),
                                 ngay_nop='05/10/2026').to_dict(), _file_status='not_downloaded') for i in range(3)]
         self.window.output.setText(str(self.root))
@@ -506,12 +510,12 @@ class DesktopV2InteractionTests(unittest.TestCase):
         LocalCatalog(folder, account_fingerprint('fixture-user')).upsert_documents('tax', rows)
         self.window.controller.sessions.set_account('fixture-user', 'fixture-secret')
         account = hashlib.sha256(b'fixture-user').hexdigest()
-        self.window.result = JobResult('SUCCESS', 'Query', self.root, rows=rows, date_range=('01/06/2025', '30/06/2025'),
+        self.window.result = JobResult('SUCCESS', 'Query', self.root, rows=rows, date_range=('01/10/2026', '31/10/2026'),
                                       account_key=account, operation='query')
         self.window.model.reset('tax', rows)
         self.window.active_config = replace(self.window.make_config('tax'), target_ids=('0',), action='download_selected')
         completed = JobResult('SUCCESS', 'Done', self.root, rows=[dict(rows[0], _file_status='downloaded')],
-                              downloaded=1, account_key=account, operation='download_selected', date_range=('01/06/2025', '30/06/2025'))
+                              downloaded=1, account_key=account, operation='download_selected', date_range=('01/10/2026', '31/10/2026'))
         self.window.on_completed(completed)
         self.assertEqual(len(self.window.model.rows), 3)
         self.assertEqual(self.window.model.rows[1]['_file_status'], 'not_downloaded')

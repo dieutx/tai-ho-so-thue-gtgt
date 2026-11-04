@@ -43,14 +43,28 @@ class DesktopUsabilityTests(unittest.TestCase):
         self.assertIn('Xem hồ sơ đã lưu trên máy…', menu)
 
     def test_account_type_switch_isolates_session_and_view(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        self.assertEqual(self.window.account_type.currentData(), 'DN')
         self.window.controller.sessions.set_account('company-a', 'secret')
         self.window.model.reset('tax', [self.row('first')])
         self.assertEqual(self.window.model.rowCount(), 1)
-        self.window.account_type.setCurrentIndex(self.window.account_type.findData('CN'))
+        self.window.show()
+        self.app.processEvents()
+        selector = self.window.account_type
+        QTest.mouseClick(selector, Qt.MouseButton.LeftButton,
+                         pos=selector.tabRect(selector.findData('CN')).center())
         self.assertEqual(self.window.controller.sessions.account_type, 'CN')
         self.assertEqual(self.window.controller.sessions.account.username, '')
         self.assertEqual(self.window.model.rowCount(), 0)
         self.assertIn('Cá nhân', self.window.account_label.text())
+        # Switching while a job is running must keep the selected scope/session.
+        with patch.object(type(self.window.controller), 'busy', new=property(lambda _: True)), \
+                patch.object(self.window, 'error') as error:
+            selector.setCurrentIndex(selector.findData('DN'))
+            self.assertEqual(selector.currentData(), 'CN')
+            self.assertEqual(self.window.controller.sessions.account_type, 'CN')
+            error.assert_called_once()
 
     def test_hovering_a_cell_does_not_reveal_row_details(self):
         from PySide6.QtCore import Qt

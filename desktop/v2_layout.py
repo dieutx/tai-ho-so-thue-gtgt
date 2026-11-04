@@ -37,6 +37,25 @@ class AccountLabel(QLabel):
             super().mouseReleaseEvent(event)
 
 
+class AccountTypeSelector(QTabBar):
+    """Two visible, keyboard-accessible choices for the login and storage scope."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName('accountType')
+        self.setDrawBase(False)
+        self.setExpanding(False)
+        self.setUsesScrollButtons(False)
+        for label, value in [('Doanh nghiệp', 'DN'), ('Cá nhân', 'CN')]:
+            self.setTabData(self.addTab(label), value)
+
+    def currentData(self):
+        return self.tabData(self.currentIndex())
+
+    def findData(self, value):
+        return next((index for index in range(self.count()) if self.tabData(index) == value), -1)
+
+
 def build_workspace(window):
     from .ui import TITLES, PathEdit, button, field
     self = window
@@ -54,14 +73,12 @@ def build_workspace(window):
     self.version_button = button('v' + __version__, self.show_release, 'Phiên bản và cập nhật')
     header.addWidget(self.version_button)
     header.addStretch()
-    self.account_type = QComboBox()
-    self.account_type.addItem('Doanh nghiệp', 'DN')
-    self.account_type.addItem('Cá nhân', 'CN')
+    self.account_type = AccountTypeSelector()
     self.account_type.setAccessibleName('Loại tài khoản')
     self.account_type.setToolTip('Chọn đúng loại tài khoản trước khi đăng nhập; đổi loại sẽ đăng xuất phiên hiện tại')
     index = self.account_type.findData(self.controller.sessions.account_type)
     self.account_type.setCurrentIndex(max(0, index))
-    self.account_type.currentIndexChanged.connect(self.change_account_type)
+    self.account_type.currentChanged.connect(self.change_account_type)
     header.addWidget(self.account_type)
     self.account_label = AccountLabel('MST: —')
     self.account_label.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -127,15 +144,14 @@ def build_workspace(window):
     self.date_type = QLabel('Ngày nộp')
     dates.addWidget(self.date_type)
     self.preset = QComboBox()
-    for label, value in [('Tháng này', 'month'), ('Tháng trước', 'previous'), ('Quý này', 'quarter'),
+    for label, value in [('30 ngày gần nhất', 'recent30'), ('Tháng này', 'month'), ('Tháng trước', 'previous'), ('Quý này', 'quarter'),
                          ('Năm nay', 'year'), ('12 tháng qua', 'twelve'), ('Tùy chỉnh', 'custom')]:
         self.preset.addItem(label, value)
     self.preset.setAccessibleName('Chọn nhanh khoảng ngày tra cứu')
     dates.addWidget(self.preset)
     self.from_date, self.to_date = QDateEdit(), QDateEdit()
-    previous = QDate.currentDate().addMonths(-1)
-    first = QDate(previous.year(), previous.month(), 1)
-    for label, widget, day in [('Từ', self.from_date, first), ('Đến', self.to_date, first.addMonths(1).addDays(-1))]:
+    today = QDate.currentDate()
+    for label, widget, day in [('Từ', self.from_date, today.addDays(-29)), ('Đến', self.to_date, today)]:
         dates.addWidget(QLabel(label))
         widget.setCalendarPopup(True)
         widget.setDisplayFormat('dd/MM/yyyy')
@@ -145,7 +161,7 @@ def build_workspace(window):
         widget.setAccessibleName(label + ' ngày')
         widget.dateChanged.connect(self.dates_changed)
         dates.addWidget(widget)
-    self.preset.setCurrentIndex(1)
+    self.preset.setCurrentIndex(0)
     self.preset.currentIndexChanged.connect(self.apply_preset)
     self.config_layout.addWidget(self.online_panel)
     self.offline_panel = QWidget()

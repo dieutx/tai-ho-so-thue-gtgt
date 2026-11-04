@@ -56,4 +56,4 @@ class TabState:
     last_task: JobResult | None = None
     from_date: str = ""
     to_date: str = ""
-    preset: str = "previous"
+    preset: str = "recent30"

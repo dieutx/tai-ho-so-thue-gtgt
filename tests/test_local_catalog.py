@@ -421,17 +421,28 @@ class PersistentUITests(unittest.TestCase):
         self.assertEqual(result.children['tax'].inventory_total, 3)
         self.assertEqual(len(result.children['tax'].rows), 1)
 
-    def test_reopen_restores_account_dates_and_rows(self):
+    def test_reopen_starts_recent30_and_keeps_older_rows_available(self):
+        from PySide6.QtCore import QDate
+
         from desktop.ui import MainWindow
         self.period(2025, 6)
         self.window.save_tab()
+        self.window.preferences.account_type = 'CN'
+        self.window.store.save(self.window.preferences)
         reopened = MainWindow(SettingsStore(self.root / 'settings.json'))
         try:
+            self.assertEqual(reopened.account_type.currentData(), 'DN')
             reopened.output.setText(str(self.root))
             reopened.controller.sessions.set_account('synthetic-catalog-owner', '')
             reopened.clear_account_views()
             reopened.apply_local_date_filter()
-            self.assertEqual(reopened.from_date.date().toString('dd/MM/yyyy'), '01/06/2025')
+            today = QDate.currentDate()
+            self.assertEqual(reopened.from_date.date(), today.addDays(-29))
+            self.assertEqual(reopened.to_date.date(), today)
+            self.assertEqual(reopened.preset.currentData(), 'recent30')
+            self.assertNotIn('2025', {row['ma_ho_so'] for row in reopened.model.rows})
+            reopened.from_date.setDate(QDate(2025, 6, 1))
+            reopened.to_date.setDate(QDate(2025, 6, 28))
             self.assertEqual(reopened.model.rows[0]['ma_ho_so'], '2025')
         finally:
             reopened.close()
