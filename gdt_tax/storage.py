@@ -40,7 +40,7 @@ from .archive_limits import (
 )
 from .atomic import replace_with_retry
 from .catalog import generation, serialized_catalog
-from .classification import TAX_GROUPS
+from .classification import TAX_GROUPS, is_rental_declaration
 from .constants import METADATA_CSV, METADATA_JSON, METADATA_XLSX
 from .contracts import DownloadArtifact
 from .errors import StorageError
@@ -61,6 +61,10 @@ LOGGER_NAME = "gdt_tax.storage"
 
 def required_document_kind(record: CaseRecord) -> str:
     """ZIP của hồ sơ thông báo (04/SS-HĐĐT...) chứa XML ``TBao``, không phải tờ khai."""
+    # Older catalogs misclassified this combined title as NOTICE. The portal
+    # returns declaration XML; enforce that schema even for stale metadata.
+    if is_rental_declaration(record.to_khai):
+        return "declaration"
     if getattr(record, "loai_tai_lieu", "") == "NOTICE":
         return "notice"
     title = (getattr(record, "to_khai", "") or "").casefold()

@@ -48,6 +48,10 @@ REJECTED_FILL = PatternFill('solid', fgColor='FDECEA')
 
 
 def _cqt_status(row: dict) -> str:
+    raw = str(row.get('trang_thai') or '').strip()
+    if raw:
+        code = business_status_from_text(raw)
+        return BUSINESS_LABELS.get(code, raw) if code != 'unknown' else raw
     code = str(row.get('_cqt_status') or row.get('_notice_state')
                or business_status_from_text(row.get('trang_thai')) or '')
     return str(row.get('_cqt_status_label') or BUSINESS_LABELS.get(code)

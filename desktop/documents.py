@@ -132,6 +132,9 @@ def display_amount(value: Any, currency: str = '') -> str:
 
 def needs_review(row: dict) -> bool:
     status = str(row.get('trang_thai', '')).casefold()
+    if status.strip():
+        from .domain import business_status_from_text
+        return business_status_from_text(status) == 'rejected'
     return row.get('_notice_state') == 'rejected' or any(marker in status for marker in ('từ chối', 'không chấp nhận', 'không được chấp nhận', 'không thành công'))
 
 
@@ -211,7 +214,7 @@ def verify_rows(mode: str, rows: list[dict], output: Path, hooks: RunHooks | Non
             row.update(_notices=notices, _notice_state=notice_state(notices),
                        _notice_summary=notice_summary(notices), _feedback_count=len(notices))
             summary = feedback_summary(row)
-            label = ''
+            label = str(row.get('trang_thai') or '').strip()
             if summary.conflict:
                 label = 'Cần kiểm tra'
             elif summary.status in {'accepted', 'received', 'rejected'}:
@@ -221,6 +224,6 @@ def verify_rows(mode: str, rows: list[dict], output: Path, hooks: RunHooks | Non
                        _feedback_conflict=summary.conflict,
                        _feedback_problem=summary.problem)
         row['_file_state'] = FILE_LABELS[row['_file_status']]
-        row['_needs_review'] = needs_review(row) or row.get('_notice_state') == 'rejected'
+        row['_needs_review'] = needs_review(row)
         verified.append(row)
     return verified

@@ -7,6 +7,7 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
 from functools import partial
 
 from .attachments import AttachmentResult, collect_attachments
@@ -20,7 +21,7 @@ from .dates import format_date
 from .dvc_notices import NOTICE_DIRECTORY, NoticeStore
 from .errors import LoginError, NetworkError, SchemaChangedError, SearchError
 from .http import HttpClient
-from .identity import account_fingerprint, scope_targets
+from .identity import RecordKey, account_fingerprint, scope_targets
 from .models import CaseRecord, RunSummary
 from .orchestration import consume_record, pages, search_page
 from .ownership import prepare_output
@@ -45,6 +46,7 @@ class Pipeline:
         target_ids: set[str] | None = None,
         download_notices: bool = True,
         authenticate: bool = True,
+        input_rows: list[dict] | None = None,
     ) -> None:
         self.settings = settings
         self.http = http
@@ -61,6 +63,7 @@ class Pipeline:
         self.checkpoint = CatalogCheckpoint(write_metadata, settings.download_dir,
                                             enabled=persist_metadata and not settings.dry_run)
         self.target_ids = target_ids
+        self.input_rows = {row.get('record_key'): row for row in input_rows or []}
         self.account_key = account_fingerprint(settings.username)
         self.case_targets: set[str] | None = None
         self.record_errors: dict[str, str] = {}
@@ -146,11 +149,36 @@ class Pipeline:
 
         records: dict[str, CaseRecord] = self.records
         succeeded: set[str] = self.downloaded_ids
+        attempted: set[str] = set()
         for period in active:
             self.hooks.check()
             summary.periods += 1
             self.logger.info("=== %s: %s ===", period.source, period.label)
-            if self._search_and_download(portals[period.source], period, records, succeeded):
+            portal = portals[period.source]
+            targets = self.target_ids if self.target_ids is not None else self.case_targets
+            if targets is not None and getattr(portal, 'supports_case_search', False):
+                for token in sorted(targets - attempted):
+                    key = RecordKey.parse(token)
+                    if key.source != period.source:
+                        continue
+                    raw_date = str(self.input_rows.get(token, {}).get('ngay_nop') or '')
+                    try:
+                        submitted = datetime.strptime(raw_date[:10], '%d/%m/%Y').date()
+                    except ValueError:
+                        submitted = None
+                    # A stale/imported date is an optimisation hint, never a
+                    # reason to silently omit an explicitly selected ID.
+                    if submitted is not None and not self.settings.from_date <= submitted <= self.settings.to_date:
+                        submitted = None
+                    if submitted is not None and not period.start <= submitted <= period.end:
+                        continue
+                    self.logger.info('TRA CỨU THEO MÃ: %s — %s', period.source, key.remote_id)
+                    self._search_and_download(portal, period, records, succeeded, case_id=key.remote_id)
+                    if token in records:
+                        attempted.add(token)
+                    self.hooks.check()
+                continue
+            if self._search_and_download(portal, period, records, succeeded):
                 break
 
         if self._persist(records, materialize=True):
@@ -168,8 +196,8 @@ class Pipeline:
         summary.attachments_failed = sum(item.failed + item.discovery_failed for item in self.attachments.values())
         return summary
 
-    def _search_and_download(self, portal, period, records, succeeded) -> bool:
-        for page, result in pages(self, lambda number: self._search_page(portal, period, number), records, portal.source):
+    def _search_and_download(self, portal, period, records, succeeded, *, case_id: str = '') -> bool:
+        for page, result in pages(self, lambda number: self._search_page(portal, period, number, case_id=case_id), records, portal.source):
             for index, found in enumerate(result.records, start=1):
                 self.hooks.check()
                 if found.nguon != period.source:
@@ -179,9 +207,17 @@ class Pipeline:
                 found.routing_version = (self.settings.routing_policy or self.settings.execution_plan()).version
                 if self.case_targets is not None and found.record_key not in self.case_targets:
                     continue
+                if self.target_ids is not None and found.record_key not in self.target_ids:
+                    continue
+                if case_id and found.ma_ho_so != case_id:
+                    continue
+                found.trang_thai_tra_cuu = found.trang_thai
+                found.trang_thai_cap_nhat = datetime.now(timezone.utc).isoformat()
                 record = records.setdefault(found.record_key, classify_record(found))
                 self.logger.info("TẢI trang=%s mục=%s/%s: %s", page, index, len(result.records), record.ma_ho_so)
                 success = consume_record(self, record, records, partial(self._attempt_download, portal, record, succeeded))
+                if case_id and (result.diagnostics is None or result.diagnostics.complete):
+                    return True
                 if self.settings.case_id and (success or self.settings.dry_run):
                     if result.diagnostics is None or result.diagnostics.complete:
                         return True
@@ -189,6 +225,13 @@ class Pipeline:
                     if result.diagnostics is None or result.diagnostics.complete:
                         return True
                 self._pause(self.settings.pause_between_records)
+            if case_id:
+                if result.diagnostics is not None and not result.diagnostics.complete:
+                    raise SchemaChangedError('SCHEMA_CHANGED: ' + '; '.join(result.diagnostics.reasons))
+                # A single ID query must never fall back to scanning unrelated pages.
+                if result.records or (result.total_pages or 0) > 1:
+                    raise SearchError('CASE_SEARCH_NOT_SCOPED: Cổng trả kết quả ngoài mã hồ sơ đang tra cứu; đã dừng quét trang.')
+                return False
         return False
 
     def _pause(self, seconds: float) -> None:
@@ -196,8 +239,8 @@ class Pipeline:
         delay = seconds * (1 + random.uniform(0, jitter)) if jitter > 0 and seconds > 0 else seconds
         self.hooks.pause(delay, self.sleep)
 
-    def _search_page(self, portal, period, page: int) -> QueryOutcome[CaseRecord]:
-        return search_page(self, lambda: portal.search(period, page), portal.source, page)
+    def _search_page(self, portal, period, page: int, *, case_id: str = '') -> QueryOutcome[CaseRecord]:
+        return search_page(self, lambda: portal.search(period, page, case_id=case_id) if case_id else portal.search(period, page), portal.source, page)
 
     def _download(self, portal, record: CaseRecord, succeeded: set[str]) -> bool:
         # Dry-run không được dò/đổi tên file đã có hoặc tính chúng là vừa tải.
@@ -208,8 +251,12 @@ class Pipeline:
             return True
         if self.store.find_existing(record):
             self.reused_ids.add(record.record_key)
+            if record.nguon == 'DVC':
+                detail_url, csrf = portal.fetch_detail_csrf(record)
+                self._download_attachments(portal, record, detail_url=detail_url, csrf=csrf)
+            else:
+                self._download_attachments(portal, record)
             succeeded.add(record.record_key)
-            self._download_attachments(portal, record)
             return True
         detail_url, csrf = portal.fetch_detail_csrf(record)
         if not csrf and not getattr(portal, "csrf_optional", False):

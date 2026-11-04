@@ -11,7 +11,7 @@ import unicodedata
 
 from .models import CaseRecord
 
-CLASSIFICATION_VERSION = "metadata-keyword-v1"
+CLASSIFICATION_VERSION = "metadata-keyword-v2"
 TAX_GROUPS = ("GTGT", "TNCN", "TNDN", "OTHER", "UNKNOWN")
 _GROUP_TERMS = {
     "GTGT": ("gtgt", "gia tri gia tang"),
@@ -27,6 +27,12 @@ def _normalize(value: str) -> str:
     )).strip()
 
 
+def is_rental_declaration(title: str) -> bool:
+    """01/BĐS has a dual-purpose title but downloads a HSoThueDTu declaration."""
+    normalized = _normalize(title)
+    return normalized.startswith('01 bds ') and 'to khai thue' in normalized
+
+
 def classify_record(record: CaseRecord) -> CaseRecord:
     """Phân loại có lý do; tín hiệu mâu thuẫn được giữ UNKNOWN để kiểm tra."""
     title = _normalize(record.to_khai)
@@ -38,7 +44,9 @@ def classify_record(record: CaseRecord) -> CaseRecord:
     record.quy_tac_phan_loai = CLASSIFICATION_VERSION
     record.nhom_to_khai = "UNKNOWN"
     record.loai_tai_lieu = "UNKNOWN"
-    if "thong bao" in title:
+    if is_rental_declaration(record.to_khai):
+        record.loai_tai_lieu = "DECLARATION"
+    elif "thong bao" in title:
         record.loai_tai_lieu = "NOTICE"
     elif "phu luc" in title and "to khai" not in title:
         record.loai_tai_lieu = "APPENDIX"
@@ -56,4 +64,4 @@ def classify_record(record: CaseRecord) -> CaseRecord:
     return record
 
 
-__all__ = ["CLASSIFICATION_VERSION", "TAX_GROUPS", "classify_record"]
+__all__ = ["CLASSIFICATION_VERSION", "TAX_GROUPS", "classify_record", "is_rental_declaration"]

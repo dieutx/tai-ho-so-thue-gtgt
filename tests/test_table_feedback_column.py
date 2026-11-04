@@ -64,10 +64,10 @@ class FeedbackColumnTests(unittest.TestCase):
         self.assertEqual(self.cell(row, 'trang_thai').data(), 'Chưa xác định')
         self.assertEqual(self.cell(row, '_file_status').data(), 'Đã tải')
 
-    def test_cqt_status_uses_feedback_evidence_not_portal_text(self):
+    def test_cqt_status_prioritizes_portal_text_and_falls_back_to_xml(self):
         row = self.row(_notice_state='rejected', trang_thai='Đã chấp nhận',
                        _notices=[{'name': 'reject.xml'}])
-        self.assertEqual(self.cell(row, 'trang_thai').data(), 'Không chấp nhận')
+        self.assertEqual(self.cell(row, 'trang_thai').data(), 'Đã chấp nhận')
         accepted = self.row(_notice_state='accepted', trang_thai='',
                             _notices=[{'name': 'accept.xml'}])
         self.assertEqual(self.cell(accepted, 'trang_thai').data(), 'Đã chấp nhận')

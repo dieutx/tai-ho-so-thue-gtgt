@@ -18,7 +18,6 @@ from dataclasses import dataclass
 
 from .domain import (
     BUSINESS_LABELS,
-    BUSINESS_NONE,
     DocumentAsset,
     SubmissionFeedback,
     TaxNotice,
@@ -110,15 +109,20 @@ def find_feedback_item(row: dict, key: str, *, taxpayer_key: str = "") -> Feedba
 
 
 def feedback_summary(row: dict, *, taxpayer_key: str = "") -> FeedbackSummary:
+    from .domain import business_status_from_text
     items = list_feedback_items(row, taxpayer_key=taxpayer_key)
     feedbacks = [item.feedback for item in items]
     status = aggregate_feedback_result(feedbacks)
+    portal_status = str(row.get('trang_thai') or '').strip()
+    if portal_status:
+        status = business_status_from_text(portal_status)
     return FeedbackSummary(
         submission_key=submission_key(row, taxpayer_key=taxpayer_key),
         count=len(items),
         status=status,
-        status_label=BUSINESS_LABELS.get(status, BUSINESS_LABELS[BUSINESS_NONE]),
-        conflict=has_conflicting_results(feedbacks),
+        status_label=(BUSINESS_LABELS.get(status, portal_status) if status != 'unknown'
+                      else portal_status or BUSINESS_LABELS['unknown']),
+        conflict=has_conflicting_results(feedbacks) and not portal_status,
         problem=row_attachment_problem(row),
     )
 

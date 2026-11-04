@@ -24,13 +24,14 @@ class EtaxPortal(Portal):
     """Tra cứu và tải hồ sơ từ luồng Thuế điện tử."""
 
     source = SOURCE_ETAX
+    supports_case_search = True
     detail_loai = SOURCE_ETAX
 
     def __init__(self, http: HttpClient, captcha, settings, csrf: str = "", logger=None) -> None:
         super().__init__(http, captcha, settings, logger)
         self.csrf = csrf
 
-    def search(self, period: SearchPeriod, page: int) -> PageResult:
+    def search(self, period: SearchPeriod, page: int, *, case_id: str = "") -> PageResult:
         response = self.http.post(
             self.capabilities.search_endpoint,
             data={
@@ -38,7 +39,7 @@ class EtaxPortal(Portal):
                 self.capabilities.page_parameter: page,
                 "size": self.settings.page_size,
                 "maToKhai_tdt": "",
-                "maGiaoDichTthc_tdt": "",
+                "maGiaoDichTthc_tdt": case_id,
                 "tuNgay_tdt": format_date(period.start),
                 "denNgay_tdt": format_date(period.end),
                 "scope_tdt2": "SELF",

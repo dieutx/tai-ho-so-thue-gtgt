@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [2.1.4 — cập nhật lại asset] — 2026-11-04
+
+- Tải chưa tải, thử lại và cập nhật hồ sơ đã chọn tra cứu trực tiếp từng mã;
+  dùng trường riêng của DVC, Thuế điện tử doanh nghiệp và cá nhân. Không quay
+  về quét các trang khác khi cổng không lọc đúng mã.
+- Thêm **Cập nhật đã chọn** và **Cập nhật hồ sơ này** để lấy lại trạng thái CQT,
+  phản hồi đính kèm và tải tệp còn thiếu; dùng lại tệp đã có hợp lệ.
+- Trạng thái từ cổng được ưu tiên hơn XML phản hồi cũ. Đọc mốc xử lý mới nhất
+  trong chi tiết DVC, lưu thời điểm cập nhật; phân biệt chờ chấp nhận với đã chấp nhận.
+- Nhận đúng XML tờ khai của mẫu cá nhân **01/BĐS** có tên kép
+  “Thông báo doanh thu/Tờ khai thuế”, dùng cùng quy tắc khi tải và dùng lại tệp.
+- Tab Thông báo thuế dùng **Xem file**, mở tệp bằng ứng dụng mặc định.
+- Thông báo bản mới tự mở cửa sổ có nội dung thay đổi, thời gian phát hành,
+  liên kết GitHub và lựa chọn tải hoặc bỏ qua.
+- GitHub là nơi duy trì mã nguồn và phát hành; GitLab cũ được lưu trữ và có
+  thông báo chuyển địa chỉ.
+
 ## [2.1.4] — 2026-11-03
 
 - Hợp nhất các sửa lỗi DVC trên GitHub với bản sửa kho cá nhân 2.1.3;

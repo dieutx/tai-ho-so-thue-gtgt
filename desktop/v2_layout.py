@@ -261,6 +261,9 @@ def build_workspace(window):
     self.selection_label = QLabel()
     selection.addWidget(self.selection_label)
     selection.addWidget(button('Tải các tệp đã chọn', self.download_checked))
+    self.refresh_selected_button = button('Cập nhật đã chọn', self.refresh_checked,
+                                         'Tra cứu từng mã để cập nhật trạng thái CQT và phản hồi; dùng lại tệp đã có hợp lệ')
+    selection.addWidget(self.refresh_selected_button)
     selection.addWidget(button('Bỏ chọn', self.clear_selection))
     selection.addStretch()
     results.addWidget(self.selection_bar)

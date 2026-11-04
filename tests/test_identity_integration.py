@@ -92,7 +92,7 @@ class IdentityIntegrationTests(unittest.TestCase):
         self.assertEqual(summary.expected, 1)
         self.assertEqual(downloads, [("DVC", "same-id")])
         rows = [record.to_dict() for record in pipeline.records.values()]
-        self.assertEqual(len({document_id("tax", row) for row in rows}), 2)
+        self.assertEqual({document_id("tax", row) for row in rows}, {selected})
         self.assertTrue(all(remote_document_id("tax", row) == "same-id" for row in rows))
 
     def test_bare_multisource_and_cross_account_targets_fail_before_login(self):

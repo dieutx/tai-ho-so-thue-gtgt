@@ -62,6 +62,7 @@ class DvcPortal(Portal):
     """Tra cứu và tải hồ sơ từ luồng Dịch vụ công."""
 
     source = SOURCE_DVC
+    supports_case_search = True
     detail_loai = ""
     #: Kết quả dò khả năng AJAX chỉ cần biết một lần cho mỗi lượt chạy: cổng
     #: không đổi giữa hai hồ sơ, nên hồ sơ sau không phải gửi lại request dò.
@@ -71,14 +72,14 @@ class DvcPortal(Portal):
         hooks = getattr(self.http, "hooks", None)
         (hooks if isinstance(hooks, RunHooks) else RunHooks()).pause(seconds, time.sleep)
 
-    def search(self, period: SearchPeriod, page: int) -> PageResult:
+    def search(self, period: SearchPeriod, page: int, *, case_id: str = "") -> PageResult:
         response = self.http.get(
             self.capabilities.search_endpoint,
             params={
                 "maNghiepVu": "",
                 "maTTHC": "",
                 "maToKhai": "",
-                "maHoSo": "",
+                "maHoSo": case_id,
                 "tuNgay": format_date(period.start),
                 "denNgay": format_date(period.end),
                 "scope_tdt1": "SELF",

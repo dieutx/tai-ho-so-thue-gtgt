@@ -391,7 +391,7 @@ class FailureTests(PipelineTestCase):
         self.assertTrue(old.is_file())
         self.assertEqual(list(self.directory.iterdir()), [old])
 
-    def test_case_id_loi_tai_van_tim_tiep_doan_sau(self):
+    def test_case_id_failed_download_does_not_scan_later_periods(self):
         attempts = []
         handler = make_handler(search=etax_search)
         def fail_first(method, path, kwargs):
@@ -402,8 +402,8 @@ class FailureTests(PipelineTestCase):
             return handler(method, path, kwargs)
         settings = self.settings_for(to_date=date(2025, 2, 28), case_id="11320250292469209")
         summary, _ = self.run_pipeline(fail_first, settings)
-        self.assertTrue(summary.complete)
-        self.assertEqual(len(attempts), 2)
+        self.assertFalse(summary.complete)
+        self.assertEqual(len(attempts), 1)
 
     def test_dang_nhap_that_bai_thi_bao_loi(self):
         def handler(method, path, kwargs):

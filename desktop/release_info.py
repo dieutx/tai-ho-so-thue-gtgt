@@ -19,6 +19,8 @@ class ReleaseInfo:
     tag: str
     page_url: str
     download_url: str
+    notes: str = ''
+    published_at: str = ''
 
 
 def latest_release(get=requests.get) -> ReleaseInfo | None:
@@ -67,7 +69,8 @@ def _select_release(releases) -> ReleaseInfo | None:
         )
         if not download:
             download = page
-        info = ReleaseInfo(str(parsed), tag, page, download)
+        info = ReleaseInfo(str(parsed), tag, page, download,
+                           str(item.get('body') or ''), str(item.get('published_at') or ''))
         if best is None or parsed > best[0]:
             best = (parsed, info)
     return best[1] if best else None

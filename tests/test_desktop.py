@@ -68,7 +68,13 @@ class DesktopTests(unittest.TestCase):
                 settings = replace(config.settings(), download_dir=cli_output)
                 with patch(module + ".Settings.from_env", return_value=settings), patch(module + ".create_solver", return_value=StubCaptcha()), patch(module + ".HttpClient", return_value=FakeHttp(factory({}))):
                     self.assertEqual(cli(["--env-file", str(self.root / "missing.env")]), 0)
-                self.assertEqual(json.loads((config.output / metadata).read_text(encoding="utf-8")), json.loads((cli_output / metadata).read_text(encoding="utf-8")))
+                desktop_rows = json.loads((config.output / metadata).read_text(encoding="utf-8"))
+                cli_rows = json.loads((cli_output / metadata).read_text(encoding="utf-8"))
+                # Each independent query records its actual observation time.
+                for rows in (desktop_rows, cli_rows):
+                    for row in rows:
+                        row.pop('trang_thai_cap_nhat', None)
+                self.assertEqual(desktop_rows, cli_rows)
                 dry = replace(config, output=self.root / (mode + "-dry"), dry_run=True)
                 dry.validate()
                 lookup = run_online(dry, RunHooks(), StubCaptcha(), logging.getLogger("gdt_tax.test"), http=FakeHttp(factory({})))

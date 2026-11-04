@@ -1,4 +1,4 @@
-"""S06: tab Thông báo thuế độc lập, dùng XML Viewer dùng chung."""
+"""S06: tab Thông báo thuế độc lập, mở tệp bằng ứng dụng mặc định."""
 from __future__ import annotations
 
 import importlib.util
@@ -11,7 +11,7 @@ from unittest.mock import patch
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 HAS_QT = importlib.util.find_spec('PySide6') is not None
 
-from desktop.domain import BUSINESS_UNKNOWN, TaxNotice  # noqa: E402
+from desktop.domain import BUSINESS_UNKNOWN  # noqa: E402
 from desktop.feedback_service import feedback_summary, list_tax_notices  # noqa: E402
 from tests.support import cleanup_temporary_directory  # noqa: E402
 
@@ -83,25 +83,17 @@ class NoticeUITests(unittest.TestCase):
         self.assertEqual(self.window.model.index(0, column['so_thong_bao']).data(), '999/TB')
         self.assertEqual(self.window.model.index(0, column['co_quan_gui']).data(), 'Cục Thuế')
         self.assertEqual(self.window.model.index(0, column['_file_status']).data(), 'Đã tải')
-        self.assertEqual(self.window.model.index(0, column['_action']).data(), 'Xem tệp')
+        self.assertEqual(self.window.model.index(0, column['_action']).data(), 'Xem file')
         self.assertIn('999/TB', self.window.model.index(
             0, column['so_thong_bao']).data(Qt.ItemDataRole.ToolTipRole))
 
-    def test_open_notice_uses_tax_notice_owner_not_feedback_selector(self):
+    def test_open_notice_opens_its_own_file_with_default_application(self):
         pdf = self.root / '999.pdf'
         pdf.write_bytes(b'%PDF-1.4\nfixture')
         row = notice_row(str(pdf))
-        with patch('desktop.xml_viewer.XmlViewer.show_asset') as opener:
+        with patch.object(self.window, 'open_path') as opener:
             self.window.open_notice_row(row)
-        opener.assert_called_once()
-        asset = opener.call_args.args[1]
-        summary = opener.call_args.kwargs['summary']
-        self.assertEqual(opener.call_args.kwargs['source_kind'], 'tax_notice')
-        self.assertEqual(asset.owner_kind, 'tax_notice')
-        self.assertEqual(asset.original_filename, '999.pdf')
-        self.assertIsInstance(summary, TaxNotice)
-        self.assertEqual(summary.number, '999/TB')
-        self.assertEqual(summary.business_result, BUSINESS_UNKNOWN)
+        opener.assert_called_once_with(pdf)
 
     def test_missing_notice_file_is_reported_without_fake_viewer(self):
         row = notice_row('C:/khong-ton-tai/999.pdf')

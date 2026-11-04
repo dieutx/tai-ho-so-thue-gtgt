@@ -14,6 +14,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import replace
+from datetime import datetime, timezone
 
 from ..auth_outcomes import AuthOutcome, classify_response, raise_terminal
 from ..captcha import fetch_captcha
@@ -24,6 +25,7 @@ from ..headers import build_page_headers, build_xhr_headers
 from ..models import CaseRecord, PageResult, SearchPeriod
 from ..parsing import page_count, parse_record_table
 from ..portal_profiles import PortalProfile, profile_for
+from ..processing_status import detail_processing_status
 
 
 class Portal(ABC):
@@ -91,6 +93,13 @@ class Portal(ABC):
         response = self.http.get(url, headers=self.page_headers(headers={"Referer": self.landing_url}))
         raise_terminal(response, 'DVC', authenticated=True)
         self.detail_html = response.text if response.status_code == 200 else ''
+        if self.detail_html:
+            state = detail_processing_status(self.detail_html)
+            if state:
+                record.trang_thai_tra_cuu = record.trang_thai_tra_cuu or record.trang_thai
+                record.trang_thai_chi_tiet = state
+                record.trang_thai = state
+                record.trang_thai_cap_nhat = datetime.now(timezone.utc).isoformat()
         csrf = csrf_token(response.text) if response.status_code == 200 else ""
         return url, csrf
 

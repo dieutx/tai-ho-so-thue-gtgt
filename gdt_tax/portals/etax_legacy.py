@@ -512,7 +512,9 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
         self.legacy_capabilities = selected
 
     # --- Giai đoạn 3: tra cứu ---
-    def search(self, period: SearchPeriod, page: int) -> PageResult:
+    supports_case_search = True
+
+    def search(self, period: SearchPeriod, page: int, *, case_id: str = "") -> PageResult:
         from ..dates import format_date
 
         self.login()
@@ -528,7 +530,7 @@ class EtaxLegacyPortal(LegacySessionNavigator, Portal):
                 "maTKhai": "00",
                 "tenTKhai": "",
                 "kieuKy": "",
-                "ma_gd": "",
+                "ma_gd": case_id,
                 "qryFromDate": format_date(period.start),
                 "qryToDate": format_date(period.end),
             },

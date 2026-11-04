@@ -11,6 +11,8 @@ from pathlib import Path
 from unittest import mock
 from urllib.parse import parse_qs
 
+from bs4 import BeautifulSoup
+
 from gdt_tax.config import Settings
 from gdt_tax.constants import SOURCE_ETAX, SOURCE_ETAX_LEGACY
 from gdt_tax.errors import LegacyEtaxError
@@ -153,7 +155,17 @@ def make_legacy_handler(state: dict):
                 )
             if event == "query":
                 state["queries"] = state.get("queries", []) + [dict(data)]
-                return FakeResponse(state.get("query_html", fixture("etax_legacy_results.html")), url=url)
+                html = state.get("query_html", fixture("etax_legacy_results.html"))
+                if data.get('ma_gd'):
+                    soup = BeautifulSoup(html, 'lxml')
+                    table = soup.find('table', id='data_content_onday')
+                    if table:
+                        for row in table.find_all('tr'):
+                            cells = row.find_all('td', recursive=False)
+                            if len(cells) > 1 and cells[1].get_text(strip=True) != data['ma_gd']:
+                                row.decompose()
+                        html = str(soup) if parse_records(str(soup), SOURCE_ETAX_LEGACY) else fixture('etax_legacy_empty.html')
+                return FakeResponse(html, url=url)
         # Ghi lại request không khớp route để dễ chẩn đoán khi thêm endpoint mới.
         state.setdefault("unmatched", []).append((method, route, str(kwargs)[:200]))
         return FakeResponse("<html></html>", status_code=404)

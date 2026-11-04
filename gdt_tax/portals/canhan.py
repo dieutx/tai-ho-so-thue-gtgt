@@ -665,7 +665,9 @@ class CanhanPortal:
         return response
 
     # --- Tờ khai ---
-    def search(self, period: SearchPeriod, page: int) -> PageResult:
+    supports_case_search = True
+
+    def search(self, period: SearchPeriod, page: int, *, case_id: str = "") -> PageResult:
         self.login()
         if not self._search_page_html:
             opened, self._search_form_id = self._open_operation(
@@ -673,7 +675,7 @@ class CanhanPortal:
             self._search_page_html = opened.text
             self._search_page_url = getattr(opened, "url", CANHAN_REQUEST)
         response = self._query_with_transient_retry(
-            lambda: self._query_declarations(period, page))
+            lambda: self._query_declarations(period, page, case_id=case_id))
         if response.status_code != 200:
             return PageResult(http_status=response.status_code)
         empty = any(marker in response.text for marker in ("Chưa có tờ khai", "Không có dữ liệu"))
@@ -698,7 +700,7 @@ class CanhanPortal:
         return PageResult(records=records, total_pages=_total_pages(response.text),
                           http_status=response.status_code)
 
-    def _query_declarations(self, period: SearchPeriod, page: int):
+    def _query_declarations(self, period: SearchPeriod, page: int, *, case_id: str = ""):
         if page > 1:
             target = _page_url(self._search_page_html, page)
             if target:
@@ -710,7 +712,7 @@ class CanhanPortal:
                     "dse_operationName": _DECLARATION_OPERATION,
                     "dse_nextEventName": "ok",
                     "maGDichArr": ";;;;;;;;;",
-                    "maGDich": "",
+                    "maGDich": case_id,
                     "cboTenTKhai": "",
                     "maHdong": "",
                     "_ngaygui": format_date(period.start),

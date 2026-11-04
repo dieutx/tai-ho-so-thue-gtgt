@@ -318,7 +318,7 @@ class V2InteractionMixin:
     def can_target_download(self):
         account = self.controller.sessions.account
         return bool(self.result and self.mode != 'offline' and all(self.result.date_range)
-                    and self.result.operation in {'query', 'query_and_download', 'download_selected', 'library'}
+                    and self.result.operation in {'query', 'query_and_download', 'download_selected', 'refresh_selected', 'library'}
                     and self.result.account_key == hashlib.sha256(account.username.encode()).hexdigest())
 
     def sync_actions(self):
@@ -350,8 +350,13 @@ class V2InteractionMixin:
             self.export_action.setEnabled(not busy and online and bool(rows))
         if hasattr(self, 'selection_bar'):
             self.selection_bar.setEnabled(not busy)
+        if hasattr(self, 'refresh_selected_button'):
+            self.refresh_selected_button.setVisible(self.mode == 'tax')
+            self.refresh_selected_button.setEnabled(can_download and bool(self.model.checked))
         if hasattr(self, 'detail_download'):
             self.detail_download.setText('Thử lại tệp' if self.detail_row and self.detail_row.get('_file_status') == 'failed' else 'Tải tệp')
+            if self.mode == 'tax' and self.detail_row and self.detail_row.get('_file_status') == 'downloaded':
+                self.detail_download.setText('Cập nhật hồ sơ')
             self.detail_download.setVisible(online)
             self.detail_download.setEnabled(can_download and bool(self.detail_row))
             self.detail_download.setToolTip('Chỉ tải tệp đang xem' if can_download else 'Tra cứu kỳ tương ứng bằng tài khoản hiện tại trước khi tải')
@@ -409,10 +414,14 @@ class V2InteractionMixin:
     def download_missing(self):
         self.download_rows([row for row in self.model.rows if row.get('_file_status', 'not_downloaded') == 'not_downloaded'])
 
+    def refresh_checked(self):
+        self.download_rows([row for row in self.model.rows
+                            if document_id(self.mode, row) in self.model.checked], refresh=True)
+
     def retry_failed(self):
         self.download_rows([row for row in self.model.rows if row.get('_file_status') == 'failed'])
 
-    def download_rows(self, rows):
+    def download_rows(self, rows, *, refresh=False):
         if self.controller.busy or not rows:
             return
         if not self.can_target_download():
@@ -427,12 +436,12 @@ class V2InteractionMixin:
             self.error('Nguồn DVC đang tắt. Bật DVC trong Cài đặt trước khi tải các hồ sơ này.')
             return
         if not self.controller.sessions.account.password:
-            self.open_login(after=lambda: self.download_rows(rows))
+            self.open_login(after=lambda: self.download_rows(rows, refresh=refresh))
             return
         config = replace(self.make_config(self.mode), output=self.result.output,
                          from_date=self.from_date.date().toString('dd/MM/yyyy'),
                          to_date=self.to_date.date().toString('dd/MM/yyyy'),
-                         case_id='', action='download_selected',
+                         case_id='', action='refresh_selected' if refresh else 'download_selected',
                          target_ids=tuple(dict.fromkeys(document_id(self.mode, row) for row in rows)),
                          input_rows=[dict(row) for row in rows])
         self.pending_rows = {document_id(self.mode, row): dict(row) for row in self.model.rows}
@@ -574,16 +583,21 @@ class V2InteractionMixin:
             self.error('Thư mục chứa tệp phản hồi không còn tồn tại; hãy kiểm tra nơi lưu.')
 
     def open_notice_row(self, row: dict) -> None:
-        """Mở XML Viewer cho thông báo thuế độc lập (không dùng selector tờ khai)."""
-        from .domain import OWNER_TAX_NOTICE, tax_notice_from_row
+        """Mở tệp thông báo bằng ứng dụng mặc định, giống các tab khác."""
         from .feedback_service import find_tax_notice_asset
-        from .xml_viewer import XmlViewer
         asset = find_tax_notice_asset(row, taxpayer_key=self.taxpayer_key())
         if not asset or not Path(asset.path_or_handle).is_file():
             self.error('Tệp thông báo chưa có trên máy hoặc đã bị di chuyển; hãy tải lại.')
             return
-        summary = tax_notice_from_row(row, taxpayer_key=self.taxpayer_key())
-        XmlViewer.show_asset(self, asset, source_kind=OWNER_TAX_NOTICE, summary=summary)
+        source = Path(asset.path_or_handle)
+        if source.suffix.lower() == '.zip':
+            from gdt_tax.declaration_view import DeclarationViewError, declaration_xml
+            try:
+                source = declaration_xml(source)
+            except (DeclarationViewError, OSError) as error:
+                self.error(str(error))
+                return
+        self.open_path(source)
 
     def save_feedback_asset(self, item) -> None:
         """Sao chép tệp phản hồi sang vị trí người dùng chọn; không sửa tệp gốc."""
@@ -751,7 +765,7 @@ class V2InteractionMixin:
         else:
             parts.append('<p>Chỉ phân tích XML cục bộ; không xác thực chữ ký số hoặc tính đúng của nghĩa vụ thuế.</p>')
         self.detail_text.setHtml(''.join(parts))
-        self.detail_open.setText('Xem file' if self.mode == 'tax' else 'Xem tệp')
+        self.detail_open.setText('Xem file')
         self.detail_open.setEnabled(bool(row.get('_file_path') and Path(row['_file_path']).is_file()))
         notices = row.get('_notices') or []
         self.detail_notices.setVisible(self.mode == 'tax')
@@ -818,7 +832,7 @@ class V2InteractionMixin:
 
     def download_detail(self):
         if self.detail_row:
-            self.download_rows([self.detail_row])
+            self.download_rows([self.detail_row], refresh=self.mode == 'tax')
 
     def raw_details(self):
         if not self.detail_row:
@@ -848,9 +862,11 @@ class V2InteractionMixin:
             menu.addAction('Xem phản hồi…', lambda: (self.table.setCurrentIndex(index), self.open_notices(index)))
         if self.mode == 'tax' and row.get('ma_ho_so'):
             menu.addAction('Xuất hồ sơ ZIP…', lambda: self.export_submission(row))
+            refresh = menu.addAction('Cập nhật hồ sơ này', lambda: self.download_rows([row], refresh=True))
+            refresh.setEnabled(self.can_target_download() and not self.controller.busy)
         if self.mode != 'offline':
             if row.get('_file_status') == 'downloaded':
-                menu.addAction('Xem file' if self.mode == 'tax' else 'Mở tệp', lambda: (self.details(), self.open_detail_file()))
+                menu.addAction('Xem file', lambda: (self.details(), self.open_detail_file()))
             else:
                 action = menu.addAction('Tải riêng tệp này', lambda: self.download_rows([row]))
                 action.setEnabled(self.can_target_download() and not self.controller.busy)

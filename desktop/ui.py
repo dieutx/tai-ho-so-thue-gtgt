@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from dataclasses import asdict, replace
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -33,6 +34,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpinBox,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -357,6 +359,33 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             "Cập nhật để nhận sửa lỗi mới."
         )
         self.update_banner.show()
+        previous = getattr(self, '_update_dialog', None)
+        if previous is not None:
+            previous.close()
+        dialog = QDialog(self)
+        self._update_dialog = dialog
+        dialog.setWindowTitle(f'Cập nhật v{info.version}')
+        layout = QVBoxLayout(dialog)
+        content = QTextBrowser()
+        content.setOpenExternalLinks(True)
+        try:
+            published = datetime.fromisoformat(info.published_at.replace('Z', '+00:00')).astimezone().strftime('%d/%m/%Y %H:%M %Z')
+        except ValueError:
+            published = info.published_at or 'Chưa có thời gian phát hành'
+        content.setMarkdown(f'## Phiên bản {info.version}\n\n{published}\n\n'
+                            + (info.notes or 'Xem nội dung cập nhật trên trang phát hành.')
+                            + f'\n\n[GitHub]({info.page_url})')
+        layout.addWidget(content)
+        actions = QHBoxLayout()
+        def download():
+            self.download_update()
+            dialog.accept()
+        actions.addWidget(button('Tải bản cập nhật', download))
+        actions.addWidget(button('Bỏ qua', self.dismiss_update))
+        layout.addLayout(actions)
+        fit_dialog(dialog, 620, 440)
+        dialog.show()
+        dialog.raise_()
         self.setWindowTitle(f"Tải Hồ Sơ Thuế — có bản mới v{info.version}")
         try:
             QApplication.alert(self, 0)  # nháy taskbar khi app không phải cửa sổ đang focus
@@ -371,6 +400,9 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         QDesktopServices.openUrl(QUrl(info.download_url or info.page_url))
 
     def dismiss_update(self) -> None:
+        dialog = getattr(self, '_update_dialog', None)
+        if dialog is not None:
+            dialog.close()
         info = self._available_update
         self.update_banner.hide()
         self.setWindowTitle("Tải Hồ Sơ Thuế")

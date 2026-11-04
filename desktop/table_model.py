@@ -100,6 +100,8 @@ class RecordsModel(QAbstractTableModel):
 
     def _cqt_code(self, row: dict) -> str:
         """Mã trạng thái CQT để lọc; không dùng nhãn hiển thị."""
+        if str(row.get('trang_thai') or '').strip():
+            return business_status_from_text(row['trang_thai'])
         if row.get('_feedback_conflict'):
             return 'conflict'
         status = row.get('_cqt_status')
@@ -116,7 +118,11 @@ class RecordsModel(QAbstractTableModel):
         return business_status_from_text(row.get('trang_thai'))
 
     def _cqt_status(self, row: dict) -> str:
-        """Nhãn Trạng thái CQT; ưu tiên bằng chứng phản hồi, fallback cổng."""
+        """Ưu tiên trạng thái mới nhất từ cổng; XML chỉ dùng khi cổng thiếu."""
+        raw = str(row.get('trang_thai') or '').strip()
+        if raw:
+            mapped = business_status_from_text(raw)
+            return BUSINESS_LABELS.get(mapped, raw) if mapped != BUSINESS_UNKNOWN else raw
         label = row.get('_cqt_status_label')
         if label:
             return str(label)
@@ -172,7 +178,7 @@ class RecordsModel(QAbstractTableModel):
             return None
         if role == Qt.ItemDataRole.TextAlignmentRole and key == 'so_tien':
             return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        if role == Qt.ItemDataRole.BackgroundRole and self.mode == 'tax' and row.get('_notice_state') == 'rejected':
+        if role == Qt.ItemDataRole.BackgroundRole and self.mode == 'tax' and self._cqt_code(row) == BUSINESS_REJECTED:
             return REJECTED_ROW
         if role == Qt.ItemDataRole.FontRole and key == '_notice_state' and row.get('_notices'):
             font = QFont()
@@ -186,10 +192,10 @@ class RecordsModel(QAbstractTableModel):
                     return QColor('#93631B')
                 return QColor('#225DE9' if row.get('_notices') else '#94A3B8')
             if key == 'trang_thai' and self.mode == 'tax':
-                if row.get('_feedback_conflict'):
+                if self._cqt_code(row) == 'conflict':
                     return QColor('#93631B')
-                status = row.get('_cqt_status') or ''
-                if status == BUSINESS_REJECTED or row.get('_notice_state') == 'rejected':
+                status = self._cqt_code(row)
+                if status == BUSINESS_REJECTED:
                     return QColor('#C94242')
                 if status == BUSINESS_ACCEPTED:
                     return QColor('#15805B')
@@ -212,7 +218,7 @@ class RecordsModel(QAbstractTableModel):
             return self._feedback_action(row)
         if key == '_action':
             if self.mode == 'notice':
-                return ('Xem tệp' if row.get('_file_status') == 'downloaded'
+                return ('Xem file' if row.get('_file_status') == 'downloaded'
                         else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp')
             return 'Xem file' if row.get('_file_status') == 'downloaded' else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp'
         if key == 'so_tien':

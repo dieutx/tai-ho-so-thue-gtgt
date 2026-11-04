@@ -65,10 +65,10 @@ class SearchFilterStateTests(unittest.TestCase):
     def test_cqt_filter_uses_status_code(self):
         rows = [
             self.tax_row('A', _cqt_status='accepted'),
-            self.tax_row('B', _cqt_status='rejected', _notice_state='rejected',
+            self.tax_row('B', trang_thai='Không chấp nhận', _cqt_status='rejected', _notice_state='rejected',
                          _cqt_status_label='Không chấp nhận'),
-            self.tax_row('C', _cqt_status='received', _cqt_status_label='Đã tiếp nhận'),
-            self.tax_row('D', _cqt_status='unknown', _cqt_status_label='Chưa xác định'),
+            self.tax_row('C', trang_thai='Đã tiếp nhận', _cqt_status='received', _cqt_status_label='Đã tiếp nhận'),
+            self.tax_row('D', trang_thai='', _cqt_status='unknown', _cqt_status_label='Chưa xác định'),
         ]
         self.window.model.reset('tax', rows)
         self.window.proxy_model.set_cqt_filter('rejected')

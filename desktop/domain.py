@@ -35,6 +35,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from gdt_tax.processing_status import status_code
+
 from .notices import ACCEPTED, RECEIVED, REJECTED
 
 # --- Trạng thái nghiệp vụ của CQT (độc lập với trạng thái tải tệp) ---
@@ -163,13 +165,10 @@ def period_key(value: Any) -> tuple[int, int, str]:
 def business_status_from_text(value: Any) -> str:
     """Đọc trạng thái do cổng trả về; không suy diễn khi chuỗi không khớp."""
     text = fold_text(value)
-    if not text:
-        return BUSINESS_UNKNOWN
-    if any(marker in text for marker in ("khong chap nhan", "khong duoc chap nhan", "tu choi")):
-        return BUSINESS_REJECTED
-    if "tiep nhan" in text:
-        return BUSINESS_RECEIVED
-    if "chap nhan" in text or "xac nhan" in text:
+    code = status_code(str(value or ''))
+    if code in {BUSINESS_RECEIVED, BUSINESS_ACCEPTED, BUSINESS_REJECTED}:
+        return code
+    if not code and 'xac nhan' in text and not any(marker in text for marker in ('cho xac nhan', 'chua xac nhan')):
         return BUSINESS_ACCEPTED
     return BUSINESS_UNKNOWN
 
@@ -386,7 +385,9 @@ def has_conflicting_results(feedbacks: list[SubmissionFeedback]) -> bool:
 
 def submission_from_row(row: dict, *, taxpayer_key: str = "") -> DeclarationSubmission:
     """Tạo thực thể lần nộp từ row desktop; không suy ra trạng thái từ tệp."""
-    if "_notices" in row:
+    if str(row.get('trang_thai') or '').strip():
+        tax_status = business_status_from_text(_text(row))
+    elif "_notices" in row:
         tax_status = aggregate_feedback_result(feedbacks_from_row(row, taxpayer_key=taxpayer_key))
     else:
         tax_status = business_status_from_text(_text(row))

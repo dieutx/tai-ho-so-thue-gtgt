@@ -99,7 +99,7 @@ class RunConfig:
     def validate(self) -> None:
         if self.mode not in {"tax", "gnt", "notice", "offline", "login", "batch", "import", "saved", "library"}:
             raise ValueError("Chế độ không hợp lệ")
-        if self.action not in {"", "download_selected", "verify", "export_report"}:
+        if self.action not in {"", "download_selected", "refresh_selected", "verify", "export_report"}:
             raise ValueError("Thao tác không hợp lệ")
         if self.action == "verify":
             return
@@ -200,6 +200,7 @@ def run_online(config: RunConfig, hooks: RunHooks, captcha: Any,
     if config.mode == 'tax':
         kwargs['store'] = DesktopZipStore(config.output, logger, config.input_rows)
         kwargs['authenticate'] = authenticate
+        kwargs['input_rows'] = config.input_rows
     pipeline = kind(settings, http, captcha, hooks=hooks, logger=logger,
                     # SQLite owns crash checkpoints. Materialize legacy exports
                     # once in finally, rather than re-serializing the full JSON

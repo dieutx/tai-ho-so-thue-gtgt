@@ -28,6 +28,9 @@ class CaseRecord:
     ngay_nop: str = ""
     noi_nop: str = ""
     trang_thai: str = ""
+    trang_thai_tra_cuu: str = ""
+    trang_thai_chi_tiet: str = ""
+    trang_thai_cap_nhat: str = ""
     ho_so_dinh_kem: str = ""
     tep_zip: str = ""
     #: Nhóm thuế khác với loai_to_khai (chính thức/bổ sung).

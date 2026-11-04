@@ -356,7 +356,25 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.assertEqual(config.from_date, self.window.from_date.date().toString('dd/MM/yyyy'))
         self.assertEqual(config.output, self.root)
 
-    def test_rejected_notice_column_shows_red_warning(self):
+    def test_refresh_selected_preserves_downloaded_files_and_targets_only_checked_ids(self):
+        rows = [dict(CaseRecord(str(i), SOURCE_ETAX_LEGACY, account_key=account_fingerprint('fixture-user')).to_dict(),
+                     _file_status='downloaded', tep_zip=f'original-{i}.zip') for i in range(2)]
+        self.window.controller.sessions.set_account('fixture-user', 'fixture-secret')
+        self.window.result = JobResult('SUCCESS', 'Query', self.root, rows=rows,
+                                      date_range=('01/06/2025', '30/06/2025'),
+                                      account_key=account_fingerprint('fixture-user'), operation='query')
+        self.window.model.reset('tax', rows)
+        self.window.model.checked.add(document_id('tax', rows[1]))
+        with patch.object(self.window, 'launch') as launch:
+            self.window.refresh_checked()
+        config = launch.call_args.args[0]
+        self.assertEqual(config.action, 'refresh_selected')
+        self.assertEqual(config.target_ids, (document_id('tax', rows[1]),))
+        self.assertEqual(config.input_rows[0]['tep_zip'], 'original-1.zip')
+        self.assertEqual(config.from_date, self.window.from_date.date().toString('dd/MM/yyyy'))
+        self.assertEqual(config.output, self.root)
+
+    def test_portal_acceptance_overrides_older_rejection_in_display(self):
         from PySide6.QtCore import Qt
 
         from desktop.table_model import COLUMNS
@@ -372,17 +390,17 @@ class DesktopV2InteractionTests(unittest.TestCase):
         self.assertIn('Bấm để xem phản hồi', index.data(Qt.ItemDataRole.ToolTipRole))
         self.assertIn('298018/0109/2026/TB-TĐT', index.data(Qt.ItemDataRole.ToolTipRole))
         self.assertTrue(index.data(Qt.ItemDataRole.FontRole).underline())
-        self.assertEqual(index.data(Qt.ItemDataRole.BackgroundRole).name(), '#fdecea')
+        self.assertIsNone(index.data(Qt.ItemDataRole.BackgroundRole))
         self.assertEqual(index.data(Qt.ItemDataRole.ForegroundRole).name(), '#225de9')
         status_column = next(index for index, (key, _) in enumerate(COLUMNS['tax']) if key == 'trang_thai')
-        self.assertEqual(self.window.model.index(0, status_column).data(), 'Không chấp nhận')
+        self.assertEqual(self.window.model.index(0, status_column).data(), 'Đã chấp nhận')
         accepted = dict(row, _notice_state='accepted', _notice_summary='Chấp nhận (2)')
         self.window.model.reset('tax', [accepted])
         self.assertIsNone(self.window.model.index(0, column).data(Qt.ItemDataRole.BackgroundRole))
 
     def test_notice_rejection_is_searchable_and_in_review_filter(self):
         from desktop.table_model import COLUMNS
-        row = dict(CaseRecord('fixture', SOURCE_ETAX_LEGACY, trang_thai='Đã chấp nhận').to_dict(),
+        row = dict(CaseRecord('fixture', SOURCE_ETAX_LEGACY, trang_thai='').to_dict(),
                    _notice_state='rejected', _notices=[{'so_thong_bao': '123/TB', 'ly_do': 'Sai chỉ tiêu'}])
         self.window.model.reset('tax', [row])
         self.window.proxy_model.set_status_filter('review')

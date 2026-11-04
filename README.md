@@ -36,6 +36,8 @@ Chế độ này không cần tài khoản hoặc Internet.
 - Hồ sơ và cấu hình nằm ngoài EXE, tiếp tục được dùng khi cập nhật ứng dụng.
 - Mật khẩu chỉ được lưu khi chọn **Lưu mật khẩu trên máy này**, qua Windows Credential Manager.
 - **Trạng thái cơ quan thuế** và **trạng thái tải tệp** là hai thông tin riêng biệt.
+- Chọn hồ sơ rồi bấm **Cập nhật đã chọn** để lấy lại trạng thái và phản hồi theo
+  từng mã. Trạng thái mới trên cổng được ưu tiên hơn thông báo XML cũ; tệp hợp lệ được dùng lại.
 - Tài khoản cá nhân hỗ trợ tờ khai và thông báo; **giấy nộp tiền cá nhân chưa được hỗ trợ**.
 - Khi tải lỗi, chọn **Thử lại tệp lỗi**; mở **Nhật ký** để xem chi tiết. Tệp đã tải xong được giữ lại.
 

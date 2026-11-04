@@ -48,6 +48,16 @@ class ReleaseLookupTests(unittest.TestCase):
         self.assertIsNotNone(info)
         self.assertEqual(info.download_url, info.page_url)
 
+    def test_release_includes_change_notes_and_publication_time(self):
+        from desktop.release_info import latest_release
+        response = Mock(status_code=200)
+        response.json.return_value = [{**release_payload('desktop-v9.9.9'),
+                                       'body': '- Cập nhật trạng thái CQT',
+                                       'published_at': '2026-11-04T01:00:00Z'}]
+        info = latest_release(Mock(return_value=response))
+        self.assertEqual(info.notes, '- Cập nhật trạng thái CQT')
+        self.assertEqual(info.published_at, '2026-11-04T01:00:00Z')
+
     def test_github_request_and_stable_release_filter(self):
         from desktop.release_info import RELEASES_API, latest_release, release_message
 
@@ -110,6 +120,7 @@ class UpdateBannerTests(unittest.TestCase):
         self.window.show_update_banner(info)
         self.assertFalse(self.window.update_banner.isHidden())
         self.assertIn("9.9.9", self.window.update_text.text())
+        self.assertTrue(self.window._update_dialog.isVisible())
         self.window.dismiss_update()
         self.assertTrue(self.window.update_banner.isHidden())
         self.assertEqual(self.store.load().dismissed_update_version, "9.9.9")
@@ -122,6 +133,20 @@ class UpdateBannerTests(unittest.TestCase):
             "https://example.test/9.9.9.exe",
         ))
         self.assertTrue(self.window.update_banner.isHidden())
+
+    def test_automatic_dialog_shows_notes_time_and_download_or_skip(self):
+        from PySide6.QtWidgets import QPushButton, QTextBrowser
+
+        from desktop.release_info import ReleaseInfo
+        self.window.show_update_banner(ReleaseInfo('9.9.9', 'desktop-v9.9.9',
+            'https://example.test/release', 'https://example.test/app.exe',
+            '- Sửa trạng thái CQT\n- Tải theo mã hồ sơ', '2026-11-04T01:00:00Z'))
+        dialog = self.window._update_dialog
+        content = dialog.findChild(QTextBrowser).toPlainText()
+        self.assertIn('Sửa trạng thái CQT', content)
+        self.assertIn('04/11/2026', content)
+        self.assertEqual({b.text() for b in dialog.findChildren(QPushButton)},
+                         {'Tải bản cập nhật', 'Bỏ qua'})
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ from gdt_tax.export import build_rows, build_workbook, load_inputs, main, write_
 from gdt_tax.outcomes import quality_summary
 from gdt_tax.parser.cli import write_parsed
 from gdt_tax.spreadsheet_values import numeric_cell
+from tests.support import temporary_directory
 from tests.test_export import CLASSIFICATION, MANIFEST, PARSED
 
 
@@ -132,7 +133,7 @@ class OfflineContractsTests(unittest.TestCase):
                 self.assertEqual(value, "\t=1+1" if raw else "'\t=1+1")
 
     def test_export_exit_quality_and_legacy_opt_in(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             root = Path(directory)
             for name, payload in (("manifest_artifact.json", MANIFEST), ("parsed_declarations.json", PARSED), ("phan_loai_artifact.json", CLASSIFICATION)):
                 (root / name).write_text(json.dumps(payload), encoding="utf-8")
