@@ -131,8 +131,11 @@ class V2InteractionMixin:
         self.file_filter.setVisible(not offline)
         self.cqt_filter.setVisible(self.mode == 'tax')
         self.type_filter.setVisible(self.mode == 'notice')
-        for widget in [self.account_label, self.source_badge, self.account_button, self.logout_button]:
+        for widget in [self.account_label, self.account_button, self.logout_button]:
             widget.setVisible(not offline)
+        # Showing this long badge briefly can make Qt enlarge the window before
+        # responsive() hides it, pushing the frame outside a small work area.
+        self.source_badge.setVisible(not offline and self.width() >= 1100)
         state = self.tab_states[self.mode]
         self.restore_dates(state)
         self.result = state.result
