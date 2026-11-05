@@ -313,7 +313,7 @@ class QtDesktopTests(unittest.TestCase):
             # Hidden widgets keep their pre-layout geometry; check the navigation
             # control that is actually shown at this width (tabs or combo).
             navigation = window.tabs if window.tabs.isVisible() else window.navigation
-            for widget in [window.output, window.start_button, window.stop_button, navigation]:
+            for widget in [window.settings_button, window.start_button, window.menu_button, navigation]:
                 self.assertTrue(window.rect().contains(widget.mapTo(window, widget.rect().bottomRight())))
         dialog = AdvancedDialog(window)
         self.assertTrue(dialog.findChildren(__import__("PySide6.QtWidgets", fromlist=["QScrollArea"]).QScrollArea))

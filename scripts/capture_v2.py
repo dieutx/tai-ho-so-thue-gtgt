@@ -87,11 +87,11 @@ def capture(size: str) -> None:
         with patch.object(window, 'screen', return_value=SimpleNamespace(availableGeometry=lambda workarea=area: workarea)):
             window.fit_screen()
         app.processEvents()
-        controls = [window.table, window.stop_button, window.history_button, window.menu_button,
+        controls = [window.table, window.menu_button,
                     window.config_panel]
         if mode != 'offline':
-            controls.extend([window.preset, window.from_date, window.to_date,
-                             window.query, window.start_button])
+            controls.extend([window.preset, window.date_button, window.search, window.filter_button,
+                             window.query_options, window.start_button])
         for control in controls:
             top = control.mapTo(window, QPoint(0, 0))
             bottom = control.mapTo(window, control.rect().bottomRight())

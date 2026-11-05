@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QFontDatabase
 from PySide6.QtWidgets import (
     QApplication,
@@ -87,7 +87,9 @@ class XmlViewer(QDialog):
     def _build(self) -> None:
         self.setWindowTitle('Xem tài liệu')
         self.resize(980, 700)
-        self.setMinimumSize(640, 420)
+        area = self.screen().availableGeometry()
+        self.setMinimumSize(min(640, area.width() - 32), min(420, area.height() - 48))
+        self.resize(min(980, area.width() - 32), min(700, area.height() - 48))
         layout = QVBoxLayout(self)
         self.title_label = QLabel()
         self.title_label.setObjectName('viewerTitle')
@@ -113,6 +115,13 @@ class XmlViewer(QDialog):
         self.identity.setObjectName('hint')
         self.identity.setWordWrap(True)
         self.identity.setText(f'Nguồn kỹ thuật: {self.asset.owner_kind} · {self.asset.asset_key}')
+        self.identity.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.identity.hide()
+        self.source_toggle = QPushButton('Nguồn kỹ thuật')
+        self.source_toggle.setCheckable(True)
+        self.source_toggle.setToolTip('Hiện mã nguồn tài liệu để kiểm tra và sao chép')
+        self.source_toggle.toggled.connect(self.identity.setVisible)
+        layout.addWidget(self.source_toggle)
         layout.addWidget(self.identity)
         actions = QHBoxLayout()
         self.copy_button = QPushButton('Sao chép XML')

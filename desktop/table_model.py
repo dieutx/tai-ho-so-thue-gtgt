@@ -81,9 +81,6 @@ class RecordsModel(QAbstractTableModel):
         flags = super().flags(index)
         if index.isValid() and COLUMNS[self.mode][index.column()][0] == '_selected':
             flags |= Qt.ItemFlag.ItemIsUserCheckable
-        if index.isValid() and COLUMNS[self.mode][index.column()][0] == '_action':
-            if not self.can_download and self.rows[index.row()].get('_file_status') != 'downloaded':
-                flags &= ~Qt.ItemFlag.ItemIsEnabled
         return flags
 
     def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
@@ -150,6 +147,8 @@ class RecordsModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.CheckStateRole and key == '_selected':
             return Qt.CheckState.Checked if document_id(self.mode, row) in self.checked else Qt.CheckState.Unchecked
         if role == Qt.ItemDataRole.ToolTipRole:
+            if key == '_action':
+                return 'Thao tác hồ sơ: xem, tải, phản hồi và sao chép'
             if key == '_selected':
                 return 'Chọn tệp này; chọn toàn bộ kết quả đang hiển thị bằng tiêu đề Chọn'
             if key == '_file_status':
@@ -217,10 +216,7 @@ class RecordsModel(QAbstractTableModel):
         if key == '_notice_state':
             return self._feedback_action(row)
         if key == '_action':
-            if self.mode == 'notice':
-                return ('Xem file' if row.get('_file_status') == 'downloaded'
-                        else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp')
-            return 'Xem file' if row.get('_file_status') == 'downloaded' else 'Thử lại' if row.get('_file_status') == 'failed' else 'Tải tệp'
+            return '⋯'
         if key == 'so_tien':
             return display_amount(row.get(key), str(row.get('loai_tien', '')))
         if key == 'to_khai':

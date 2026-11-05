@@ -512,9 +512,9 @@ class MainWindow(V2InteractionMixin, QMainWindow):
 
     def apply_theme(self) -> None:
         dark = self.preferences.theme == "dark"
-        bg, card, text, border, muted = ("#111827", "#1e293b", "#f1f5f9", "#475569", "#94a3b8") if dark else ("#F5F7FB", "#FFFFFF", "#17263D", "#E4EAF2", "#67768C")
+        bg, card, text, border, muted = ("#111827", "#1e293b", "#f1f5f9", "#475569", "#94a3b8") if dark else ("#F8FAFC", "#FFFFFF", "#0F172A", "#E2E8F0", "#64748B")
         self.setStyleSheet(f"""
-            QWidget {{font-family:'Segoe UI';font-size:12px;color:{text};}}
+            QWidget {{font-family:'Segoe UI';font-size:13px;color:{text};}}
             QMainWindow,QDialog {{background:{bg};}}
             QMenu,QAbstractItemView {{background:{card};color:{text};}}
             QMenu::item:selected {{background:#2563EB;color:white;}}
@@ -529,7 +529,9 @@ class MainWindow(V2InteractionMixin, QMainWindow):
             QPushButton#account {{background:#0F766E;color:white;border-color:#0F766E;}}
             QPushButton#query {{background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;}}
             QPushButton#stop {{background:#FFF1F2;color:#BE123C;border-color:#FECDD3;}}
-            QPushButton#files {{background:#F5F3FF;color:#6D28D9;border-color:#DDD6FE;}}
+            QPushButton#files {{background:{card};color:{text};border-color:{border};}}
+            QTableView::item:selected {{background:#EFF6FF;color:#0F172A;}}
+            QPushButton#primary:hover {{background:#1D4ED8;}}
             QPushButton#stop:disabled,QPushButton#primary:disabled,QPushButton#query:disabled {{background:{bg};color:{muted};border-color:{border};}}
             QFrame#drawer {{background:{card};border:1px solid {border};border-radius:8px;}}
             QWidget#feedbackPanel {{background:{card};border-top:1px solid {border};}}
@@ -552,6 +554,8 @@ class MainWindow(V2InteractionMixin, QMainWindow):
         """)
 
     def clear_account_views(self) -> None:
+        if hasattr(self, 'feedback_dialog'):
+            self.feedback_dialog.hide()
         for mode in ["tax", "gnt", "notice"]:
             self.tab_states[mode] = self._restore_tab_state(mode)
         self.restore_dates(self.tab_states[self.mode])

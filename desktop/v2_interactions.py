@@ -71,6 +71,8 @@ class V2InteractionMixin:
             start = QDate(today.year(), ((today.month() - 1) // 3) * 3 + 1, 1)
         elif kind == 'year':
             start = QDate(today.year(), 1, 1)
+        elif kind in {'three', 'six'}:
+            start = today.addMonths(-3 if kind == 'three' else -6)
         elif kind == 'twelve':
             start = today.addMonths(-12)
         else:
@@ -119,6 +121,8 @@ class V2InteractionMixin:
         from .ui import MODES
         self.save_tab()
         self.close_drawer()
+        if hasattr(self, 'feedback_dialog'):
+            self.feedback_dialog.hide()
         if hasattr(self, 'feedback_panel'):
             self.feedback_panel.clear()
         self.current_mode = MODES[index]
@@ -126,12 +130,14 @@ class V2InteractionMixin:
         offline = self.mode == 'offline'
         self.online_panel.setVisible(not offline)
         self.offline_panel.setVisible(offline)
-        self.query.setVisible(not offline)
+        self.query.hide()
+        self.query_options.setVisible(not offline)
         self.batch_action.setVisible(not offline)
         self.file_filter.setVisible(not offline)
         self.cqt_filter.setVisible(self.mode == 'tax')
         self.type_filter.setVisible(self.mode == 'notice')
-        for widget in [self.account_label, self.account_button, self.logout_button]:
+        self.logout_button.hide()
+        for widget in [self.account_label, self.account_button]:
             widget.setVisible(not offline)
         # Showing this long badge briefly can make Qt enlarge the window before
         # responsive() hides it, pushing the frame outside a small work area.
@@ -207,6 +213,11 @@ class V2InteractionMixin:
             self.search.text() or self.proxy_model.status_filter != 'all'
             or self.mode == 'tax' and self.proxy_model.cqt_filter != 'all'
             or self.mode == 'notice' and self.proxy_model.type_filter))
+        if hasattr(self, 'filter_button'):
+            active = sum((bool(self.search.text()), self.proxy_model.status_filter != 'all',
+                          self.mode == 'tax' and self.proxy_model.cqt_filter != 'all',
+                          self.mode == 'notice' and bool(self.proxy_model.type_filter)))
+            self.filter_button.setText(f'Bộ lọc ({active})' if active else 'Bộ lọc')
         if hasattr(self, 'selection_bar'):
             self.selection_changed()
 
@@ -486,21 +497,10 @@ class V2InteractionMixin:
             if row:
                 self.show_feedback_panel(row)
             return
-        self.details()
         if key == '_action':
-            row = self.selected_row()
-            if not row:
-                return
-            if self.mode == 'notice':
-                if row.get('_file_status') == 'downloaded':
-                    self.open_notice_row(row)
-                else:
-                    self.download_rows([row])
-                return
-            if row.get('_file_status') == 'downloaded':
-                self.open_detail_file()
-            elif row:
-                self.download_rows([row])
+            self.context_menu(self.table.visualRect(index).center())
+            return
+        self.details()
 
     def open_notices(self, index):
         """Mở bảng phản hồi của dòng đang chọn (CTA chính của cột)."""
@@ -557,8 +557,12 @@ class V2InteractionMixin:
         """Hiển thị bảng phản hồi con của **đúng** dòng được chọn."""
         if not row or not hasattr(self, 'feedback_panel'):
             return
+        from .ui import fit_dialog
         self.feedback_panel.show_for(row, taxpayer_key=self.taxpayer_key())
         self.feedback_panel.show()
+        fit_dialog(self.feedback_dialog, 1000, 520)
+        self.feedback_dialog.show()
+        self.feedback_dialog.raise_()
 
     def refresh_feedback_panel(self) -> None:
         """Giữ bảng phản hồi đồng bộ sau khi tải/kiểm tra lại mà không đổi hồ sơ."""
@@ -778,11 +782,12 @@ class V2InteractionMixin:
         self.detail_notices.setEnabled(bool(notices))
         self.detail_notices.setText(f'Xem phản hồi ({len(notices)})' if notices else 'Chưa có phản hồi')
         if hasattr(self, 'detail_bundle'):
-            self.detail_bundle.setVisible(self.mode == 'tax')
+            self.detail_bundle.hide()
             self.detail_bundle.setEnabled(self.mode == 'tax' and bool(row.get('ma_ho_so')))
         self.sync_actions()
         self.position_drawer()
         self.drawer.show()
+        self.position_drawer()
         self.drawer.raise_()
 
     def position_drawer(self):
@@ -790,12 +795,15 @@ class V2InteractionMixin:
             return
         parent = self.centralWidget()
         top = self.results_panel.mapTo(parent, QPoint(0, 0)).y()
-        width = min(440, max(280, parent.width() // 2))
+        width = min(400, max(280, parent.width() // 2))
+        docked = not self.drawer.isHidden() and parent.width() >= 1200
+        self.results_panel.layout().setContentsMargins(0, 0, width + 12 if docked else 0, 0)
         self.drawer.setGeometry(max(0, parent.width() - width - 6), top, width, max(80, self.results_panel.height()))
 
     def close_drawer(self):
         if hasattr(self, 'drawer'):
             self.drawer.hide()
+            self.results_panel.layout().setContentsMargins(0, 0, 0, 0)
             self.detail_row = None
 
     def copy_document_id(self):
@@ -862,6 +870,8 @@ class V2InteractionMixin:
             return
         self.table.setCurrentIndex(index)
         row = self.selected_row()
+        if row is None:
+            return
         menu = QMenu(self)
         menu.addAction('Xem chi tiết', self.details)
         if self.mode == 'tax' and row.get('_notices'):
@@ -879,7 +889,12 @@ class V2InteractionMixin:
             menu.addAction('Sao chép mã đầy đủ', lambda: QApplication.clipboard().setText(document_id(self.mode, row)))
         menu.addAction('Mở thư mục', self.open_output)
         menu.addAction('Sao chép metadata', lambda: QApplication.clipboard().setText(json.dumps(row, ensure_ascii=False)))
-        menu.exec(self.table.viewport().mapToGlobal(position))
+        previous = getattr(self, '_record_menu', None)
+        if previous is not None:
+            previous.close()
+            previous.deleteLater()
+        self._record_menu = menu
+        menu.popup(self.table.viewport().mapToGlobal(position))
 
     def populate_result(self, result):
         self.files.clear()
@@ -893,9 +908,9 @@ class V2InteractionMixin:
         else:
             count = counters(rows)
             total = max(result.inventory_total, count['found']) if result else count['found']
-            self.counts.setText(f"Kho: {total}  |  Kỳ đang xem: {count['found']}  |  Đã tải: {count['downloaded']}  |  Thiếu: {count['pending']}  |  Lỗi: {count['failed']}")
+            self.counts.setText(f"Kỳ đang xem: {count['found']} hồ sơ  ·  Đã tải: {count['downloaded']}  ·  Thiếu: {count['pending']}  ·  Lỗi: {count['failed']}")
             if result:
-                self.counts.setToolTip(f'Kho tích lũy của tài khoản/tab; không giảm khi đổi kỳ. Cần xác minh định danh: {result.quarantined}')
+                self.counts.setToolTip(f'Tổng kho: {total}. Chỉ số trên thanh này thuộc kỳ đang xem, không đổi theo tìm kiếm/bộ lọc bảng. Cần xác minh định danh: {result.quarantined}')
         if result:
             for path in result.files:
                 self.files.addItem(path.name, str(path))
@@ -913,6 +928,10 @@ class V2InteractionMixin:
             widget.setEnabled(not busy)
         self.batch_action.setEnabled(not busy)
         self.stop_button.setEnabled(busy and state != 'STOPPING')
+        self.stop_button.setVisible(busy)
+        self.progress.setVisible(busy)
+        self.status.setVisible(busy or bool(self.result))
+        self.query_options.setEnabled(not busy)
         self.progress.setRange(0, 0 if busy else 1)
         if state == 'STOPPING' and self.captcha_dialog:
             self.captcha_dialog.reject()
@@ -961,6 +980,9 @@ class V2InteractionMixin:
             self.refresh_feedback_panel()
 
     def on_completed(self, result):
+        self.status.show()
+        self.stop_button.hide()
+        self.progress.hide()
         self.catalog_refresh_timer.stop()
         config, self.active_config = self.active_config, None
         self.last_task = result
@@ -1345,6 +1367,15 @@ class V2InteractionMixin:
             message = 'Chọn kỳ rồi nhấn Tra cứu.\nTrạng thái cơ quan thuế và trạng thái tệp được hiển thị riêng.'
         self.empty.setText(message)
 
+    def update_date_control(self, *_args):
+        if not hasattr(self, 'date_button'):
+            return
+        custom = self.preset.currentData() == 'custom'
+        self.date_button.setVisible(custom)
+        span = self.from_date.date().toString('dd/MM/yyyy') + ' – ' + self.to_date.date().toString('dd/MM/yyyy')
+        self.date_button.setToolTip(span)
+        self.preset.setToolTip(self.date_type.text() + ': ' + span)
+
     def responsive(self):
         if not hasattr(self, 'table'):
             return
@@ -1359,8 +1390,22 @@ class V2InteractionMixin:
         self.account_label.setMaximumWidth(90 if width < 1000 else 220)
         self.account_label.setSizePolicy(self.account_label.sizePolicy().horizontalPolicy(), self.account_label.sizePolicy().verticalPolicy())
         self.source_badge.setVisible(self.mode != 'offline' and width >= 1100)
-        self.config_layout.setDirection(QHBoxLayout.Direction.TopToBottom if width < 1500 else QHBoxLayout.Direction.LeftToRight)
-        self.result_tools.setDirection(QHBoxLayout.Direction.TopToBottom if width < 850 else QHBoxLayout.Direction.LeftToRight)
+        self.config_layout.setDirection(QHBoxLayout.Direction.TopToBottom if width < 1000 else QHBoxLayout.Direction.LeftToRight)
+        self.result_tools.setDirection(QHBoxLayout.Direction.TopToBottom)
+        if hasattr(self, 'search_row'):
+            wide = width >= 1100 and self.mode != 'offline'
+            if getattr(self, '_search_in_toolbar', None) != wide:
+                self._search_in_toolbar = wide
+                target = self.config_layout if wide else self.search_row
+                target.insertWidget(1 if wide else 0, self.search, 1)
+                target.insertWidget(2 if wide else 1, self.filter_button)
+            self.search.setPlaceholderText({
+                'tax': 'Tìm tên, mã hồ sơ, kỳ thuế…',
+                'gnt': 'Tìm số giấy nộp tiền, mã chứng từ…',
+                'notice': 'Tìm tên hoặc số thông báo…',
+                'offline': 'Tìm mẫu, tên tệp XML…',
+            }[self.mode])
+            self.update_date_control()
         self.output_label.setText('Nơi xuất' if self.mode == 'offline' else 'Nơi lưu')
         self.start_button.setText('Chạy phân tích' if self.mode == 'offline' else 'Tra cứu và tải')
         self.xml_notice.setVisible(self.mode == 'offline' and height >= 430)
@@ -1370,7 +1415,7 @@ class V2InteractionMixin:
         if self.mode == 'notice' and width < 1100:
             hidden.add('co_quan_gui')
         if width < 900:
-            hidden.update({'ky_tinh_thue', 'so_tien', 'form_version'})
+            hidden.update({'form_version'})
         row_height = 28 if height < 400 else 35 if self.ultra else 43
         self.table.verticalHeader().setDefaultSectionSize(row_height)
         self._applying_widths = True

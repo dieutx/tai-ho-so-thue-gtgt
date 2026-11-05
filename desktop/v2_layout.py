@@ -1,10 +1,11 @@
-"""Qt Widgets layout translated from the supplied v2 design references."""
+﻿"""Qt Widgets layout translated from the supplied v2 design references."""
 
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QVBoxLayout,
     QWidget,
+    QWidgetAction,
 )
 
 from . import __version__
@@ -71,7 +73,7 @@ def build_workspace(window):
     self.title.setToolTip('Phần mềm bên thứ ba, không phải ứng dụng chính thức của cơ quan thuế')
     header.addWidget(self.title)
     self.version_button = button('v' + __version__, self.show_release, 'Phiên bản và cập nhật')
-    header.addWidget(self.version_button)
+    self.version_button.hide()
     header.addStretch()
     self.account_type = AccountTypeSelector()
     self.account_type.setAccessibleName('Loại tài khoản')
@@ -145,7 +147,7 @@ def build_workspace(window):
     dates.addWidget(self.date_type)
     self.preset = QComboBox()
     for label, value in [('30 ngày gần nhất', 'recent30'), ('Tháng này', 'month'), ('Tháng trước', 'previous'), ('Quý này', 'quarter'),
-                         ('Năm nay', 'year'), ('12 tháng qua', 'twelve'), ('Tùy chỉnh', 'custom')]:
+                         ('Năm nay', 'year'), ('3 tháng qua', 'three'), ('6 tháng qua', 'six'), ('12 tháng qua', 'twelve'), ('Tùy chỉnh', 'custom')]:
         self.preset.addItem(label, value)
     self.preset.setAccessibleName('Chọn nhanh khoảng ngày tra cứu')
     dates.addWidget(self.preset)
@@ -308,6 +310,7 @@ def build_workspace(window):
     self.table.horizontalHeader().setAccessibleName('Chọn tất cả hồ sơ đang hiển thị')
     self.model.selection_changed.connect(self.table.horizontalHeader().viewport().update)
     self.table.setAlternatingRowColors(False)
+    self.table.setShowGrid(False)
     self.table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
     self.table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
     self.table.setSortingEnabled(True)
@@ -346,7 +349,14 @@ def build_workspace(window):
     self.feedback_panel.save_asset.connect(self.save_feedback_asset)
     self.feedback_panel.open_folder.connect(self.open_feedback_folder)
     self.feedback_panel.technical.connect(self.show_feedback_technical)
-    results.addWidget(self.feedback_panel)
+    self.feedback_dialog = QDialog(self)
+    self.feedback_dialog.setWindowTitle('Phản hồi cơ quan thuế')
+    self.feedback_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+    feedback_layout = QVBoxLayout(self.feedback_dialog)
+    feedback_layout.addWidget(self.feedback_panel)
+    self.feedback_panel.setMaximumHeight(16777215)
+    self.feedback_panel.closed.connect(self.feedback_dialog.hide)
+    self.feedback_dialog.finished.connect(self.feedback_panel.hide)
     self.feedback_panel.hide()
     self.layout_root.addWidget(self.results_panel, 1)
     self.files = QComboBox(self)
@@ -372,14 +382,17 @@ def build_workspace(window):
     self.history_button = button('Lịch sử tải', self.show_history)
     footer.addWidget(self.history_button)
     self.file_menu = QMenu(self)
+    self.file_menu.addSection('Tệp và báo cáo')
     self.folder_button = self.file_menu.addAction('Mở thư mục', self.open_output)
     self.report_button = self.file_menu.addAction('Mở báo cáo', self.open_report)
     self.export_action = self.file_menu.addAction('Xuất danh sách Excel…', self.export_report)
     self.reconciliation_action = self.file_menu.addAction('Đối soát và xuất báo cáo…', self.show_reconciliation)
     self.report_button.setEnabled(False)
+    self.file_menu.addSection('Hỗ trợ kỹ thuật')
     self.log_button = self.file_menu.addAction('Nhật ký kỹ thuật (0)', self.show_logs)
     self.file_menu.addAction('Kiểm tra lại tệp trên máy', self.verify_files)
     self.file_menu.addSeparator()
+    self.file_menu.addSection('Dữ liệu và tác vụ')
     self.batch_action = self.file_menu.addAction('Tải các nhóm liên tiếp…', self.batch_dialog)
     self.file_menu.addAction('Đọc / sao chép dữ liệu cũ…', self.import_legacy)
     self.file_menu.addAction('Xem hồ sơ đã lưu trên máy…', self.open_local_account)
@@ -444,5 +457,141 @@ def build_workspace(window):
         action.triggered.connect(callback)
         self.table.addAction(action)
     self.setAcceptDrops(True)
+    compact_workspace(self, output, results, filter_row, tools, raw_tools)
     self.refresh_account()
     self.sync_actions()
+
+
+def menu_control(menu, widget):
+    """Reuse the original control, including its state and connected handler."""
+    action = QWidgetAction(menu)
+    action.setDefaultWidget(widget)
+    menu.addAction(action)
+    return action
+
+
+def linked_action(menu, control):
+    action = menu.addAction(control.text(), control.click)
+    def refresh():
+        action.setText(control.text())
+        action.setEnabled(control.isEnabled())
+        action.setVisible(control is not getattr(control.window(), 'detail_bundle', None) or control.window().mode == 'tax')
+        action.setToolTip(control.toolTip())
+    menu.aboutToShow.connect(refresh)
+    return action
+
+
+def compact_workspace(self, output, results, filter_row, tools, raw_tools):
+    # Keep original controls so task state updates retain a single source of truth.
+    self.storage_menu = QMenu(self.settings_button)
+    storage = QWidget()
+    storage_row = QVBoxLayout(storage)
+    storage.setMinimumWidth(300)
+    while output.count() > 2:
+        item = output.takeAt(0)
+        if item.widget():
+            storage_row.addWidget(item.widget())
+    menu_control(self.storage_menu, storage)
+    self.storage_menu.addSeparator()
+    self.storage_menu.addAction('Cài đặt nâng cao…', self.settings)
+    self.storage_menu.addAction('Lịch sử tải', self.show_history)
+    self.storage_menu.addAction('Giới thiệu ứng dụng', self.show_release)
+    self.settings_button.clicked.disconnect()
+    self.settings_button.setMenu(self.storage_menu)
+    self.settings_button.setToolTip('Thư mục lưu, cài đặt và thông tin ứng dụng')
+    self.query.hide()
+    self.query_menu = QMenu(self.start_button)
+    query_action = self.query_menu.addAction('Chỉ tra cứu', self.query.click)
+    self.query_menu.aboutToShow.connect(lambda: query_action.setEnabled(self.query.isEnabled()))
+    self.query_options = QPushButton('')
+    self.query_options.setAccessibleName('Chọn chế độ tra cứu')
+    self.query_options.setToolTip('Chỉ tra cứu, không tải tệp')
+    self.query_options.setMenu(self.query_menu)
+    self.query_options.setFixedWidth(36)
+    output.addWidget(self.query_options)
+    self.filter_button = QPushButton('Bộ lọc / Thao tác')
+    self.filter_button.setToolTip('Lọc kết quả và thao tác trên tệp của kỳ đang xem')
+    self.filter_menu = QMenu(self.filter_button)
+    filter_content = QWidget()
+    results.removeItem(self.result_tools)
+    filter_content.setLayout(self.result_tools)
+    self.result_tools.setDirection(QHBoxLayout.Direction.TopToBottom)
+    menu_control(self.filter_menu, filter_content)
+    self.filter_button.setMenu(self.filter_menu)
+    filter_row.addWidget(self.filter_button)
+    self.detail_more = QPushButton('Thao tác khác')
+    more = QMenu(self.detail_more)
+    # Technical and export actions share the existing controls and handler state.
+    for layout in (tools, raw_tools):
+        for index in reversed(range(layout.count())):
+            widget = layout.itemAt(index).widget()
+            if isinstance(widget, QPushButton) and widget is not self.detail_notices:
+                linked_action(more, widget)
+                layout.removeWidget(widget)
+                widget.setParent(self.drawer)
+                widget.hide()
+                # Hidden is presentation only; availability follows enabled state.
+    # Export visibility is still updated by details(); hide only its old widget.
+    for action in more.actions():
+        action.setVisible(True)
+    self.detail_more.setMenu(more)
+    tools.addWidget(self.detail_more)
+    finish_compact_toolbar(self, output, results, filter_row, filter_content)
+
+
+def finish_compact_toolbar(self, output, results, filter_row, filter_content):
+    self.search_row = filter_row
+    self.search_row.removeWidget(self.reset_filters_button)
+    self.result_tools.addWidget(self.reset_filters_button)
+    self.config_layout.insertWidget(1, self.search, 1)
+    self.config_layout.insertWidget(2, self.filter_button)
+    self.output_panel.setMaximumWidth(230)
+    self.preset.setMaximumWidth(180)
+    self.online_panel.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+    self.date_menu = QMenu(self)
+    date_content = QWidget()
+    date_layout = QVBoxLayout(date_content)
+    dates = self.online_panel.layout()
+    for index in reversed(range(dates.count())):
+        widget = dates.itemAt(index).widget()
+        if widget is not self.preset:
+            dates.removeWidget(widget)
+    # Original editors and signals preserve date validation and tab state.
+    date_layout.addWidget(self.date_type)
+    date_layout.addWidget(QLabel('Từ ngày'))
+    date_layout.addWidget(self.from_date)
+    date_layout.addWidget(QLabel('Đến ngày'))
+    date_layout.addWidget(self.to_date)
+    menu_control(self.date_menu, date_content)
+    self.date_button = QPushButton('Chọn ngày')
+    self.date_button.setMenu(self.date_menu)
+    self.date_button.setToolTip('Xem hoặc chỉnh khoảng ngày tra cứu')
+    dates.addWidget(self.date_button)
+    # Discard only the obsolete static labels; all functional controls are reused.
+    for widget in self.online_panel.findChildren(QLabel, options=Qt.FindChildOption.FindDirectChildrenOnly):
+        widget.hide()
+    self.preset.currentIndexChanged.connect(self.update_date_control)
+    self.from_date.dateChanged.connect(self.update_date_control)
+    self.to_date.dateChanged.connect(self.update_date_control)
+    self.preset.activated.connect(lambda _index: self.date_menu.popup(
+        self.date_button.mapToGlobal(self.date_button.rect().bottomLeft()))
+        if self.preset.currentData() == 'custom' else None)
+    self.update_date_control()
+    results.removeWidget(self.counts)
+    filter_row.removeWidget(self.filtered_label)
+    summary = QHBoxLayout()
+    summary.addWidget(self.counts, 1)
+    summary.addWidget(self.filtered_label)
+    results.insertLayout(0, summary)
+    self.storage_menu.addSeparator()
+    logout = self.storage_menu.addAction('Đăng xuất', self.logout_button.click)
+    self.storage_menu.aboutToShow.connect(lambda: logout.setEnabled(self.logout_button.isEnabled()))
+    self.logout_button.hide()
+    self.history_button.hide()
+    self.stop_button.hide()
+    self.progress.hide()
+    self.status.hide()
+    self.download_controls.setDirection(QHBoxLayout.Direction.TopToBottom)
+    self.filter_controls.setDirection(QHBoxLayout.Direction.TopToBottom)
+    self.filter_menu.setMinimumWidth(280)
+    self.update_filtered_count()

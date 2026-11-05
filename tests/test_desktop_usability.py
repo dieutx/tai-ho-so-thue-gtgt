@@ -223,15 +223,117 @@ class DesktopUsabilityTests(unittest.TestCase):
             with self.subTest(size=(width, height)):
                 self.assertLessEqual(self.window.width(), width)
                 self.assertLessEqual(self.window.height(), height)
-                for widget in [self.window.search, self.window.reset_filters_button,
-                               self.window.file_filter, self.window.cqt_filter,
-                               self.window.missing_button, self.window.retry_button,
-                               self.window.verify_button, self.window.start_button]:
+                for widget in [self.window.search,
+                               self.window.filter_button, self.window.start_button]:
                     self.assertTrue(widget.isVisible())
                     origin = widget.mapTo(self.window, widget.rect().topLeft())
                     corner = widget.mapTo(self.window, widget.rect().bottomRight())
                     self.assertTrue(self.window.rect().contains(origin))
                     self.assertTrue(self.window.rect().contains(corner))
+
+    def test_filters_and_storage_retain_original_controls_in_menus(self):
+        from PySide6.QtWidgets import QWidgetAction
+        self.assertTrue(any(isinstance(a, QWidgetAction) for a in self.window.filter_menu.actions()))
+        self.assertTrue(self.window.filter_menu.isAncestorOf(self.window.file_filter))
+        self.assertTrue(self.window.storage_menu.isAncestorOf(self.window.output))
+        self.window.model.reset('tax', [self.row('first'), self.row('second', 'failed')])
+        self.window.file_filter.setCurrentIndex(self.window.file_filter.findData('failed'))
+        self.assertEqual(self.window.proxy_model.rowCount(), 1)
+        with patch.object(self.window, 'start') as start:
+            self.window.query_menu.actions()[0].trigger()
+            start.assert_called_once_with(True)
+
+    def test_drawer_docks_on_wide_windows_and_preserves_selection(self):
+        self.window.show()
+        self.window.resize(1366, 768)
+        self.window.model.reset('tax', [self.row('first')])
+        self.window.table.setCurrentIndex(self.window.proxy_model.index(0, 1))
+        self.window.details()
+        self.app.processEvents()
+        self.assertLessEqual(self.window.drawer.width(), 400)
+        self.assertEqual(self.window.results_panel.layout().contentsMargins().right() > 400,
+                         self.window.centralWidget().width() >= 1200)
+        self.window.resize(1024, 640)
+        self.app.processEvents()
+        self.assertEqual(self.window.results_panel.layout().contentsMargins().right(), 0)
+        self.window.close_drawer()
+        self.assertEqual(self.window.model.rowCount(), 1)
+
+    def test_date_popup_and_new_presets_preserve_query_semantics(self):
+        from PySide6.QtCore import QDate, Qt
+        from PySide6.QtTest import QTest
+        self.window.show()
+        self.app.processEvents()
+        with patch.object(self.window.controller, 'start') as start:
+            for value, months in [('three', 3), ('six', 6), ('twelve', 12)]:
+                self.window.preset.setCurrentIndex(self.window.preset.findData(value))
+                self.assertEqual(self.window.from_date.date(), QDate.currentDate().addMonths(-months))
+                self.assertEqual(self.window.to_date.date(), QDate.currentDate())
+            self.window.preset.setCurrentIndex(self.window.preset.findData('custom'))
+            self.window.date_menu.popup(self.window.date_button.mapToGlobal(self.window.date_button.rect().bottomLeft()))
+            self.app.processEvents()
+            self.assertTrue(self.window.from_date.isVisible())
+            self.window.from_date.setDate(QDate(2025, 1, 1))
+            QTest.keyClick(self.window.date_menu, Qt.Key.Key_Escape)
+            self.assertFalse(self.window.date_menu.isVisible())
+            self.assertEqual(self.window.from_date.date(), QDate(2025, 1, 1))
+            start.assert_not_called()
+
+    def test_drawer_copy_menu_keeps_current_row_after_navigation(self):
+        self.window.show()
+        rows = [self.row('first'), self.row('second')]
+        self.window.model.reset('tax', rows)
+        for row_index in (0, 1):
+            self.window.table.setCurrentIndex(self.window.proxy_model.mapFromSource(self.window.model.index(row_index, 1)))
+            self.window.details()
+            menu = self.window.detail_more.menu()
+            menu.aboutToShow.emit()
+            action = next(a for a in menu.actions() if a.text() == 'Sao chép mã')
+            self.assertTrue(action.isEnabled())
+            action.trigger()
+            self.assertEqual(self.app.clipboard().text(), rows[row_index]['ma_ho_so'])
+
+    def test_feedback_dialog_closes_without_resetting_search(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        self.window.show()
+        self.window.search.setText('first')
+        self.window.show_feedback_panel(self.row('first'))
+        self.app.processEvents()
+        self.assertTrue(self.window.feedback_dialog.isVisible())
+        self.assertIs(self.window.feedback_panel.parentWidget(), self.window.feedback_dialog)
+        QTest.keyClick(self.window.feedback_dialog, Qt.Key.Key_Escape)
+        self.assertFalse(self.window.feedback_dialog.isVisible())
+        self.assertEqual(self.window.search.text(), 'first')
+
+    def test_busy_state_disables_both_query_choices(self):
+        with patch.object(type(self.window.controller), 'busy', new=property(lambda _: True)):
+            self.window.on_state('RUNNING')
+            self.assertFalse(self.window.query_options.isEnabled())
+            self.assertFalse(self.window.start_button.isEnabled())
+            self.assertFalse(self.window.query.isEnabled())
+            self.assertFalse(self.window.stop_button.isHidden())
+        self.window.on_state('IDLE')
+        self.assertTrue(self.window.stop_button.isHidden())
+        self.assertTrue(self.window.progress.isHidden())
+
+    def test_row_menu_does_not_download_until_action_is_chosen(self):
+        from desktop.table_model import COLUMNS
+        self.window.show()
+        row = self.row('first', 'not_downloaded')
+        self.window.model.reset('tax', [row])
+        self.app.processEvents()
+        col = next(i for i, (key, _) in enumerate(COLUMNS['tax']) if key == '_action')
+        index = self.window.proxy_model.index(0, col)
+        self.window.table.setCurrentIndex(index)
+        with patch.object(self.window, 'download_rows') as download, patch.object(self.window, 'can_target_download', return_value=True):
+            self.window.table_clicked(index)
+            download.assert_not_called()
+            action = next(a for a in self.window._record_menu.actions() if a.text() == 'Tải riêng tệp này')
+            self.assertTrue(action.isEnabled())
+            action.trigger()
+            download.assert_called_once_with([row])
+            self.window._record_menu.close()
 
 
 if __name__ == '__main__':
