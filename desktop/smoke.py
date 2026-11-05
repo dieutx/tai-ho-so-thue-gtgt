@@ -238,8 +238,8 @@ def ui_check(application, window, output: Path, size: str) -> None:
     for index, name in enumerate(["tax", "gnt", "notice", "offline"]):
         window.tabs.setCurrentIndex(index)
         application.processEvents()
-        controls = [window.start_button, window.stop_button, window.output, window.table, window.menu_button,
-                    window.input_path if name == "offline" else window.from_date,
+        controls = [window.start_button, window.settings_button, window.search, window.filter_button, window.table, window.menu_button,
+                    window.input_path if name == "offline" else window.preset,
                     window.tabs if window.tabs.isVisible() else window.navigation]
         for control in controls:
             rect = control.rect()
