@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [2.1.5] — 2026-11-05
+
+- Bố cục gọn hơn: toolbar một hàng khi đủ rộng, ngày tùy chỉnh trong popup,
+  preset thêm 3/6 tháng; ba tab hồ sơ giảm khoảng 57–58% control thường trực,
+  tab XML giảm 39% khi chưa tra cứu.
+- Tác vụ theo ngữ cảnh: menu thao tác ở từng dòng, “Chỉ tra cứu” cạnh nút
+  chính, tải chưa tải/thử lại/kiểm tra tệp gộp trong “Bộ lọc / Thao tác”;
+  tra cứu và menu dòng bị chặn khi tác vụ đang chạy.
+- Phản hồi CQT mở trong cửa sổ riêng, đóng bằng Esc/X và giữ nguyên tìm kiếm;
+  drawer rộng tối đa 400px, chuyển overlay khi cửa sổ hẹp, giữ selection.
+- Thư mục lưu, thay đổi thư mục, cài đặt, lịch sử và giới thiệu vào menu cài
+  đặt; phiên bản ẩn khỏi header; công cụ nâng cao chia nhóm, giữ đủ handler.
+- XML viewer thu gọn nguồn kỹ thuật vào mục mở rộng và giới hạn kích thước
+  theo màn hình; giữ sao chép, lưu và mở bằng ứng dụng mặc định.
+- Chuyển tab ở cửa sổ nhỏ không còn đẩy khung ra ngoài màn hình do badge
+  nguồn dài hiện tạm thời.
+- Quét dải ngày dài 2018–2026: TB01/AC và TB03/AC được nhận là tờ khai;
+  trang legacy “chưa được phân quyền” trả `AUTH_FUNCTION_NOT_PERMITTED` và
+  được coi là chức năng bị bỏ qua thay vì lỗi tài khoản;
+  `GDT_RUN_BUDGET_SECONDS` cho phép nới hạn mức 30 phút của một lượt chạy.
+- Bổ sung test cho bố cục mới, menu ngữ cảnh, sao chép đúng hồ sơ sau khi đổi
+  dòng và các nhánh legacy ở trên.
+
 ## [2.1.4 — cập nhật lại asset] — 2026-11-04
 
 - Mỗi lần mở ứng dụng mặc định tra cứu **30 ngày gần nhất**, tính cả hôm nay;
