@@ -83,7 +83,7 @@ class NoticeUITests(unittest.TestCase):
         self.assertEqual(self.window.model.index(0, column['so_thong_bao']).data(), '999/TB')
         self.assertEqual(self.window.model.index(0, column['co_quan_gui']).data(), 'Cục Thuế')
         self.assertEqual(self.window.model.index(0, column['_file_status']).data(), 'Đã tải')
-        self.assertEqual(self.window.model.index(0, column['_action']).data(), 'Xem file')
+        self.assertEqual(self.window.model.index(0, column['_action']).data(), '⋯')
         self.assertIn('999/TB', self.window.model.index(
             0, column['so_thong_bao']).data(Qt.ItemDataRole.ToolTipRole))
 

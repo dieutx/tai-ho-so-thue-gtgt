@@ -408,7 +408,7 @@ class PersistentUITests(unittest.TestCase):
                         self.assertEqual((self.window.from_date.date(), self.window.to_date.date(),
                                           self.window.preset.currentData()), before)
                         for widget in (self.window.config_panel, self.window.from_date,
-                                       self.window.to_date, self.window.preset, self.window.query,
+                                       self.window.to_date, self.window.preset, self.window.query_options,
                                        self.window.start_button):
                             self.assertFalse(widget.isHidden())
                         self.assertFalse(hasattr(self.window, 'edit_conditions'))

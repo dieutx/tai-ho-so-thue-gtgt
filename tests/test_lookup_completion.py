@@ -215,7 +215,7 @@ class LookupCompletionTests(unittest.TestCase):
         self.assertEqual(len(self.window.model.rows), 24)
         self.assertTrue(all(row['ma_ho_so'].startswith('personal-') for row in self.window.model.rows))
         self.assertEqual(self.window.result.output, folder)
-        self.assertIn('Kho: 24', self.window.counts.text())
+        self.assertIn('Tổng kho: 24', self.window.counts.toolTip())
         self.assertIn('Online: 24', self.window.status.text())
 
     def test_personal_catalog_refresh_stays_in_personal_namespace(self):
@@ -311,7 +311,7 @@ class LookupCompletionTests(unittest.TestCase):
         self.assertTrue(self.window.catalog_refresh_timer.isActive())
         QTest.qWait(350)
         self.assertEqual(len(self.window.model.rows), 129)
-        self.assertIn('Kho: 130', self.window.counts.text())
+        self.assertIn('Tổng kho: 130', self.window.counts.toolTip())
         self.assertIn('Kỳ đang xem: 129', self.window.counts.text())
         self.assertIsNotNone(self.window.active_config)
 
